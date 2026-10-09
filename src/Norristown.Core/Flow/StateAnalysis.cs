@@ -253,6 +253,13 @@ public sealed class StateAnalysis : IProcessorStates
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
         : new($"`{routine.DisplayName}` declares `{item}` at entry", "an `.ensure` sets it");
 
+    /// <summary>Returns whether <paramref name="previous"/> is a <c>clc</c>.</summary>
+    private static bool FollowsClc(Step? previous) =>
+        previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc } };
+
+    /// <summary>Returns <paramref name="width"/> where it is 8 bits, and unknown otherwise.</summary>
+    private static Width EightOrUnknown(Width width) => width == Width.Eight ? Width.Eight : Width.Unknown;
+
     /// <summary>
     /// Returns how many bytes a push or pull of a register this wide moves, or null when that is
     /// not known.
@@ -451,7 +458,7 @@ public sealed class StateAnalysis : IProcessorStates
                     item.Text,
                     processor.E == ProcessorMode.Emulation
                         ? "the processor is in emulation mode here, where both widths are 8 bits"
-                        : "the mode is not known here"));
+                        : report.ModeUnknown(step, processor)));
             }
             // Emulation mode pins both widths at 8, whatever is emitted to change them.
             if (processor.E == ProcessorMode.Emulation)
@@ -587,7 +594,7 @@ public sealed class StateAnalysis : IProcessorStates
             var last = i == block.Steps.Count - 1;
             var next = last ? block.Next : null;
             var end = last ? block.End : BlockEnd.Through;
-            state = Explained(step, next, state, Through(step, previous, next, end, state, routine, report));
+            state = Explained(step, previous, next, state, Through(step, previous, next, end, state, routine, report));
             if (records)
                 leaving[step.Key] = state;
         }
@@ -598,17 +605,17 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns the state after <paramref name="step"/>, with a cause for each width it made
     /// unknown, and the earlier cause kept for each width it left unknown.
     /// </summary>
-    private FlowState Explained(Step step, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
+    private FlowState Explained(Step step, Step? previous, NextDirectiveSyntax? next, FlowState before, FlowState after) => after with
     {
-        WhyA = Why(step, next, before, before.Processor.A, after.Processor.A, before.WhyA),
-        WhyIndex = Why(step, next, before, before.Processor.Index, after.Processor.Index, before.WhyIndex),
+        WhyA = Why(step, previous, next, before, before.Processor.A, after.Processor.A, before.WhyA),
+        WhyIndex = Why(step, previous, next, before, before.Processor.Index, after.Processor.Index, before.WhyIndex),
         WhyD = after.Processor.D.Kind == StateValueKind.Unknown && before.Processor.D.Kind == StateValueKind.Unknown
             ? before.WhyD
             : null,
     };
 
     private Cause? Why(
-        Step step, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
+        Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
     {
         if (after != Width.Unknown)
             return null;
@@ -635,6 +642,8 @@ public sealed class StateAnalysis : IProcessorStates
             MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true }
                 => new($"{quoted} restores a width that is not known here", "an `.ensure` after it sets it"),
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
+            MnemonicKind.Xce when FollowsClc(previous)
+                => new($"{quoted} enters native mode from a mode that is not known, and a 16-bit width is 8 bits if that was emulation mode", "a `.state` before it declares which mode it is"),
             MnemonicKind.Xce => new($"{quoted} follows neither `clc` nor `sec`", "a `.state` after it declares what it is"),
             MnemonicKind.Rep when mode != ProcessorMode.Native && StepOperands.Constant(model, step) is not null
                 => new($"{quoted} widens nothing in emulation mode, and the mode is not known", "a `.state` before it declares which mode it is"),
@@ -711,9 +720,11 @@ public sealed class StateAnalysis : IProcessorStates
 
             // `clc` then `xce` enters native mode, and `sec` then `xce` emulation mode. Any
             // other `xce` swaps in an unknown carry, so the mode becomes unknown.
-            // D and B are unaffected.
+            // D and B are unaffected. Where the mode is not known before `clc` and `xce`, an
+            // 8-bit width stays 8, which it is after either mode. Any other width becomes
+            // unknown, because a 16-bit width is 8 bits if the processor was in emulation mode.
             case MnemonicKind.Xce:
-                if (previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc } })
+                if (FollowsClc(previous))
                 {
                     return state with
                     {
@@ -721,7 +732,7 @@ public sealed class StateAnalysis : IProcessorStates
                         {
                             ProcessorMode.Emulation => processor with { A = Width.Eight, Index = Width.Eight, E = ProcessorMode.Native },
                             ProcessorMode.Native => processor,
-                            _ => processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Native },
+                            _ => processor with { A = EightOrUnknown(processor.A), Index = EightOrUnknown(processor.Index), E = ProcessorMode.Native },
                         },
                     };
                 }
@@ -1001,6 +1012,8 @@ public sealed class StateAnalysis : IProcessorStates
         // another processor's routine expects has no bearing on this processor's state.
         if (checks.InAnotherSpace(step, target))
             return state;
+        if (target is { Signature: null, Kind: SymbolKind.Label, Routine: { } owner } && SignatureOf(owner) is { } ownerSignature)
+            return CalledInto(step, mnemonic, target, owner, ownerSignature, state, report);
         if (target?.Signature is null || SignatureOf(target) is not { } callee)
         {
             report?.CheckCallTarget(step, mnemonic, target);
@@ -1018,6 +1031,32 @@ public sealed class StateAnalysis : IProcessorStates
             Entering(step, routine, target, state, report);
         }
         return signatures.IsExitKnown(target) ? StateChecks.Exited(callee, state) : null;
+    }
+
+    /// <summary>
+    /// Checks a call to <paramref name="label"/>, a label inside <paramref name="owner"/>, and
+    /// returns the state after it, or null where nothing returns to the call. The label is an
+    /// entry point, so its <c>.state</c> is the entry the call is checked against. The path from
+    /// the label leaves by <paramref name="owner"/>'s returns, so the call returns with what
+    /// <paramref name="owner"/> returns with, as a jump into the label hands back.
+    /// </summary>
+    private ProcessorState? CalledInto(
+        Step step, MnemonicKind mnemonic, Symbol label, Symbol owner, Signature callee, ProcessorState state, StateChecks? report)
+    {
+        if (report is not null)
+        {
+            if (label.StateDeclaration is null)
+            {
+                report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+                    new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+            }
+            var declared = DeclaredElsewhere(label) ?? ProcessorState.Unknown;
+            var entry = new Signature(declared, declared, callee.IsFar) { Declared = StateParts.All, Written = StateParts.All };
+            report.CheckCall(step, mnemonic, label, entry, state);
+        }
+        if (callee.IsInterrupt)
+            return state;
+        return callee.NeverReturns || !signatures.IsExitKnown(owner) ? null : StateChecks.Exited(callee, state);
     }
 
     /// <summary>
@@ -1046,7 +1085,7 @@ public sealed class StateAnalysis : IProcessorStates
             var register = StateRegister.ProgramBank;
             report.Report(step, Catalogue.CallStateMismatch.Message(
                 $"`{step.Statement.GetText().Trim()}`",
-                needed.Format(register),
+                $"`{needed.Format(register)}`",
                 bank.IsBounded ? $"control reaches it in bank {bank.Describe(register.Digits)}" : "the bank control reaches it in is not known"));
         }
         calls.Add(new CallState(caller, target, state, step.Statement.Tree.GetSpan(step.Statement.Span), bank));
@@ -1112,9 +1151,10 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Returns what a <c>.state</c> declares at a label inside another routine, which a jump into
-    /// that routine has to meet, or null when the label declares nothing. Only the parts it gives are
-    /// checked. The declaration is read off the label, so the routine may be in another file.
+    /// Returns what a <c>.state</c> declares at a label inside a routine, which a jump into that
+    /// routine from another, or a call to the label from anywhere, has to meet. It returns null when
+    /// the label declares nothing. Only the parts it gives are checked. The declaration is read off
+    /// the label, so the routine may be in another file.
     /// </summary>
     private ProcessorState? DeclaredElsewhere(Symbol label)
     {
@@ -1397,8 +1437,13 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns the state where an expansion of a macro with a state signature, or a block spliced
     /// into one, starts or ends. A call is checked the way <c>jsr</c> is. The state must match the
     /// entry, the body starts from it, and its end must match the exit. The state after the call
-    /// is the exit with its <c>*</c> items kept from the call. A block given to such a macro has to
-    /// leave the state as it found it.
+    /// is the exit with its <c>*</c> items kept from the call.
+    /// <para>
+    /// A block given to such a macro is the caller's code, so it starts from the state in the
+    /// caller's terms, in which a <c>*</c> of the macro's is the state at the call. It has to leave
+    /// that state as it found it. Where the block leaves a part as it found it, the body goes on
+    /// with that part in its own terms again.
+    /// </para>
     /// </summary>
     private FlowState Marked(Step step, FlowState state, StateChecks? report)
     {
@@ -1406,16 +1451,28 @@ public sealed class StateAnalysis : IProcessorStates
         var processor = state.Processor;
         if (step.Statement is BlockSpliceSyntax)
         {
+            var splicing = Expansion.Enclosing(step.On).FirstOrDefault(level => level.Call is not null);
+            if (splicing?.Call is not { } call || model.MacroAt(call) is not { MacroSignature: not null } owner)
+                return state;
             if (!step.Closes)
             {
                 started[key] = processor;
+                return state with { Processor = AtCall(processor, splicing) };
             }
-            else if (started.TryGetValue(key, out var before) && before != processor
-                && step.On?.NearestCall is { } call && model.MacroAt(call) is { } owner)
+            if (!started.TryGetValue(key, out var before))
+                return state;
+            var found = AtCall(before, splicing);
+            if (found != processor)
+                report?.Report(step, Catalogue.BlockChangesState.Message(owner.DisplayName, found, processor));
+            return state with
             {
-                report?.Report(step, Catalogue.BlockChangesState.Message(owner.DisplayName, before, processor));
-            }
-            return state;
+                Processor = new ProcessorState(
+                    before.A == Width.Unchanged && processor.A == found.A ? before.A : processor.A,
+                    before.Index == Width.Unchanged && processor.Index == found.Index ? before.Index : processor.Index,
+                    before.E == ProcessorMode.Unchanged && processor.E == found.E ? before.E : processor.E,
+                    before.D.IsEntered && processor.D == found.D ? before.D : processor.D,
+                    before.B.IsEntered && processor.B == found.B ? before.B : processor.B),
+            };
         }
 
         if (step.Statement is not MacroCallSyntax expanded || model.MacroAt(expanded) is not { MacroSignature: { } signature } macro)
@@ -1438,24 +1495,36 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns <paramref name="state"/>, which holds at a statement in the expansion
     /// <paramref name="on"/>, in the routine's terms. Inside the body of a macro with a signature,
     /// a <c>*</c> item means the state at the call rather than at the routine's entry. Each such
-    /// item becomes the state at the call, through every enclosing call in turn. The stack keeps
+    /// item becomes the state at the call, through every enclosing call in turn. A block spliced
+    /// into a macro is already in its caller's terms, so that macro is passed over. The stack keeps
     /// what is pushed in these terms, so a pull outside the body reads what the push saved.
     /// </summary>
     private ProcessorState InRoutine(ProcessorState state, Expansion? on)
     {
-        for (var level = on; level is not null; level = level.Outer)
+        foreach (var level in Expansion.Enclosing(on))
         {
-            if (level.Call is not { } call || model.MacroAt(call) is not { MacroSignature: not null })
-                continue;
-            var at = started.TryGetValue(StepKey.Of(call, level.Outer), out var found) ? found : ProcessorState.Unknown;
-            state = new ProcessorState(
-                state.A == Width.Unchanged ? at.A : state.A,
-                state.Index == Width.Unchanged ? at.Index : state.Index,
-                state.E == ProcessorMode.Unchanged ? at.E : state.E,
-                state.D.IsEntered ? at.D : state.D,
-                state.B.IsEntered ? at.B : state.B);
+            if (level.Call is { } call && model.MacroAt(call) is { MacroSignature: not null })
+                state = AtCall(state, level);
         }
         return state;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="state"/>, which holds in the body that the expansion
+    /// <paramref name="level"/> emits, in the terms of the code that made the call. Each
+    /// <c>*</c> item becomes the state at the call, where one was recorded, and unknown otherwise.
+    /// </summary>
+    private ProcessorState AtCall(ProcessorState state, Expansion level)
+    {
+        var at = level.Call is { } call && started.TryGetValue(StepKey.Of(call, level.Outer), out var found)
+            ? found
+            : ProcessorState.Unknown;
+        return new ProcessorState(
+            state.A == Width.Unchanged ? at.A : state.A,
+            state.Index == Width.Unchanged ? at.Index : state.Index,
+            state.E == ProcessorMode.Unchanged ? at.E : state.E,
+            state.D.IsEntered ? at.D : state.D,
+            state.B.IsEntered ? at.B : state.B);
     }
 
     /// <summary>
@@ -1466,12 +1535,9 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private ProcessorState Pulled(ProcessorState saved, Expansion? on)
     {
-        Signature? signature = null;
-        for (var level = on; level is not null && signature is null; level = level.Outer)
-        {
-            if (level.Call is { } call)
-                signature = model.MacroAt(call)?.MacroSignature;
-        }
+        var signature = Expansion.Enclosing(on)
+            .Select(level => level.Call is { } call ? model.MacroAt(call)?.MacroSignature : null)
+            .FirstOrDefault(found => found is not null);
         if (signature is null)
             return saved;
         var entry = signature.Entry;

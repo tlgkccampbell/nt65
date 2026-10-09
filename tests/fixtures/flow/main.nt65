@@ -55,6 +55,28 @@
     rts
 }
 
+; A call may target a label inside a routine, its own or another's. Here there is no processor
+; state for the label to declare, so the call needs nothing written, as it does on the 65816 once
+; the label declares its state. Each call comes back with what the path from the label leaves.
+.export .proc clear_screen {
+    lda #0
+    ldx #0
+    again:
+    sta $0400,x
+    inx
+    bne again
+    rts
+}
+
+.export .proc clear_twice {
+    jsr clear_screen::again
+    jsr @tail
+    rts
+@tail:
+    ldx #0
+    jmp clear_screen::again
+}
+
 .segment BSS
 .data cmd:   .byte
 .data value: .byte

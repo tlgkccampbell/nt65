@@ -157,3 +157,22 @@
 }
 
 .export command
+
+; A routine that does not depend on the mode takes `e*` where its callers disagree on it, so
+; it serves callers in both modes and hands each its own back.
+.proc either {
+    nop
+    rts
+}
+
+.export .proc either_from_native: a16, native {
+    jsr either
+    lda #$1234
+    rts
+}
+
+.export .proc either_from_emulation: emu {
+    jsr either
+    lda #$12
+    rts
+}

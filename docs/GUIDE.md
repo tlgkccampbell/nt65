@@ -1494,7 +1494,7 @@ immediate in such a routine needs a width the signature writes, and a `rep` in i
 until the signature writes `native` or the code enters native mode with `clc` and `xce`:
 
 ```text
-main.nt65:4:5: error: `lda #` needs the width of A, and `f` declares `a*`, which assumes nothing about it [width-unknown]
+main.nt65:4:5: error: `lda #` needs the width of A, and `f` takes the default `a*`, which assumes nothing about it [width-unknown]
 ```
 
 **Callers that disagree.** The widths and the mode decide how the routine's bytes are read.
@@ -1502,7 +1502,10 @@ Callers that enter a routine with two widths, where its body has an immediate th
 the width, are an error at the routine, `callers-disagree`. It lists each caller, and its fixes
 declare either width. Callers then get the usual error where they call in the other state.
 Where the body does not depend on the width, the callers may disagree, and the routine hands
-the width back as it found it.
+the width back as it found it. The mode works the same way: a routine called in both modes
+that does not depend on the mode is `e*`, and one that does, through an `.ensure a16` or a call
+that needs native mode, is told the mode is not known there, with the callers named. A
+routine's call to itself is one of its callers.
 
 The direct page and the data bank decide only which memory an operand reaches, and a routine
 may be meant to run with several. Callers that disagree combine as two paths do where they

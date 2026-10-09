@@ -21,6 +21,8 @@
 .export main__tail
 .export main__handler
 .export main__command
+.export main__either_from_native
+.export main__either_from_emulation
 
 .segment "BSS": absolute
 value: .res 2
@@ -169,3 +171,24 @@ command__load:
 command__save:
     rts
 ; end of command
+
+; .proc either  main.nt65:163
+either:
+    nop
+    rts
+; end of either
+
+; .proc either_from_native: a16, native  main.nt65:168
+main__either_from_native:
+    jsr either
+    lda #$1234
+    rts
+; end of either_from_native
+
+; .proc either_from_emulation: emu  main.nt65:174
+main__either_from_emulation:
+    jsr either
+    .a8
+    lda #$12
+    rts
+; end of either_from_emulation

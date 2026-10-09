@@ -4,7 +4,7 @@
 
 .cpu 65816
 
-.export copy, setup, mixed, unknown, entered, adder, twice, reenter
+.export copy, setup, mixed, unknown, entered, adder, twice, reenter, spliced
 
 .struct Locals {
     count: .word
@@ -110,4 +110,22 @@
 .proc reenter: a16, i16, native {
     pea 0
     jmp twice::again
+}
+
+; A block given to a macro with a signature is the caller's code, so it sees the caller's
+; state. Here the macro says nothing about X and Y, and the block still knows they are 16-bit,
+; as the caller does. A `php` in the block and the `plp` after the call restore the same widths.
+.macro around(body: block): a8 {
+    sep #$20
+    body
+}
+
+.proc spliced: a8, i16, native {
+    around!() {
+        ldx #$1234
+        php
+    }
+    plp
+    ldy #$5678
+    rts
 }

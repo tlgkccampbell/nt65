@@ -104,7 +104,7 @@ public sealed class InferredSignaturesTests
             + ".segment RODATA\n.data table: .addr draw\n";
 
         Assert.Contains(FlowFragment.Problems("65816", Text),
-            problem => problem.Contains("`draw` declares `a*`, which assumes nothing about it", StringComparison.Ordinal));
+            problem => problem.Contains("`draw` takes the default `a*`, which assumes nothing about it", StringComparison.Ordinal));
     }
 
     /// <summary>

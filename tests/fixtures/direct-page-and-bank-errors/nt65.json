@@ -6,9 +6,11 @@
     "WRAM":  { "size": "abs", "bank": "$7e" },
     "BANK1": { "size": "abs", "bank": 1 },
     "BANK2": { "size": "abs", "bank": 2 },
-    "BSS":   { "size": "abs", "bank": "$7e" }
+    "BSS":   { "size": "abs", "bank": "$7e" },
+    "SHADOW": { "size": "abs", "bank": "$00", "mirrors": ["$80"] }
   },
   "ranges": {
-    "$2100-$21ff": ["$00-$3f", "$80-$bf"]
+    "$2100-$21ff": ["$00-$3f", "$80-$bf"],
+    "$4300-$43ff": ["$00"]
   }
 }

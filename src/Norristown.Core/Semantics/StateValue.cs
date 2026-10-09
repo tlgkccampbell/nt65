@@ -87,6 +87,14 @@ public readonly record struct StateValue(StateValueKind Kind, long Value)
         "$" + value.ToString("x" + digits.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// Formats runs of banks as messages show them, after the word that suits their number, such
+    /// as <c>bank $80</c> or <c>banks $00-$3f, $80-$bf</c>.
+    /// </summary>
+    public static string FormatBanks(IReadOnlyList<(long First, long Last)> runs) =>
+        (runs is [var only] && only.First == only.Last ? "bank " : "banks ")
+        + string.Join(", ", runs.Select(run => run.First == run.Last ? Hex(run.First, 2) : $"{Hex(run.First, 2)}-{Hex(run.Last, 2)}"));
+
+    /// <summary>
     /// Returns a value indicating whether a register holding this value meets what
     /// <paramref name="needed"/> requires. A known requirement needs the same value. A set needs
     /// a value, or a set of values, that all fall within it.
