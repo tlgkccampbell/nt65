@@ -628,7 +628,9 @@ public static class Catalogue
         Severity.Error,
         "`{0}` is not declared{1}",
         "Nothing in scope here declares the name. Where a name one letter away is declared, or another module "
-            + "exports it, the message reports it, because that is nearly always what was meant.");
+            + "exports it, the message reports it, because that is nearly always what was meant. Where the body of "
+            + "a macro the file calls declares it, the message says so: each expansion has its own copy of such a "
+            + "name, so it can be named only inside the body.");
 
     internal static DiagnosticDescriptor NotDeclaredIn { get; } = Entry(
         Area.Names,

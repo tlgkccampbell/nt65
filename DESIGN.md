@@ -3502,7 +3502,8 @@ annotates a macro that leaves data in the instruction stream:
 
 **Local declarations.** A body may declare labels, constants, scopes, enums, structs,
 unions, charmaps and lists. Each is local to its expansion and can be named only in the
-body. A macro's header resolves names where the macro is declared and a body cannot
+body. A name used outside it is not declared there, and where the body of a macro the file
+calls declares it, the message says so and asks for the declaration in the caller instead. A macro's header resolves names where the macro is declared and a body cannot
 export, so no local type or list can reach the caller, and a type declared in a body
 never gives the caller a shape.
 
