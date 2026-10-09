@@ -1,0 +1,36 @@
+; An `.ensure` goes by what a called routine's body leaves in a flag where the routine declares
+; no flags, because what it does not declare is inferred and used. The bytes are worked out
+; again on every build, so they follow the body when it changes. A routine that names any flag
+; after `->` promises only that flag, so an `.ensure` after it emits what the rest need.
+.module main
+
+.cpu 6502
+
+.export after_inferred, after_declared
+
+.segment CODE
+.proc sets_carry {
+    lda #0
+    sec
+    rts
+}
+
+.proc declares_zero: -> z = 1 {
+    lda #0
+    sec
+    rts
+}
+
+; C is 1 after `sets_carry`, which promises nothing, so the `.ensure` emits nothing.
+.proc after_inferred {
+    jsr sets_carry
+    .ensure c = 1
+    rts
+}
+
+; `declares_zero` promises only Z, so the `.ensure` emits `sec`.
+.proc after_declared {
+    jsr declares_zero
+    .ensure c = 1
+    rts
+}

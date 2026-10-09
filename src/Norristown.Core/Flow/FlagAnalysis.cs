@@ -365,6 +365,32 @@ internal sealed class FlagAnalysis
         || (flag == StatusFlags.Overflow && !value);
 
     /// <summary>
+    /// Returns the flags a suggestion may read just before <paramref name="step"/>, where the
+    /// flags and registers are <paramref name="state"/>. A <c>clc</c> or a <c>sec</c> reads C, and
+    /// so does a compare with zero after N and Z were set from its register. A load reads N and Z
+    /// where its register holds a known constant, and a <c>jmp</c> on a CPU without <c>bra</c> may
+    /// become a branch on any of N, Z, C and V.
+    /// </summary>
+    private static StatusFlags Suggested(Step step, FlagState state, Cpu cpu)
+    {
+        if (step.Statement is not InstructionStatementSyntax instruction)
+            return StatusFlags.None;
+        var mnemonic = instruction.MnemonicKind;
+        if (Compared(mnemonic) is { } compared)
+            return (state.Held.NzFrom & compared) != 0 ? StatusFlags.Carry : StatusFlags.None;
+        return mnemonic switch
+        {
+            MnemonicKind.Clc or MnemonicKind.Sec => StatusFlags.Carry,
+            MnemonicKind.Lda => state.Held.ValueOf(Registers.A) is null ? StatusFlags.None : StatusFlags.Negative | StatusFlags.Zero,
+            MnemonicKind.Ldx => state.Held.ValueOf(Registers.X) is null ? StatusFlags.None : StatusFlags.Negative | StatusFlags.Zero,
+            MnemonicKind.Ldy => state.Held.ValueOf(Registers.Y) is null ? StatusFlags.None : StatusFlags.Negative | StatusFlags.Zero,
+            MnemonicKind.Jmp when !Instructions.Has(cpu, MnemonicKind.Bra) =>
+                StatusFlags.Negative | StatusFlags.Zero | StatusFlags.Carry | StatusFlags.Overflow,
+            _ => StatusFlags.None,
+        };
+    }
+
+    /// <summary>
     /// Returns the state after the call a block ends with, which is what any of the routines it
     /// may call returns with. <paramref name="track"/> is as for the state after one call.
     /// </summary>
@@ -718,7 +744,8 @@ internal sealed class FlagAnalysis
     /// <paramref name="state"/>. With <paramref name="record"/>, it also keeps the state before
     /// each statement, where a statement that two routines share keeps what both agree on. The
     /// suggestions and the checks ask about a few kinds of statement, and an editor asks about
-    /// any line.
+    /// any line. A suggestion may rely on what a called routine returns with, so the flags it
+    /// reads at such a statement are recorded as consumed.
     /// </summary>
     private (FlagState Last, FlagState After) Walk(BasicBlock block, FlagState state, bool record)
     {
@@ -727,7 +754,14 @@ internal sealed class FlagAnalysis
         {
             last = state;
             if (record)
+            {
                 Keep(before, step.Key, state);
+                foreach (var flag in FlagValues.Named)
+                {
+                    if ((Suggested(step, state, layout.Cpu) & flag) != 0)
+                        Consume(state, flag);
+                }
+            }
             state = After(step, state);
         }
         return (last, state);

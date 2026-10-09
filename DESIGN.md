@@ -4828,8 +4828,13 @@ Recorded so the reasoning survives. None is open.
   are worked out, a file whose recorded answers differ is analyzed again, as one that took a stale
   stack effect is. The answers themselves are worked out after every file's analysis, from the
   blocks as they stand, so a change that touches no decision analyzes nothing again. An
-  `.ensure`, and the editor's hints, go only by values a routine promised, so neither relies on
-  another routine's body.
+  `.ensure`, and the editor's hints, go by the same answers the branches do: by what a routine
+  promises, and by what the body of a routine that declares no flags leaves, but never by a flag
+  a routine leaves out of what it names. An `.ensure` is worked out again on every build, so its
+  bytes follow the body. A hint, and the title of its fix, name a routine whose body it relies on
+  without a promise, as in "`g` leaves Z this way but does not promise it", because a line the
+  fix deletes stays deleted when that body changes. The flags a hint reads count as answers its
+  file depended on.
 - **Flags are followed from what the CPU defines.** nt65 tracks N, Z, C, V, D and I as 0, 1 or
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
   `clc`, `sec`, `clv`, `cld`, `sed`, `cli`, `sei`, and a `rep` or `sep` with a constant mask set a

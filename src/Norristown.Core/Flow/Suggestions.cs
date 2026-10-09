@@ -287,25 +287,28 @@ public static class Suggestions
         {
             if (block.Steps is not [.., { Statement: InstructionStatementSyntax branch } step]
                 || !Own(model, step) || !seen.Add(branch) || flags.ProvedAt(step) is not { } proved
-                || flags.Before(step)?.IsBacked(proved.Flag) != true)
+                || flags.Before(step) is not { } before || !before.IsBacked(proved.Flag))
             {
                 continue;
             }
             var text = branch.GetText().Trim();
+            var unpromised = Unpromised.Of(before, proved.Flag);
             if (proved.Taken && block.Next is { QuestionToken: null, ReturnToken: null, Targets.Count: 1 } next
                 && next.Tree == model.Tree)
             {
-                yield return new Diagnostic(next.Tree.GetSpan(next.Span), Catalogue.NextProved.Message(text, proved.Why))
+                yield return new Diagnostic(next.Tree.GetSpan(next.Span),
+                    Catalogue.NextProved.Message(text, proved.Why) + unpromised)
                 {
-                    Fix = new DiagnosticFix(FixKind.Redundant),
+                    Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                     IsUnnecessary = true,
                 };
             }
             else if (!proved.Taken && block.Next is null)
             {
-                yield return new Diagnostic(branch.Tree.GetSpan(branch.Span), Catalogue.BranchNeverTaken.Message(text, proved.Why))
+                yield return new Diagnostic(branch.Tree.GetSpan(branch.Span),
+                    Catalogue.BranchNeverTaken.Message(text, proved.Why) + unpromised)
                 {
-                    Fix = new DiagnosticFix(FixKind.Redundant),
+                    Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                     IsUnnecessary = true,
                 };
             }
@@ -342,6 +345,7 @@ public static class Suggestions
                 continue;
             string branch;
             var why = "";
+            Unpromised? unpromised = null;
             if (always)
             {
                 branch = "bra";
@@ -351,6 +355,7 @@ public static class Suggestions
                 var value = state.ValueOf(flag)!.Value;
                 branch = SyntaxFacts.TextOf(FlagAnalysis.BranchWhen(flag, value));
                 why = $", because {FlagState.Describe(flag, value)}";
+                unpromised = Unpromised.Of(state, flag);
             }
             else
             {
@@ -358,16 +363,19 @@ public static class Suggestions
             }
             var operand = jump.Operand!.GetText().Trim();
             yield return new Diagnostic(jump.Tree.GetSpan(jump.Span),
-                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why))
+                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why) + unpromised)
             {
-                Fix = new DiagnosticFix(FixKind.Branch, branch),
+                Fix = new DiagnosticFix(FixKind.Branch, branch, Caveat: unpromised?.Caveat),
             };
         }
 
-        // The carry comes first, since it is the flag code most often sets on purpose.
+        // The carry comes first, since it is the flag code most often sets on purpose. A flag
+        // whose value nothing fails to promise comes before one a called routine leaves without
+        // promising it.
         static StatusFlags? Known(FlagState state) =>
             new[] { StatusFlags.Carry, StatusFlags.Zero, StatusFlags.Negative, StatusFlags.Overflow }
-                .Where(flag => state.ValueOf(flag) is not null && state.IsFirm(flag))
+                .Where(flag => state.ValueOf(flag) is not null && state.IsBacked(flag))
+                .OrderBy(flag => Unpromised.Of(state, flag) is null ? 0 : 1)
                 .Select(flag => (StatusFlags?)flag)
                 .FirstOrDefault();
     }
@@ -391,18 +399,20 @@ public static class Suggestions
                 var step = block.Steps[i];
                 if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Clc or MnemonicKind.Sec } setup
                     || !Own(model, step) || !seen.Add(setup) || file.Flow.Patched.Contains(step.Key)
-                    || flags.Before(step) is not { } before || !before.IsFirm(StatusFlags.Carry)
+                    || flags.Before(step) is not { } before || !before.IsBacked(StatusFlags.Carry)
                     || before.ValueOf(StatusFlags.Carry) is not { } carry)
                 {
                     continue;
                 }
                 var sets = setup.MnemonicKind == MnemonicKind.Sec;
                 var text = setup.GetText().Trim();
+                var unpromised = Unpromised.Of(before, StatusFlags.Carry);
                 if (carry == sets)
                 {
-                    yield return new Diagnostic(setup.Tree.GetSpan(setup.Span), Catalogue.CarryAlreadySet.Message(text, sets ? 1 : 0))
+                    yield return new Diagnostic(setup.Tree.GetSpan(setup.Span),
+                        Catalogue.CarryAlreadySet.Message(text, sets ? 1 : 0) + unpromised)
                     {
-                        Fix = new DiagnosticFix(FixKind.Redundant),
+                        Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                         IsUnnecessary = true,
                     };
                     continue;
@@ -421,9 +431,10 @@ public static class Suggestions
                 var folded = Decremented(expression, value);
                 yield return new Diagnostic(expression.Tree.GetSpan(expression.Span),
                     Catalogue.CarryFolded.Message(
-                        text, arithmetic.GetText().Trim(), $"{SyntaxFacts.TextOf(uses)} #{folded}", carry ? 1 : 0))
+                        text, arithmetic.GetText().Trim(), $"{SyntaxFacts.TextOf(uses)} #{folded}", carry ? 1 : 0)
+                    + unpromised)
                 {
-                    Fix = new DiagnosticFix(FixKind.CarryFolded, folded, setup.Tree.GetSpan(setup.Span)),
+                    Fix = new DiagnosticFix(FixKind.CarryFolded, folded, setup.Tree.GetSpan(setup.Span), unpromised?.Caveat),
                 };
             }
         }
@@ -484,17 +495,24 @@ public static class Suggestions
             {
                 continue;
             }
+            // A reason that relies on nothing a called routine leaves without promising it comes
+            // first.
             string why;
-            if (before.ValueOf(StatusFlags.Carry) == true && before.IsFirm(StatusFlags.Carry))
+            var carried = before.ValueOf(StatusFlags.Carry) == true && before.IsBacked(StatusFlags.Carry);
+            var unpromised = carried ? Unpromised.Of(before, StatusFlags.Carry) : null;
+            if (carried && unpromised is null)
                 why = "C is already 1";
             else if ((liveness.After(step) & StatusFlags.Carry) == 0)
-                why = "nothing reads the C it sets";
+                (why, unpromised) = ("nothing reads the C it sets", null);
+            else if (carried)
+                why = "C is already 1";
             else
                 continue;
             yield return new Diagnostic(compare.Tree.GetSpan(compare.Span),
-                Catalogue.ZeroCompare.Message(compare.GetText().Trim(), RegisterEffects.Format(register), why))
+                Catalogue.ZeroCompare.Message(compare.GetText().Trim(), RegisterEffects.Format(register), why)
+                + unpromised)
             {
-                Fix = new DiagnosticFix(FixKind.Redundant),
+                Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                 IsUnnecessary = true,
             };
         }
@@ -532,20 +550,25 @@ public static class Suggestions
             {
                 var nz = StatusFlags.Negative | StatusFlags.Zero;
                 var after = before.Loaded(value, bits);
-                string why;
-                if (before.ValueOf(StatusFlags.Negative) == after.ValueOf(StatusFlags.Negative)
+                // A reason that relies on nothing a called routine leaves without promising it
+                // comes first.
+                var said = before.ValueOf(StatusFlags.Negative) == after.ValueOf(StatusFlags.Negative)
                     && before.ValueOf(StatusFlags.Zero) == after.ValueOf(StatusFlags.Zero)
-                    && before.IsFirm(StatusFlags.Negative) && before.IsFirm(StatusFlags.Zero))
-                {
+                    && before.IsBacked(StatusFlags.Negative) && before.IsBacked(StatusFlags.Zero);
+                var unpromised = said ? Unpromised.Of(before, nz) : null;
+                string why;
+                if (said && unpromised is null)
                     why = "N and Z already say what it would";
-                }
                 else if ((liveness.After(step) & nz) == 0)
-                    why = "nothing reads the N and Z it sets";
+                    (why, unpromised) = ("nothing reads the N and Z it sets", null);
+                else if (said)
+                    why = "N and Z already say what it would";
                 else
                     continue;
-                yield return new Diagnostic(load.Tree.GetSpan(load.Span), Catalogue.LoadAlreadyHeld.Message(text, name, hex, why))
+                yield return new Diagnostic(load.Tree.GetSpan(load.Span),
+                    Catalogue.LoadAlreadyHeld.Message(text, name, hex, why) + unpromised)
                 {
-                    Fix = new DiagnosticFix(FixKind.Redundant),
+                    Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                     IsUnnecessary = true,
                 };
                 continue;
@@ -687,6 +710,63 @@ public static class Suggestions
     /// only kind of line a suggestion can change.
     /// </summary>
     private static bool Own(SemanticModel model, Step step) => step.On is null && step.Statement.Tree == model.Tree;
+
+    /// <summary>
+    /// Represents the words a suggestion adds where it relies on what a called routine's body
+    /// leaves in a flag without the routine promising it. Such a routine declares neither the
+    /// flag's value after <c>-&gt;</c> nor that it keeps the flag, so its body is inferred and
+    /// used, and the suggestion says so.
+    /// </summary>
+    /// <param name="Message">The words the suggestion's message ends with.</param>
+    /// <param name="Caveat">The words the title of the suggestion's fix ends with.</param>
+    private sealed record Unpromised(string Message, string Caveat)
+    {
+        /// <summary>
+        /// Returns <paramref name="message"/> with the words <paramref name="unpromised"/> adds at
+        /// its end, or <paramref name="message"/> itself where <paramref name="unpromised"/> is null.
+        /// </summary>
+        public static DiagnosticMessage operator +(DiagnosticMessage message, Unpromised? unpromised) =>
+            unpromised is null ? message : message with { Text = message.Text + unpromised.Message };
+
+        /// <summary>
+        /// Returns the words for what is known about <paramref name="flags"/> in
+        /// <paramref name="state"/>, or null where every routine that knowledge depends on
+        /// promises it. Where several routines do not, the first by name is the one named.
+        /// </summary>
+        public static Unpromised? Of(FlagState state, StatusFlags flags)
+        {
+            Symbol? routine = null;
+            var named = new List<string>();
+            foreach (var flag in new[] { StatusFlags.Negative, StatusFlags.Zero, StatusFlags.Carry, StatusFlags.Overflow })
+            {
+                if ((flags & flag) == 0)
+                    continue;
+                var declining = state.SourcesOf(flag)
+                    .Where(source => !Promises(source, flag))
+                    .OrderBy(source => source.QualifiedName, StringComparer.Ordinal)
+                    .FirstOrDefault();
+                if (declining is null || (routine is not null && declining != routine))
+                    continue;
+                routine = declining;
+                named.Add(FlagState.Name(flag));
+            }
+            if (routine is null)
+                return null;
+            var names = string.Join(" and ", named);
+            var them = named.Count > 1 ? "them" : "it";
+            return new Unpromised(
+                $"; `{routine.DisplayName}` leaves {names} this way but does not promise {them}",
+                $", though `{routine.DisplayName}` does not promise {names}");
+        }
+
+        /// <summary>
+        /// Returns whether <paramref name="routine"/> declares the value it returns
+        /// <paramref name="flag"/> with, or that it keeps the flag.
+        /// </summary>
+        private static bool Promises(Symbol routine, StatusFlags flag) =>
+            FlagAnalysis.SignatureOf(routine) is { } signature
+            && ((signature.ExitFlags.Known | FlagExits.FlagsOf(signature.Keeps)) & flag) != 0;
+    }
 
     /// <summary>
     /// The suggestions other than tail calls found for one file, with what they were found from.

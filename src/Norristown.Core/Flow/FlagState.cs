@@ -174,16 +174,9 @@ internal sealed class FlagState : IEquatable<FlagState>
     }
 
     /// <summary>
-    /// Returns whether what is known about <paramref name="flag"/> here comes from this routine's
-    /// own code and its signature alone, and not from what a routine it calls returns with. A hint
-    /// goes only by such a flag, so that it neither relies on another routine's body nor goes
-    /// stale when that body changes.
-    /// </summary>
-    public bool IsFirm(StatusFlags flag) => !sources.ContainsKey(flag) && IsBacked(flag);
-
-    /// <summary>
     /// Returns whether what is known about <paramref name="flag"/> here relies on nothing a
-    /// routine called on the way declined to promise.
+    /// routine called on the way declined to promise. A hint and an <c>.ensure</c> go only by
+    /// such a flag.
     /// </summary>
     public bool IsBacked(StatusFlags flag) => ((Unbacked | Quiet) & flag) == 0;
 
