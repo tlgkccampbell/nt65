@@ -1665,16 +1665,14 @@ public sealed class Emitter
         public void NotTranspiled(SyntaxNode node) => emitter.NotTranspiled(node);
 
         /// <summary>
-        /// Returns one value of a slot as <see cref="ExpressionWriter.Datum"/> returns it when it
-        /// returns anything, and as <see cref="ExpressionWriter.Rendered"/> writes it otherwise. Any comment either produces is
-        /// dropped.
+        /// Returns one value of a slot as <see cref="ExpressionWriter.SlotText"/> writes it.
         /// </summary>
         /// <param name="value">The value.</param>
         /// <param name="width">The width of the slot, in bytes.</param>
         /// <param name="bigEndian">Whether the slot's bytes are written high first.</param>
         /// <returns>The value as the output writes it.</returns>
         public string ValueText(SyntaxNode value, int width, bool bigEndian) =>
-            emitter.expressions.Datum(value, width, bigEndian, []) ?? emitter.expressions.Rendered(value);
+            emitter.expressions.SlotText(value, width, bigEndian);
     }
 
     /// <summary>

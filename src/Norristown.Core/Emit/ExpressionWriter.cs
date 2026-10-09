@@ -80,9 +80,28 @@ internal sealed class ExpressionWriter(
     internal void InPlace(SyntaxNode value, int width, bool bigEndian, TokenRewriter rewriter)
     {
         if (Datum(value, width, bigEndian, rewriter.Comments) is { } text)
+        {
             rewriter.Replace(value, text);
-        else
-            Substitute(value, rewriter, nested: false);
+            return;
+        }
+        Substitute(value, rewriter, nested: false);
+        if (width == 1)
+            NarrowToByte(value, rewriter);
+    }
+
+    /// <summary>
+    /// Returns one value of a slot <paramref name="width"/> bytes wide, written out rather than
+    /// edited in place. It is what <see cref="Datum"/> returns when that returns anything, and
+    /// what <see cref="Rendered"/> writes otherwise, inside <c>.lobyte()</c> where
+    /// <see cref="LinkRange.NarrowsToByte"/> says a one-byte slot needs it. Any comment either
+    /// produces is dropped.
+    /// </summary>
+    internal string SlotText(SyntaxNode value, int width, bool bigEndian)
+    {
+        if (Datum(value, width, bigEndian, []) is { } text)
+            return text;
+        var rendered = Rendered(value);
+        return width == 1 && LinkRange.NarrowsToByte(model, value, Expansion) ? LowByteOf(rendered) : rendered;
     }
 
     /// <summary>
@@ -121,16 +140,21 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
-    /// Rewrites a negative constant in an immediate as its two's complement. An immediate is a
-    /// byte or a word slot, as wide as the instruction makes it.
+    /// Rewrites a negative constant in an immediate as its two's complement, and writes a one-byte
+    /// immediate inside <c>.lobyte()</c> where <see cref="LinkRange.NarrowsToByte"/> says ca65
+    /// needs it there. An immediate is a byte or a word slot, as wide as the instruction makes it.
     /// </summary>
     internal void Immediate(StatementSyntax statement, int bytes, TokenRewriter rewriter)
     {
-        if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax { Value: var value, SecondValue: null } }
-            && bytes is 2 or 3 && Datum(value, bytes - 1, bigEndian: false, rewriter.Comments) is { } text)
+        if (statement is not InstructionStatementSyntax { Operand: ImmediateOperandSyntax { Value: var value, SecondValue: null } }
+            || bytes is not (2 or 3))
         {
-            rewriter.Replace(value, text, around: false);
+            return;
         }
+        if (Datum(value, bytes - 1, bigEndian: false, rewriter.Comments) is { } text)
+            rewriter.Replace(value, text, around: false);
+        else if (bytes == 2)
+            NarrowToByte(value, rewriter);
     }
 
     /// <summary>
@@ -203,6 +227,12 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
+    /// Returns <paramref name="text"/> inside <c>.lobyte()</c>, without doubling the parentheses
+    /// of text that is already one parenthesized whole.
+    /// </summary>
+    private static string LowByteOf(string text) => IsWrapped(text) ? ".lobyte" + text : $".lobyte({text})";
+
+    /// <summary>
     /// Writes <paramref name="text"/>, an operation, in place of a node that stands for a single
     /// value. Where the node is an operand of another operation, the text is parenthesized, so
     /// that <c>#&gt;player::hp</c> is <c>#&gt;(player+255)</c> rather than the high byte of
@@ -213,6 +243,24 @@ internal sealed class ExpressionWriter(
 
     /// <summary>Returns the name a symbol has in the output, in the expansion being written.</summary>
     private string NameOf(Symbol symbol) => names.Of(symbol, Expansion);
+
+    /// <summary>
+    /// Writes <paramref name="value"/>, the value of a one-byte slot, inside <c>.lobyte()</c>
+    /// where <see cref="LinkRange.NarrowsToByte"/> says ca65 would otherwise refuse it for its
+    /// address size. The low byte loses nothing, because the value always fits a byte. The edits
+    /// <paramref name="rewriter"/> already holds for the value are kept inside the call.
+    /// </summary>
+    private void NarrowToByte(SyntaxNode value, TokenRewriter rewriter)
+    {
+        if (!LinkRange.NarrowsToByte(model, value, Expansion))
+            return;
+
+        // The comments stay with the line rather than going inside the call.
+        List<string> comments = [];
+        var text = rewriter.Inline(value, comments);
+        rewriter.Comments.AddRange(comments);
+        rewriter.Replace(value, LowByteOf(text), around: false);
+    }
 
     /// <summary>
     /// Records the edits that make the output differ from the source. These are flat names, the
@@ -700,12 +748,6 @@ internal sealed class ExpressionWriter(
         // the comment only repeats part of it.
         else if (LinkTime(call, null, [], []) is { } linked)
         {
-            // ca65 refuses an absolute address in a one-byte slot whatever the value comes to, so
-            // a value that always fits a byte, signed or unsigned, is written as its low byte,
-            // which loses nothing.
-            if (LinkRange.Of(model, call, Expansion) is { Low: >= -0x80, High: <= 0xff })
-                linked = IsWrapped(linked) ? $".lobyte{linked}" : $".lobyte({linked})";
-
             // A parenthesis first in an operand would read as indirection, which a unary `+` prevents.
             text = linked.StartsWith('(') && call.FirstAncestorOrSelf<AbsoluteOperandSyntax>() is { } operand
                 && TokenRewriter.Tokens(operand)[0].Position == tokens[0].Position

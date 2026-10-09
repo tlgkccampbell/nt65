@@ -87,10 +87,13 @@ public static class DataLengths
     };
 
     /// <summary>
-    /// Returns why an operand that is an address, or an address plus or minus a constant, does
-    /// not fit a slot of <paramref name="bytes"/> bytes, or null when it fits or is not such an
-    /// address. ca65 refuses the fragment with a range error, so nt65 reports it first, with the
-    /// fix.
+    /// Returns why an operand whose value only the linker knows does not fit a slot of
+    /// <paramref name="bytes"/> bytes, or null when it fits. ca65 refuses the fragment with a
+    /// range error, so nt65 reports it first, with the fix. An address, or an address plus or
+    /// minus a constant, is reported as an address wider than the slot. Any other operand in a
+    /// one-byte slot that names an absolute or far address is reported unless
+    /// <see cref="LinkRange"/> shows its value always fits a byte, which the output then keeps
+    /// the low byte of.
     /// </summary>
     public static DiagnosticMessage? TooWide(
         SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
@@ -98,25 +101,22 @@ public static class DataLengths
         if (model.ValueOf(operand, on).AsNumber() is not null)
             return null;
 
-        // A call to a `.func` given an address is written as the function's body for ld65 to
-        // finish, narrowed to its low byte where its value always fits one. ca65 refuses an
-        // address in a byte otherwise, so a call nt65 cannot show fits is refused here.
-        if (bytes == 1 && LinkRange.HasLinkedCall(model, operand, on))
+        if (AddressIn(operand, model, on) is { } address && model.AddressSizeOf(address, null, on) is { } size)
         {
-            if (LinkRange.Of(model, operand, on) is { Low: >= -0x80, High: <= 0xff })
+            if ((int)size <= bytes)
                 return null;
-            return Catalogue.LinkedValueMayNotFit.Message(operand.GetText().Trim(), slot);
+            var text = address.GetText().Trim();
+            var fix = bytes == 1 ? $"use `<{text}` for its low byte" : $"use `.loword({text})` for its low 16 bits";
+            return Catalogue.AddressDoesNotFit.Message(
+                text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
         }
 
-        if (AddressIn(operand, model, on) is not { } address
-            || model.AddressSizeOf(address, null, on) is not { } size || (int)size <= bytes)
-        {
+        // ca65 refuses an absolute or far address in a byte whatever the value comes to. The
+        // output keeps the low byte of a value that always fits one, and anything else is
+        // refused here.
+        if (bytes != 1 || !LinkRange.NamesWideAddress(model, operand, on) || LinkRange.FitsByte(LinkRange.Of(model, operand, on)))
             return null;
-        }
-        var text = address.GetText().Trim();
-        var fix = bytes == 1 ? $"use `<{text}` for its low byte" : $"use `.loword({text})` for its low 16 bits";
-        return Catalogue.AddressDoesNotFit.Message(
-            text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
+        return Catalogue.LinkedValueMayNotFit.Message(operand.GetText().Trim(), slot);
     }
 
     /// <summary>Reports what the assembler would refuse about a directive's values.</summary>
@@ -458,6 +458,11 @@ public static class DataLengths
         if (bytes is null && Holds(element) is { } range)
         {
             CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{SyntaxFacts.TextOf(element)}`");
+        }
+        if (bytes is null && element == DirectiveKind.Byte
+            && TooWide(given, 1, $"`{name}` holds 8 bits", model, on) is { } message)
+        {
+            Report(given, model, diagnostics, on, message);
         }
     }
 

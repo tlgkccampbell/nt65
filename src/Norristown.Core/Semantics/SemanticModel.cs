@@ -334,6 +334,13 @@ public sealed class SemanticModel
         new BoundNames(resolved, BindingsOf(on)).SymbolOf(name);
 
     /// <summary>
+    /// Returns the expression a name stands for in <paramref name="on"/>, such as the argument a
+    /// macro call gives the parameter it names, or null when the name is bound to none there.
+    /// </summary>
+    internal SyntaxNode? BoundItemOf(NameExpressionSyntax name, Expansion? on) =>
+        new BoundNames(resolved, BindingsOf(on)).BoundItem(name);
+
+    /// <summary>
     /// Returns how much room a data directive takes, which is the bytes it generates and the
     /// number of elements they form. Returns null where nt65 cannot tell, such as for an
     /// <c>.align</c>.

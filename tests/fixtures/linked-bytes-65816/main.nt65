@@ -1,0 +1,16 @@
+; On the 65816 an immediate is one byte while its register is 8 bits wide, and a value there
+; that names an address and always fits a byte is written as its low byte, as it is on the
+; 6502. A 16-bit immediate holds an absolute address, so it is written as it stands.
+.module main
+
+.cpu 65816
+
+.export start
+
+.segment CODE
+.proc start: a8, i16, native {
+    lda #start / 256
+    lda #(start >> 8) .mod 10
+    ldx #start / 2
+    rts
+}
