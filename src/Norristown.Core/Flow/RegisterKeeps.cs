@@ -141,7 +141,8 @@ public static class RegisterKeeps
             UnpromisedKeeps.Check(walks[name], region, Of, ReadsOf, readers, Declining, diagnostics);
 
         // A routine that declares what it reads shows its declaration, which is what its callers
-        // go by, and is checked against what its body was found to read.
+        // go by, and is checked against what its body was found to read. Where its body passes
+        // control to code nt65 cannot follow, that code may read whatever it can see.
         foreach (var (name, region) in regions)
         {
             if (region.Routine.Signature?.Reads is not { } declared)
@@ -150,7 +151,7 @@ public static class RegisterKeeps
                 continue;
             }
             region.Reads = new RoutineReads(declared, true);
-            if ((reads[name].Read & ~declared) != Registers.None)
+            if ((reads[name].Read & ~declared) != Registers.None || (!reads[name].Complete && declared != Registers.All))
                 Undeclared(region, declared, walks[name], diagnostics);
         }
 
@@ -165,11 +166,13 @@ public static class RegisterKeeps
         return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers, effects);
 
         // Reports each register a routine reads that its `reads` does not list, at the first place
-        // on each path where its entry value is used.
+        // on each path where its entry value is used. A register whose entry value only code nt65
+        // cannot follow may see is reported at the first place control passes to such code.
         void Undeclared(FlowRegion region, Registers declared, RegisterWalk walk, List<Diagnostic> report)
         {
             var sites = new Dictionary<Registers, (Step Step, Symbol? Through)>();
-            ReadsAnalysis.Of(walk, region, Of, ReadsOf, readers, sites);
+            var unfollowed = new Dictionary<Registers, (Step Step, Symbol? Through)>();
+            ReadsAnalysis.Of(walk, region, Of, ReadsOf, readers, sites, unfollowed: unfollowed);
             var routine = region.Routine;
             // The item is the signature's own where the signature writes one, and otherwise comes
             // from a signature set, which a fix here should not change.
@@ -184,13 +187,40 @@ public static class RegisterKeeps
                 var fix = register == Registers.C
                     ? $": add `{name}` to `reads`, or set the carry with `clc` or `sec` first"
                     : $": add `{name}` to `reads`, or give {RegisterEffects.Format(register)} a value first";
+                Report(step, register, via + fix, item.Node is not null ? name : null);
+            }
+
+            // Code nt65 cannot follow may use every entry value it can see, so each place control
+            // passes to such code is reported once, with all the registers it may use.
+            foreach (var place in unfollowed
+                .Where(pair => (declared & pair.Key) == Registers.None && !sites.ContainsKey(pair.Key))
+                .GroupBy(pair => pair.Value))
+            {
+                var (step, through) = place.Key;
+                var registers = place.Aggregate(Registers.None, (all, pair) => all | pair.Key);
+                var via = through is null
+                    ? " where control passes to code nt65 cannot follow"
+                    : $" through `{through.DisplayName}`, which nt65 cannot follow";
+                var one = RegisterEffects.Each(registers).Count() == 1;
+                var (them, values) = one ? ("it", "a value") : ("them", "values");
+                var fix = through?.Signature is null
+                    ? $": add {them} to `reads`, or give {them} {values} first"
+                    : $": add {them} to `reads`, give {them} {values} first, or declare what `{through.DisplayName}` reads";
+                var name = one && item.Node is not null
+                    ? RegisterEffects.Format(registers).ToLowerInvariant()
+                    : null;
+                Report(step, registers, via + fix, name);
+            }
+
+            // Reports the registers used at a step, with how their values got there. Where one
+            // register is named, the fix adds it to the routine's `reads`.
+            void Report(Step step, Registers registers, string tail, string? added) =>
                 report.Add(new Diagnostic(
                     step.Statement.Tree.GetSpan(step.Statement.Span),
-                    Catalogue.ReadsUndeclared.Message(routine.DisplayName, written, RegisterEffects.Format(register), via + fix))
+                    Catalogue.ReadsUndeclared.Message(routine.DisplayName, written, RegisterEffects.Format(registers), tail))
                 {
-                    Fix = item.Node is not null ? new DiagnosticFix(FixKind.Reads, name, routine.DeclarationSpan) : null,
+                    Fix = added is not null ? new DiagnosticFix(FixKind.Reads, added, routine.DeclarationSpan) : null,
                 });
-            }
         }
 
         // Returns what a routine keeps. That is what the walk found or, for a routine whose body

@@ -2221,7 +2221,11 @@ carry passed in on purpose from one left over by accident. Callers go by the dec
 by the body, as they go by `keeps`, so an edit to a body does not change what its callers are
 told. On an extern proc and an imported routine it is trusted. `reads none` says a routine reads
 nothing, which is not what writing no `reads` says of a routine with no body: that one may read
-anything. A signature set may give `reads`, and a signature that writes its own takes the place
+anything. So may code nt65 cannot follow, such as an indirect jump with `.next ?`. Where a
+routine that declares `reads` passes control to either while a register or the stack still
+holds one of its caller's values, each such register `reads` does not list is reported at that
+call or jump, which says the call could not be followed. Declaring what the callee reads, or
+giving the registers values first, answers it. A signature set may give `reads`, and a signature that writes its own takes the place
 of the set's.
 
 **`.state keeps a` is what a restore the analysis cannot see says.** A routine that saves a

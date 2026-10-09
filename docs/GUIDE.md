@@ -1355,7 +1355,9 @@ to the tail uses the caller's Y.
 
 A routine can declare what it reads with `reads`, and nt65 then checks its body against the
 declaration. A register the body uses without its being listed is an error where it is used,
-which is how a missing `clc` shows up. Callers go by the declaration. On an extern proc or an
+which is how a missing `clc` shows up. A call or a jump nt65 cannot follow may use every
+register that still holds what the caller left, so each one not listed is an error there.
+Callers go by the declaration. On an extern proc or an
 import it is trusted, which gives a ROM routine's inputs somewhere to live, and `reads none`
 says the routine reads nothing, which leaving `reads` out does not:
 

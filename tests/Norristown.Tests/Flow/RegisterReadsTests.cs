@@ -192,6 +192,26 @@ public sealed class RegisterReadsTests
     }
 
     /// <summary>
+    /// A declared <c>reads</c> is checked at a call nt65 cannot follow too, because the callee may
+    /// use any entry value still held there. One that can see none of them reads nothing.
+    /// </summary>
+    [Fact]
+    public void ACallThatCannotBeFollowedBreaksADeclaredReads()
+    {
+        Assert.Equal(
+            ["main.nt65:3: `p` declares `reads a, c, z, n, v`, but uses the value its caller left in X, Y through `rom`, "
+                + "which nt65 cannot follow: add them to `reads`, give them values first, or declare what `rom` reads"],
+            Problems(".proc rom = $FFD2\n.proc p: reads a, c, z, n, v {\n    jsr rom\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:5: `p` declares `reads a, x, c, z, n, v`, but uses the value its caller left in Y where control "
+                + "passes to code nt65 cannot follow: add it to `reads`, or give it a value first"],
+            Problems(".segment BSS\n.data vector: .addr\n.segment CODE\n.proc p: reads a, x, c, z, n, v {\n"
+                + "    jmp (vector)\n    .next ?\n}\n"));
+        Assert.Empty(Problems(".proc rom = $FFD2\n.proc p: reads a, c, z, n, v {\n    ldx #0\n    ldy #0\n    jsr rom\n    rts\n}\n"));
+        Assert.Empty(Problems(".proc rom = $FFD2: reads a\n.proc p: reads a {\n    jsr rom\n    rts\n}\n"));
+    }
+
+    /// <summary>
     /// A store that a <c>.state saves</c> marks only saves the register, so it is not a use of it,
     /// and the <c>.state keeps</c> where the value is loaded back says the register is kept.
     /// </summary>
