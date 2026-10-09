@@ -59,7 +59,8 @@ the same cc65, and `build.ps1` compares them with `expected.sha256` and fails if
   address and jumps there with `rts`, and its `.next` names the table, so nt65 follows the call
   to every entry point in it. Each of those leaves with `jmp bankrts`, which switches back to
   the caller's bank before it returns, and nt65 checks what the routine hands back through
-  `bankrts`.
+  `bankrts`. `bankrts` declares `pulls 1`, the saved bank above the original caller's return
+  address, so nt65 checks that it returns through that address.
 - `src/chrram.nt65`: CHR RAM data setup, in bank 13.
 - `src/bg.nt65`: background graphics setup.
 - `src/player.nt65`: player sprite graphics setup and movement. The sprite is drawn in bank 2,

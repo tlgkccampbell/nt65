@@ -1239,6 +1239,7 @@ items are:
 | `near` `far` | entered by `jsr`/`jmp` and left by `rts`, or by `jsl`/`jml` and `rtl` | `near` |
 | `inline n`, `inline .strz` | the routine returns past data written after each call: n bytes, or one `.strz` (§7.4) | none |
 | `pushed n` | the caller pushes n bytes before the call (below) | none |
+| `pulls n` | the routine is entered with n bytes above its return address, and pulls them before it returns (below) | none |
 | `interrupt` | an interrupt handler (below) | none |
 | `noreturn` | the routine never returns (below) | none |
 | `c = 0` `c = 1`, and the same for `z` `n` `v` `d` `i`; `cz = 0` for several | before `->`, the flag's value at every call; after it, its value at every return (below) | none |
@@ -1343,7 +1344,7 @@ A set's name comes first in its list, and the items after it take the place of t
 for the same part. A set may start from another set, but not reach itself. It is declared
 where a constant may be, is exported and brought in with `.use` like one, and writes nothing.
 After `->`, and in a macro's signature, a set gives only its state: `near`, `far`, `inline`,
-`pushed`, `interrupt` and `noreturn` describe how a routine is called, entered or left, and are
+`pushed`, `pulls`, `interrupt` and `noreturn` describe how a routine is called, entered or left, and are
 left out there. There are no defaults per file or per segment: the built-in defaults above stay
 what a signature that says nothing means.
 
@@ -1376,7 +1377,24 @@ while the warning stands.
 the analysis stack starts with those bytes and the return address above them, two bytes near
 and three far, so a `.frame` can lay out both (below). At a call, where what the caller has
 pushed is known, it must be at least n bytes, on every CPU. The call leaves the stack as it
-found it: the caller removes the arguments.
+found it: the caller removes the arguments. Bytes the routine was handed and has not pulled
+count towards them, as its own pushes do.
+
+`pulls n` says the routine is entered with n bytes above its return address and pulls them
+before it returns. A routine that pushes bytes and then jumps to such a routine hands them
+over, and the routine returns to whoever called the one that jumped: msbasic's operator stack
+enters `FRM_PERFORM1` with the stacked operand above the performer's address it returns
+into, and the snrom template's `bankrts` is entered by `jmp` with the bank `bankcall` saved
+above the original caller's return address. n is a constant the configuration may decide, as
+the counts of `pushed n` and `inline n` are. At every entry of the routine, its own name and
+every label entered from outside, the analysis stack starts with the return address and n
+bytes above it that nothing is known about, so a pull of any size takes them one byte at a
+time and a `plp` that pulls one restores an unknown status. A call puts nothing above the
+return address, so a `jsr` or `jsl` to such a routine, or to a label in it, is the error
+`pulls-routine-called`, on every CPU. A jump or a branch into it is not checked for the n
+bytes, because the routine that pushed them is usually not the one that jumps in; the
+contract is enforced on the routine, at its returns (below). `pulls` with `inline`, which is
+entered by its call, is the error `pulls-with-inline`, and an interrupt handler takes neither.
 
 Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.proc CHROUT = $FFD2: a8, i8`, §6.1) and an imported routine
@@ -1447,7 +1465,7 @@ the known top gets a value nothing is known of. The whole stack becomes unknown 
 or pull whose size is unknown, and at a merge where the incoming stacks differ in depth.
 
 **Assertions.** `.state` takes the same items as a signature, except those that describe a
-routine rather than a point in it: `near`, `far`, `inline`, `pushed`, `interrupt`, `noreturn`,
+routine rather than a point in it: `near`, `far`, `inline`, `pushed`, `pulls`, `interrupt`, `noreturn`,
 the `*` items, and a signature set, which stands for items of its own. `keeps` is the one item
 that is about a routine and is written at a point too, because a routine's promise is its
 point fact asked at every way out of it (§7.7):
@@ -1465,7 +1483,8 @@ sides meet in the middle, then: a jump in is checked for the parts the declarati
 the code after the label assumes no more than those.
 
 The analysis stack at such a label is **what entering the routine leaves**: nothing, or, for a
-routine that declares `pushed n`, the arguments and the return address above them. Whoever jumps in
+routine that declares `pushed n`, the arguments and the return address above them, and for one
+that declares `pulls n`, the return address and the n bytes above it. Whoever jumps in
 is taken to have arrived as a call would, which is the word a tail call to a routine is taken
 at too, and it is the only thing either side can be held to: a `.state` says what the processor
 state at the label is and has no way to say what is on the stack, so there is nothing for the
@@ -1474,7 +1493,10 @@ jump in has not, they disagree, and the stack after the label is one nothing is 
 `pla` there matches no `pha`, a `plp` finds no saved P, a `.frame` counts from a stack pointer
 nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
 a label, and a second entry point that reads what its caller pushed says so with `pushed n`,
-which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
+which is on the stack there exactly as it is at the routine's own entry. A label that a jump
+enters with bytes above the return address, which the path above it pushes for itself, starts
+a routine of its own that declares `pulls n`, and the path above runs into it with a
+`.fallthrough`, as msbasic's `L31F3` runs into `L3250`. Nothing carries a push
 or a `.frame` across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
 entered with the stack of a call to it, which is what makes each of them callable.
 
@@ -1553,11 +1575,16 @@ analysis stack, so a frame reaches them:
   emitted in emulation mode;
 - every `rts`/`rtl` reaches the declared exit state and matches the proc's
   `near`/`far` attribute;
-- on every CPU, no `rts`/`rtl` without a `.next` returns with bytes the routine pushed still
-  above a return address no pull has reached, `return-past-pushes`, even where paths that pushed
-  different amounts meet. Once a pull has reached beneath the return address, the routine may
-  have pushed one back, and a routine entered by a jump may have been handed bytes above it, so
-  a return is not checked there;
+- on every CPU, every `rts`/`rtl` without a `.next` finds the return address on top of the
+  stack. A return with bytes the routine pushed still above a return address no pull has
+  reached is `return-past-pushes`, even where paths that pushed different amounts meet. One
+  with bytes `pulls n` declares still on the stack is `return-past-handed-bytes`. One after the
+  routine has pulled more than it pushed and was handed, so that the return goes through bytes
+  that were beneath the return address, is `return-beneath-entry`. Each entry of the routine
+  is checked on its own, so the message names a label the routine was entered at. A routine
+  that pulled its return address may have pushed one back, so once the stack has been beneath
+  the return address, a return is checked only where the routine has pushed less than an
+  address since;
 - every `.ensure` of a 16-bit width is reached in native mode, and every frame slot where
   the stack depth is known;
 - every `jsr`/`jmp` targets a `near` routine and every `jsl`/`jml` a `far` one;
@@ -1566,6 +1593,7 @@ analysis stack, so a frame reaches them:
   returns: this proc never does or is an interrupt handler, or the target never returns;
 - on every CPU, every call to a routine that declares `pushed n` has n bytes pushed, where what the
   caller pushed since it was entered is known;
+- on every CPU, no `jsr` or `jsl` calls a routine that declares `pulls n`;
 - no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
@@ -3607,7 +3635,7 @@ condition may test it:
 ### 11.5 State signatures
 
 On the 65816 a macro may declare the processor state it expects and leaves, with
-the items of a proc signature other than `near`, `far`, `inline`, `pushed`, `interrupt` and
+the items of a proc signature other than `near`, `far`, `inline`, `pushed`, `pulls`, `interrupt` and
 `noreturn` (§7.3), and it may name a signature set, whose state it takes. Unlike a
 proc's, a macro's items default to `*`: a macro assumes and changes nothing it does not
 declare.
@@ -5323,7 +5351,20 @@ Recorded so the reasoning survives. None is open.
   spelled `args n` and was renamed: nt65 passes arguments three ways, in registers through
   `reads`, in bytes after the call through `inline n`, and on the stack, and `args` was the
   only one of the three that named the concept rather than its mechanism. `pushed n` names
-  the mechanism, as `inline n` does.
+  the mechanism, as `inline n` does, and pairs with `pulls n`, the bytes a routine is handed
+  above its return address.
+- **`pulls n` for bytes a routine is handed above its return address.** Some routines are
+  entered by a jump or a branch with bytes above the return address that they pull before
+  they return: msbasic's operator stack, which pulls the stacked operand and returns into the
+  performer, and the snrom template's `bankrts`, which pulls the bank `bankcall` saved. Nothing
+  could say so, so the return check stopped at the first pull beneath the return address,
+  and that half of the rule was withdrawn. The count is a signature item rather than a count
+  written under the `rts`, as `.next .return n` is, because it is a fact about the entry, as
+  `pushed n` is, and the routine that pushed the bytes is not the one that jumps in, so no
+  jump site can be held to it. With the bytes declared, the return check is complete: a return
+  finds its return address on top of the stack. Every entry of such a routine is handed the
+  same bytes, so a label that only a jump enters with them starts a routine of its own. A call
+  cannot hand anything above the return address, so calling such a routine is an error.
 - **A mirror address is an expression.** `(bank << 16) | .loword(f)` says which bank a long
   transfer lands in, and is checked as a transfer to `f`; a prefix or a rule of its own would
   hide that bank.
@@ -5655,7 +5696,8 @@ multiproc   := '.multiproc' path ',' ident (':' state ('->' state)?)? '{' NL bod
 extern-proc := '.proc' ident '=' expr (':' state ('->' state)?)?
 state       := state-item (',' state-item)*
 state-item  := point-item | unchanged-item | '?' | 'near' | 'far' | 'inline' (expr | '.strz')
-             | 'pushed' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr | 'pbr?'
+             | 'pushed' expr | 'pulls' expr | 'interrupt' | 'noreturn' | keeps-item | 'pbr' '=' expr
+             | 'pbr?'
              | path                                   ; a path names a signature set, first
 keeps-item  := 'keeps' reg (',' reg)*                 ; reg is a, x, y or c (§7.7)
 signature   := '.signature' ident '=' state
@@ -5679,7 +5721,7 @@ segment     := '.segment' ident '{' NL (item* | body) '}'
 body        := (item | label-line | instr | data | macro-call | assertion | ensure | frame
              | annotation | splice)*                  ; no proc inside a proc
 splice      := ident                                  ; block parameter, in macros only
-assertion   := '.state' state                         ; not near, far, inline, pushed,
+assertion   := '.state' state                         ; not near, far, inline, pushed, pulls,
                                                       ; interrupt, noreturn, a signature set
                                                       ; or the * items
 ensure      := '.ensure' width (',' width)*           ; other state items parse, and are errors
