@@ -8,7 +8,7 @@
 .import print: proc(inline .strz)
 .import beep: proc(inline 2)
 .export dispatch, nmi, restore, set, table_jump, record_jump, relative, far_relative, first, second
-.export patching, enter, jumper, caller
+.export patching, enter, jumper, caller, stop_here
 
 .segment BSS
 .data cmd:      .byte
@@ -202,4 +202,17 @@
     jsr enter::into
     lda #$34
     rts
+}
+
+; A call to a label inside a routine that never returns ends the path, as a call to the routine
+; does. The label still declares what it takes, and the call is checked against it.
+.proc halt: a8, i8, native, noreturn {
+    lda #0
+    spin:
+    .state a8, native
+    jmp spin
+}
+
+.proc stop_here: a8, i8, native {
+    jsr halt::spin
 }

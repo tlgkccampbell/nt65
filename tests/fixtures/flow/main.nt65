@@ -77,6 +77,20 @@
     jmp clear_screen::again
 }
 
+; A call to a label inside a routine that never returns does not return either, because the
+; path from the label leaves by that routine's exits. Nothing after the call runs, so the routine
+; making it needs no return of its own.
+.proc halt: noreturn {
+    lda #0
+    spin:
+    jmp spin
+}
+
+.export .proc stop_here {
+    ldx #1
+    jsr halt::spin
+}
+
 ; A jump to a constant address, such as a ROM entry point, is not computed. It is a tail call
 ; to a routine nothing is known about, as a call to one is a call to such a routine, so neither
 ; needs an annotation. An extern proc, `.proc CHROUT = $FFD2`, says more where more is known.

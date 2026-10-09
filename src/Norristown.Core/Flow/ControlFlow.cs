@@ -424,12 +424,16 @@ public sealed class ControlFlow
             return BlockEnd.Jump;
 
         // A call returns to the statement after it, even where a `.next` lists the routines it
-        // calls, unless it calls a routine that never returns.
+        // calls, unless it calls a routine that never returns. A call to a label inside a routine
+        // leaves by that routine's exits, so it never returns where the routine never does.
         if (IsCall(step.Statement) || relative is not null)
         {
-            return CalledAt(step, relative) is { Signature: not null } callee && NeverReturns(callee)
-                ? BlockEnd.CallNeverReturns
-                : BlockEnd.Call;
+            return CalledAt(step, relative) switch
+            {
+                { Signature: not null } callee when NeverReturns(callee) => BlockEnd.CallNeverReturns,
+                { Kind: SymbolKind.Label, Signature: null, Routine: { Signature: not null } owner } when NeverReturns(owner) => BlockEnd.CallNeverReturns,
+                _ => BlockEnd.Call,
+            };
         }
         if (unit.Next is not null)
             return BlockEnd.Declared;
