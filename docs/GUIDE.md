@@ -1650,7 +1650,9 @@ label's declaration. It is also what follows a `plp` of a value nt65 did not see
 }
 ```
 
-The editor's fixes write `.state` lines from what the analysis finds reaching a label.
+The editor's fixes write `.state` lines from what the analysis finds reaching a label. Where
+the label is also entered from somewhere nt65 cannot see, that state is only what the visible
+paths bring, so the fix says so, is not preferred, and is offered beside `.state ?`.
 
 ### The stack
 
