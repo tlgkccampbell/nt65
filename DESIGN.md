@@ -1354,7 +1354,9 @@ another interrupt handler or a routine that never returns. On the 6502 and its C
 accepted with the same `rti` and call checks. An `rti` in a routine not marked `interrupt` is a
 warning, `rti-outside-handler`, whose fix adds the item: leaving the mark off would otherwise
 earn the routine more trust than writing it. An `rti` with a `.next` is a computed jump that
-says where it goes, and is not reported.
+says where it goes, and is not reported. A routine that nothing calls and that returns with `rti`
+is still shown as the handler it is, in where routines run from and in the Data view (§14),
+while the warning stands.
 
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near

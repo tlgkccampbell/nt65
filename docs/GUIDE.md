@@ -2129,7 +2129,10 @@ everything below works across modules.
   reached by the calls, tail calls, branches, `.next` targets and `.fallthrough` that lead out
   of a handler, but not into another handler. A transfer nt65 cannot follow, such as one under
   `.next ?`, stops the walk, and the hover of a routine under an interrupt lists the lines where
-  it does so in a `not followed` row. The Data view uses the same walk.
+  it does so in a `not followed` row. The Data view uses the same walk. A routine that nothing
+  calls and that returns with `rti`, such as one only a vector table names, is walked as a
+  handler before it is marked `interrupt`: the outline says `interrupt handler` after it, and the
+  warning `rti-outside-handler` still asks for the mark.
 - **The Processor view**, in the nt65 view of the activity bar, shows what the instruction
   hover shows below its rule for the caret's line, and follows the caret. On the 65816 it gives
   the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the

@@ -95,6 +95,9 @@ public sealed class DataMap
         private readonly Dictionary<long, int> direct = [];
         private readonly MemoryInference memory = new(analysis);
 
+        // Where each routine runs from, and which routines are walked as interrupt handlers.
+        private readonly RoutineContexts contexts = analysis.Contexts();
+
         // The statements that take each location's address without reaching it, in the order the
         // walk found them.
         private readonly Dictionary<LocationKey, List<DataReference>> references = [];
@@ -156,7 +159,6 @@ public sealed class DataMap
         /// </summary>
         private (HashSet<Symbol> Interrupt, HashSet<Symbol> Main) Contexts()
         {
-            var contexts = analysis.Contexts();
             return (Where(RoutineContext.Interrupt), Where(RoutineContext.Main));
 
             HashSet<Symbol> Where(RoutineContext context) => [.. routines.Keys.Where(routine => contexts.Of(routine).HasFlag(context))];
@@ -735,7 +737,7 @@ public sealed class DataMap
                 cancellation.ThrowIfCancellationRequested();
                 var routine = Current(region.Routine);
                 var hazards = Walk(region, byStep, tracked, roles).Hazards;
-                var handler = RoutineContexts.IsHandler(routine);
+                var handler = contexts.Handles(routine);
                 var inInterrupt = handler || interrupt.Contains(routine);
                 var inMain = InMain(routine);
                 foreach (var location in accesses.GroupBy(access => (access.Location, access.Unknown)))
@@ -758,7 +760,7 @@ public sealed class DataMap
 
             // A routine that neither the program's starts nor a handler reaches, such as one
             // only a loop of calls reaches, is taken as the rest of the program's.
-            bool InMain(Symbol routine) => !RoutineContexts.IsHandler(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
+            bool InMain(Symbol routine) => !contexts.Handles(routine) && (main.Contains(routine) || !interrupt.Contains(routine));
         }
 
         /// <summary>

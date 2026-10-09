@@ -408,6 +408,43 @@ public sealed class DataMapTests
     }
 
     /// <summary>
+    /// A routine that only a vector table names and that returns with <c>rti</c> is a handler
+    /// even without the <c>interrupt</c> mark, so its use of a location as a temporary is the
+    /// same hazard a marked handler's is.
+    /// </summary>
+    [Fact]
+    public void AVectorOnlyRoutineIsGradedAsAHandler()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Interrupt hazard=True used=1 direct=4",
+                "  ◦ no config · layout guessed",
+                "  tmp +0 x1 .byte Interrupt Guessed",
+                "    main Temp 2",
+                "    nmi Temp 2 handler",
+                "      ⚠ `nmi` uses it as a temporary @ stx tmp",
+                "      ⚠ and can interrupt `main` between its write and its read @ lda tmp",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                .export .data vectors: .addr = nmi
+                .proc nmi {
+                    stx tmp
+                    ldx tmp
+                    .allow "rti-outside-handler", "the vector table is the only way in"
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
     /// A handler that keeps the interrupted code's D reaches a location's own page whenever it
     /// interrupts code that holds D there, so its use of the location as a temporary is a hazard
     /// there too. Each page the program holds D at says where the access lands.

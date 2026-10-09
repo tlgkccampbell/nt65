@@ -1,3 +1,4 @@
+using Norristown.Flow;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -148,6 +149,42 @@ public sealed class RoutineContextsTests
                     rts
                 }
                 """));
+    }
+
+    /// <summary>
+    /// A routine that nothing calls and that returns with <c>rti</c>, such as one only a vector
+    /// table names, is walked as a handler without the <c>interrupt</c> mark. What it calls runs
+    /// under it, and it is not where the rest of the program starts. An <c>rti</c> under a
+    /// <c>.next</c> is a computed jump, which makes no handler.
+    /// </summary>
+    [Fact]
+    public void AVectorOnlyRoutineThatReturnsWithRtiIsAHandler()
+    {
+        var analysis = FlowFragment.Analyze("6502", """
+            .data vectors: .addr = nmi
+            .export .proc main {
+                rts
+            }
+            .proc nmi {
+                jsr play
+                rti
+            }
+            .proc play {
+                rts
+            }
+            .export .proc jump {
+                rti
+                .next main
+            }
+            """);
+        var contexts = analysis.Contexts();
+        var routines = analysis.FlowFor(Analysis.Path)!.Regions.Select(region => analysis.Program.Current(region.Routine)).ToDictionary(routine => routine.Name);
+        Assert.True(contexts.IsUnmarkedHandler(routines["nmi"]));
+        Assert.True(contexts.Handles(routines["nmi"]));
+        Assert.False(contexts.Handles(routines["jump"]));
+        Assert.Equal(RoutineContext.Interrupt, contexts.Of(routines["nmi"]));
+        Assert.Equal(RoutineContext.Interrupt, contexts.Of(routines["play"]));
+        Assert.Equal(["nmi"], contexts.HandlersOf(routines["play"]).Select(handler => handler.Name));
     }
 
     /// <summary>
