@@ -2120,7 +2120,9 @@ routine is short with a region of another segment between them in the text, as i
 none. ca65's `longbranch` package can choose the short form only for
 a target it has already seen, so its forward branches are always long; here they are not.
 For the flow analysis a long branch is a conditional branch to its target, and a long
-branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen.
+branch to a routine is a tail call (§7.3). Its cycle count is that of the form chosen, taken from
+the short branch's count for the CPU and mode, so in native mode neither form pays for a page
+crossed, and its hover names the causes of its interval as a short branch's does.
 
 **Cycle counts.** Each instruction has a cycle interval [min, max] from the CPU's table
 for its addressing mode and, on the 65816, its widths. Where the count depends on
@@ -2129,19 +2131,22 @@ indexed or indirect-indexed read adds one to max (on the 65816 with a 16-bit ind
 extra cycle is always paid and the count is exact); a branch costs 2 not taken and 3
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
-nonzero, which is known when D is known (§7.5). Tooling shows the interval per
+nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
+decimal mode, which is known where the flag analysis knows the decimal flag. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`
 block of one, what one pass through it costs: the shortest and the longest path from where it
-is entered to where its path ends. A routine no path leaves is shown as never returning,
+is entered to where its path ends. Each way out of a branch is charged what that way costs, as a
+span's is below, so both are costs of paths the code has. A routine no path leaves is shown as never returning,
 rather than as one nothing could be worked out for.
 
 A path that can come back on itself has no longest, and the count is a fewest with a `+`,
 except where the loop counts itself: a register loaded with an immediate, brought down by one
 or more `dex` or `dey` written in a row before the `bne` or `bpl` that takes the turn round
-again, with one way into the loop, one way out of it, and nothing else in it touching that
-register. The loop is found from the back edge and the blocks that dominate it, so a turn may
+again, with one way into the loop, one way out of it, and nothing else in it, nor any routine
+called between the load and the loop, touching that register. On the 65816 a change to the index
+width touches it too, since it clears the high byte. The loop is found from the back edge and the blocks that dominate it, so a turn may
 branch and may call; a loop inside one is counted first, and the turns multiply. `bne` needs
 the stride to divide the count, and `bpl` a count with the sign bit clear, or it is not
 counting down from that immediate at all. Every other loop keeps the `+`, because a loop
@@ -2153,7 +2158,9 @@ would say the routine is quicker than anything it could be built as.
 
 A routine is also shown what it costs **with what it calls**: a call costs the call and then
 whatever the routine it names costs, and a tail jump the same, since control comes back from it
-to this routine's caller. That is worked out across the program, so an edit to one file moves
+to this routine's caller. A `.next` under a call or a jump through a pointer names the routines
+it can reach, which are alternatives: the count adds the cheapest of them to its fewest and the
+dearest to its most, never their sum. That is worked out across the program, so an edit to one file moves
 what another file's lenses say. A call to a routine with no body, one through a pointer, and a
 routine that can reach itself leave no total to give, and the lens says the calls are not in
 the count rather than quietly leaving them out.

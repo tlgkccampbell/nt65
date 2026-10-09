@@ -61,8 +61,9 @@ public sealed class BasicBlock
     /// <summary>
     /// Gets the places outside the routine that the block hands control to other than by a call
     /// or a tail call. They are the target of a conditional branch out of the routine, and the
-    /// labels outside it that a <c>.next</c> under a jump names. Unlike <see cref="Calls"/>, what
-    /// they cost is not counted with the routine's.
+    /// labels outside it that a <c>.next</c> under a jump names. What a branch out of the routine
+    /// reaches is not counted with the routine's cost. What a <c>.next</c> names is counted as a
+    /// tail jump's target is, because control comes back from it to the routine's caller.
     /// </summary>
     public IReadOnlyList<Symbol> Leaves => leaves;
 
@@ -133,6 +134,20 @@ public sealed class BasicBlock
     /// count. A block runs all of its statements or none, so the sum is a bound anyone can use.
     /// </summary>
     public CycleCount? Cycles { get; internal set; }
+
+    /// <summary>
+    /// Gets what the conditional branch that ends the block costs where it is taken, or null where
+    /// the block does not end in one with a count. The block's <see cref="Cycles"/> holds the
+    /// branch's whole interval, and a path that leaves the block by the branch pays this instead.
+    /// </summary>
+    public CycleCount? Taken { get; internal set; }
+
+    /// <summary>
+    /// Gets what the conditional branch that ends the block costs where it is not taken, or null
+    /// where the block does not end in one with a count. A path that falls through from the block
+    /// pays this rather than the branch's whole interval.
+    /// </summary>
+    public CycleCount? NotTaken { get; internal set; }
 
     /// <summary>
     /// Gets a sentence saying why the block has no count, where nt65 knows the instruction but

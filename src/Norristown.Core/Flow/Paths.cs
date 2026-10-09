@@ -7,6 +7,11 @@ namespace Norristown.Flow;
 /// shortest path, which every graph has, since no block costs less than nothing. The upper bound
 /// is a longest path, which only a graph with no cycle in it has.
 /// <para>
+/// A block that ends in a conditional branch is charged by the way a path leaves it. Falling
+/// through pays the branch's least, and the taken edge pays from one more up to its most, so each
+/// bound is the cost of a path the code has.
+/// </para>
+/// <para>
 /// A call's edge is not followed. Control comes back to the statement after the call, which is
 /// the fall-through edge already there, so following the call would walk into the callee and
 /// never come out. What a call costs is put on the block that makes it instead, by the weight
@@ -101,26 +106,84 @@ internal static class Paths
         || !block.Successors.Any(edge => edge.Kind != EdgeKind.Call);
 
     /// <summary>
+    /// Returns what a path pays for a block where it leaves the block by the branch that ends it,
+    /// when <paramref name="taken"/> is true, or by falling through. A block that does not end in a
+    /// conditional branch costs its <paramref name="weight"/> either way. A block of a counted loop
+    /// does too, because the loop's cost already charges its branches.
+    /// </summary>
+    private static CycleCount Charged(BasicBlock block, CycleCount weight, bool taken)
+    {
+        if (block.LoopCycles is not null || block.Taken is not { } yes || block.NotTaken is not { } no)
+            return weight;
+
+        // The weight holds the branch's whole interval, from its least not taken to its most
+        // taken, and the way the path leaves pays only that way's share of it.
+        var paid = taken ? yes : no;
+        return new CycleCount(
+            weight.Minimum + paid.Minimum - no.Minimum,
+            weight.Maximum + paid.Maximum - yes.Maximum);
+    }
+
+    /// <summary>
+    /// Returns the edges a path may follow from a block, as the block reached and whether the
+    /// block's branch is taken to reach it. The edges left out are those <see cref="Onward"/>
+    /// leaves out.
+    /// </summary>
+    private static IEnumerable<(int To, bool Taken)> Edges(BasicBlock block, Func<int, bool> inside) =>
+        block.Successors
+            .Where(edge => edge.Kind != EdgeKind.Call && inside(edge.To) && edge.To != block.Repeats)
+            .Select(edge => (edge.To, edge.Kind != EdgeKind.FallThrough))
+            .Distinct();
+
+    /// <summary>
+    /// Returns the ways a path may end at a block, as whether the block's branch is taken on each.
+    /// They are the ways <see cref="Leaves"/> finds.
+    /// </summary>
+    private static IEnumerable<bool> Exits(BasicBlock block, Func<int, bool> inside)
+    {
+        if (block.BranchesOut)
+            yield return true;
+        var onward = false;
+        foreach (var edge in block.Successors.Where(edge => edge.Kind != EdgeKind.Call))
+        {
+            onward = true;
+            if (!inside(edge.To))
+                yield return edge.Kind != EdgeKind.FallThrough;
+        }
+
+        // A block that nothing follows ends the path where its last statement leaves. Only a
+        // branch proved never taken runs on past its end into nothing.
+        if (!onward)
+            yield return block.End != BlockEnd.Through;
+    }
+
+    /// <summary>
     /// Returns the cost of the shortest path to an end. No block has a negative cost, so this works
-    /// for any arrangement of blocks, including one that forms loops.
+    /// for any arrangement of blocks, including one that forms loops. The cost of reaching a block
+    /// excludes the block itself, which is paid on the edge that leaves it.
     /// </summary>
     private static int? Minimum(
         IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside, Func<BasicBlock, CycleCount?> weight)
     {
         var best = new int?[blocks.Count];
         var pending = new PriorityQueue<int, int>();
-        best[entry] = weight(blocks[entry])!.Value.Minimum;
-        pending.Enqueue(entry, best[entry]!.Value);
+        best[entry] = 0;
+        pending.Enqueue(entry, 0);
         int? minimum = null;
         while (pending.TryDequeue(out var at, out var cost))
         {
             if (cost > best[at])
                 continue;
-            if (Leaves(blocks[at], inside))
-                minimum = minimum is { } found ? Math.Min(found, cost) : cost;
-            foreach (var to in Onward(blocks[at], inside))
+            var block = blocks[at];
+            var own = weight(block)!.Value;
+            foreach (var taken in Exits(block, inside))
             {
-                var through = cost + weight(blocks[to])!.Value.Minimum;
+                var end = cost + Charged(block, own, taken).Minimum;
+                minimum = minimum is { } found ? Math.Min(found, end) : end;
+            }
+            foreach (var (to, taken) in Edges(block, inside))
+            {
+                var through = cost + Charged(block, own, taken).Minimum;
                 if (best[to] is null || through < best[to])
                 {
                     best[to] = through;
@@ -134,7 +197,8 @@ internal static class Paths
     /// <summary>
     /// Returns the cost of the longest path to an end, or null when a path can come back on
     /// itself. The blocks are put in the order they can run in, and a cycle is what is left over
-    /// when nothing can be put next.
+    /// when nothing can be put next. The cost of reaching a block excludes the block itself, which
+    /// is paid on the edge that leaves it.
     /// </summary>
     private static int? Maximum(
         IReadOnlyList<BasicBlock> blocks, bool[] reached, Func<int, bool> inside, Func<BasicBlock, CycleCount?> weight)
@@ -156,7 +220,7 @@ internal static class Paths
         {
             if (reached[i] && waiting[i] == 0)
             {
-                high[i] = weight(blocks[i])!.Value.Maximum;
+                high[i] = 0;
                 pending.Enqueue(i);
             }
         }
@@ -166,16 +230,24 @@ internal static class Paths
         {
             var at = pending.Dequeue();
             visited++;
-            if (Leaves(blocks[at], inside) && high[at] is { } end)
-                maximum = maximum is { } found ? Math.Max(found, end) : end;
-            foreach (var to in Onward(blocks[at], inside))
+            var block = blocks[at];
+            var own = weight(block)!.Value;
+            if (high[at] is { } from)
             {
-                if (high[at] is { } from)
+                foreach (var taken in Exits(block, inside))
                 {
-                    var through = from + weight(blocks[to])!.Value.Maximum;
+                    var end = from + Charged(block, own, taken).Maximum;
+                    maximum = maximum is { } found ? Math.Max(found, end) : end;
+                }
+                foreach (var (to, taken) in Edges(block, inside))
+                {
+                    var through = from + Charged(block, own, taken).Maximum;
                     if (high[to] is null || through > high[to])
                         high[to] = through;
                 }
+            }
+            foreach (var to in Onward(block, inside))
+            {
                 if (--waiting[to] == 0)
                     pending.Enqueue(to);
             }

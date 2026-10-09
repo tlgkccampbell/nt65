@@ -10,7 +10,7 @@ namespace Norristown.Layout;
 /// Provides the cycle count of each instruction on each CPU. The count is an interval, because
 /// some of what it depends on is not in the program. That includes whether an indexed read
 /// crosses a page, whether a branch is taken and crosses one, and, on the 65C02, whether the
-/// decimal flag is set. Every count that is an interval carries the causes of the extra cycles
+/// decimal flag is set where the flag analysis does not know it. Every count that is an interval carries the causes of the extra cycles
 /// at its top, so a reader never has to guess what decides where in the interval their line
 /// falls.
 /// <para>
@@ -41,6 +41,18 @@ public static class Cycles
     /// where only the page crossing is unknown.
     /// </summary>
     private const string Crosses = "+1 when it crosses a page";
+
+    /// <summary>
+    /// The cause shown for a long branch laid out as the inverted branch over a <c>jmp</c>, whose
+    /// condition holding runs the <c>jmp</c>.
+    /// </summary>
+    private const string Jumped = "+2 when taken, which runs the `jmp`";
+
+    /// <summary>
+    /// The cause shown for a long branch laid out as the inverted branch over a <c>jmp</c>, whose
+    /// inverted branch may cross a page skipping the <c>jmp</c>.
+    /// </summary>
+    private const string Skipped = "+1 when not taken and the skip crosses a page";
 
     /// <summary>The cause shown for a direct-page operand on a 65816 whose D the analysis could not follow.</summary>
     private const string DirectPage = "+1 when the low byte of D is not zero";
@@ -83,7 +95,16 @@ public static class Cycles
     /// nt65 has no count for it. A branch is counted both taken and not taken, so its
     /// interval covers everything it can cost.
     /// </summary>
-    public static Timing? Of(Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, ProcessorState? state = null)
+    /// <param name="cpu">The CPU the instruction runs on.</param>
+    /// <param name="mnemonic">The instruction.</param>
+    /// <param name="mode">The addressing mode it is laid out in.</param>
+    /// <param name="state">On the 65816, the processor state reaching the instruction, where known.</param>
+    /// <param name="decimalMode">
+    /// Whether the decimal flag is set where the instruction runs, or null where that is not known.
+    /// On the 65C02 it decides whether arithmetic pays the decimal-mode cycle.
+    /// </param>
+    public static Timing? Of(
+        Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, ProcessorState? state = null, bool? decimalMode = null)
     {
         if (cpu == Cpu.Wdc65816)
             return Of65816(mnemonic, mode, state ?? ProcessorState.Unknown);
@@ -94,18 +115,50 @@ public static class Cycles
             Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02 => wdc65C02,
             _ => throw new ArgumentOutOfRangeException(nameof(cpu), cpu, "not a CPU nt65 knows"),
         };
-        return table.TryGetValue((mnemonic, mode), out var cycles) ? cycles : null;
+        if (!table.TryGetValue((mnemonic, mode), out var cycles))
+            return null;
+        return decimalMode is { } set && cycles.Causes.Contains(Decimal) ? Resolved(cycles, set) : cycles;
     }
 
     /// <summary>
-    /// Returns what a long branch costs in the form it was laid out in. The short form costs what the
-    /// branch costs. In the long form the branch is inverted to skip over a <c>jmp</c>: when
-    /// the original condition holds, execution falls through into the <c>jmp</c>, and when it
-    /// does not, the inverted branch is taken over it.
+    /// Returns what a long branch costs in the form it was laid out in, and what each way out of
+    /// it costs. Both forms are counted from the short branch's timing on <paramref name="cpu"/>
+    /// in <paramref name="state"/>, so a taken branch pays for crossing a page only where the
+    /// short branch would.
+    /// <para>
+    /// The short form costs what the branch costs. In the long form the branch is inverted to skip
+    /// over a <c>jmp</c>. When the original condition holds, execution falls through into the
+    /// <c>jmp</c>, and when it does not, the inverted branch is taken over it.
+    /// </para>
     /// </summary>
-    public static CycleCount OfLongBranch(bool inverted) => inverted
-        ? new CycleCount(3, 5)
-        : new CycleCount(2, 4);
+    /// <param name="cpu">The CPU the branch runs on.</param>
+    /// <param name="state">On the 65816, the processor state reaching the branch, where known.</param>
+    /// <param name="inverted">Whether the branch is laid out as the inverted branch over a <c>jmp</c>.</param>
+    public static (Timing Timing, BranchCycles Edges) OfLongBranch(Cpu cpu, ProcessorState? state, bool inverted)
+    {
+        var branch = Of(cpu, MnemonicKind.Beq, AddressingMode.Relative, state)!.Value;
+        var edges = EdgesOf(branch.Count);
+        if (!inverted)
+            return (branch, edges);
+
+        // Where the condition holds, the inverted branch is not taken and the `jmp` runs. Where it
+        // fails, the inverted branch is taken over the `jmp`, and may cross a page doing so.
+        var holds = edges.NotTaken + new CycleCount(3);
+        var fails = edges.Taken;
+        var count = new CycleCount(Math.Min(holds.Minimum, fails.Minimum), Math.Max(holds.Maximum, fails.Maximum));
+        string[] causes = fails.IsExact ? [Jumped] : [Jumped, Skipped];
+        return (new Timing(count, [.. causes]), new BranchCycles(holds, fails));
+    }
+
+    /// <summary>
+    /// Returns what each way out of a short conditional branch whose whole count is
+    /// <paramref name="branch"/> costs. Not taken, it costs its least. Taken, it costs at least
+    /// one cycle more, and its most where it crosses a page. An exact count costs the same either
+    /// way.
+    /// </summary>
+    public static BranchCycles EdgesOf(CycleCount branch) => branch.IsExact
+        ? new BranchCycles(branch, branch)
+        : new BranchCycles(new CycleCount(branch.Minimum + 1, branch.Maximum), new CycleCount(branch.Minimum));
 
     /// <summary>
     /// Returns the timing of a 65816 instruction. The table counts the 8-bit form. A 16-bit
@@ -210,6 +263,18 @@ public static class Cycles
             (_, AddressingMode.Implied) => new Timing(2),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Returns the timing of 65C02 arithmetic whose decimal flag is known to be
+    /// <paramref name="set"/>. The decimal-mode cycle is then paid always or never, rather than
+    /// being an interval.
+    /// </summary>
+    private static Timing Resolved(Timing arithmetic, bool set)
+    {
+        var binary = new Timing(
+            new CycleCount(arithmetic.Count.Minimum, arithmetic.Count.Maximum - 1), arithmetic.Causes.Remove(Decimal));
+        return set ? binary + new Timing(1) : binary;
     }
 
     /// <summary>
@@ -364,8 +429,8 @@ public static class Cycles
                 new Timing(new CycleCount(5, 7), [Taken, TakenCrossing]));
         }
 
-        // Decimal arithmetic costs one more on the 65C02, and nothing in the program says
-        // whether the decimal flag is set where the instruction runs.
+        // Decimal arithmetic costs one more on the 65C02. The table holds the count where the
+        // decimal flag is not known, and the flag analysis settles it where the flag is known.
         foreach (var mode in table.Keys.Where(key => key.Item1 is Adc or Sbc).ToList())
             table[mode] = table[mode].Maybe(1, Decimal);
         return table.ToFrozenDictionary();
