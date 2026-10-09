@@ -63,7 +63,9 @@ public sealed class CodeLensTests
         Assert.Equal(
             [
                 (2, "11 cycles"),
-                (7, "11-15 cycles"),
+                // Not taken, the branch costs 2 and the pass 3 + 2 + 2 + 6 = 13. Taken, it costs 3,
+                // or 4 across a page, and the pass 3 + 3 + 6 = 12 to 13.
+                (7, "12-13 cycles"),
                 (14, "11+ cycles, loops"),
                 (20, "12 cycles, 23 with calls"),
 
@@ -181,8 +183,9 @@ public sealed class CodeLensTests
                 // there, and the jump is not treated as a call the count could not follow.
                 "9 cycles, 17 with calls, then never returns",
 
-                // One of its paths returns, so it is not marked as never returning.
-                "8-13 cycles",
+                // One of its paths returns, so it is not marked as never returning. That path
+                // costs 3 + 2 + 6 = 11, and the one taken to the jump 3 + 3 + 3 = 9 to 10.
+                "9-11 cycles",
 
                 // It runs on into a routine that never returns, so it never returns either.
                 "2 cycles, then never returns",
@@ -261,8 +264,8 @@ public sealed class CodeLensTests
                 // The indirect jump costs 5, and control comes back from w1 or w2 to the caller.
                 "5 cycles, 13-15 with calls",
 
-                // Each block is charged the branch's whole interval of 2 to 4, so either way
-                // costs 2 + 2 + 5 = 9 to 11. The way to w1 adds 8 and the way to w2 adds 10.
+                // The way to w1 falls through the branch for 2 + 2 + 5 = 9 and adds 8. The way to
+                // w2 takes it for 2 + 3 + 5 = 10, or 11 across a page, and adds 10.
                 "9-11 cycles, 17-21 with calls",
                 "8 cycles",
                 "10 cycles",
@@ -620,6 +623,17 @@ public sealed class CodeLensTests
                 bpl @turn
                 rts
             }
+            .proc branching {
+                ldx #10
+            @turn:
+                lda $10
+                beq @skip
+                nop
+            @skip:
+                dex
+                bne @turn
+                rts
+            }
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
@@ -653,8 +667,15 @@ public sealed class CodeLensTests
                 "19+ cycles, loops",
 
                 // `bpl` tests the sign bit, and 199 has it set after the first `dex`, so the flag
-                // analysis proves the branch is never taken and the body runs once.
-                "17-19 cycles",
+                // analysis proves the branch is never taken and the body runs once. The branch
+                // costs 2 not taken, so the pass is 2 + 5 + 2 + 2 + 6 = 17.
+                "17 cycles",
+
+                // Short of the branch back, a turn costs 3 + 2 + 2 + 2 = 9 not taking the inner
+                // branch and 3 + 3 + 2 = 8 to 9 taking it. Ten turns with the branch back taken
+                // nine times, at 3 to 4, cost 2 + 80 + 27 + 2 + 6 = 117 at least and
+                // 2 + 90 + 36 + 2 + 6 = 136 at most.
+                "117-136 cycles",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }

@@ -440,7 +440,7 @@ public sealed class FlowTests
 
     /// <summary>
     /// Checks that a branch to another routine is a way out of the routine, so the shortest pass
-    /// can end there. A loop that such a branch can leave is not counted.
+    /// can end there, paying for the branch taken. A loop that such a branch can leave is not counted.
     /// </summary>
     [Fact]
     public void ABranchToAnotherRoutineIsAWayOut()
@@ -454,8 +454,10 @@ public sealed class FlowTests
         var p = regions.Single(region => region.Routine.Name == "p");
         var q = regions.Single(region => region.Routine.Name == "q");
 
-        Assert.Equal(2, p.Cost.Minimum);
-        Assert.Equal(14, p.Cost.Maximum);
+        // Taken, the branch out costs 3 and ends the pass. Not taken, it costs 2 and the pass
+        // 2 + 2 + 2 + 6 = 12.
+        Assert.Equal(3, p.Cost.Minimum);
+        Assert.Equal(12, p.Cost.Maximum);
         Assert.Null(q.Cost.Maximum);
     }
 

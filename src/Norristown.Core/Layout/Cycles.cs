@@ -108,6 +108,29 @@ public static class Cycles
         : new CycleCount(2, 4);
 
     /// <summary>
+    /// Returns what a conditional branch whose whole count is <paramref name="branch"/> costs where
+    /// it is taken. That is at least one cycle more than its least, because only a taken branch
+    /// can cross a page. A long branch laid out as the inverted branch over a <c>jmp</c>, which
+    /// <paramref name="inverted"/> says, costs its most when it is taken. An exact count costs the
+    /// same either way.
+    /// </summary>
+    public static CycleCount WhenTaken(CycleCount branch, bool inverted) =>
+        branch.IsExact ? branch
+        : inverted ? new CycleCount(branch.Maximum)
+        : new CycleCount(branch.Minimum + 1, branch.Maximum);
+
+    /// <summary>
+    /// Returns what a conditional branch whose whole count is <paramref name="branch"/> costs where
+    /// it is not taken. That is its least, except for a long branch laid out as the inverted branch
+    /// over a <c>jmp</c>, which <paramref name="inverted"/> says, whose inverted branch is then the
+    /// one taken.
+    /// </summary>
+    public static CycleCount WhenNotTaken(CycleCount branch, bool inverted) =>
+        branch.IsExact ? branch
+        : inverted ? new CycleCount(branch.Minimum, branch.Maximum - 1)
+        : new CycleCount(branch.Minimum);
+
+    /// <summary>
     /// Returns the timing of a 65816 instruction. The table counts the 8-bit form. A 16-bit
     /// register adds a cycle for each extra byte read or written, or two for a read-modify-write,
     /// and a 16-bit index always pays the page-crossing cycle that an 8-bit index pays only

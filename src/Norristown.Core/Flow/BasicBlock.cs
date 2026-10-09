@@ -136,6 +136,20 @@ public sealed class BasicBlock
     public CycleCount? Cycles { get; internal set; }
 
     /// <summary>
+    /// Gets what the conditional branch that ends the block costs where it is taken, or null where
+    /// the block does not end in one with a count. The block's <see cref="Cycles"/> holds the
+    /// branch's whole interval, and a path that leaves the block by the branch pays this instead.
+    /// </summary>
+    public CycleCount? Taken { get; internal set; }
+
+    /// <summary>
+    /// Gets what the conditional branch that ends the block costs where it is not taken, or null
+    /// where the block does not end in one with a count. A path that falls through from the block
+    /// pays this rather than the branch's whole interval.
+    /// </summary>
+    public CycleCount? NotTaken { get; internal set; }
+
+    /// <summary>
     /// Gets a sentence saying why the block has no count, where nt65 knows the instruction but
     /// still cannot say how long it takes. It is null where the block has a count, and where the
     /// uncounted line is one nt65 could not lay out at all.

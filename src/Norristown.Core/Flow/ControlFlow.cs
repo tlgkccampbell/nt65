@@ -1002,6 +1002,7 @@ public sealed class ControlFlow
                 ? RoutineNamed(into, end.On)
                 : null;
             blocks[i].Cycles = Counted(blocks[i], skipped);
+            Branched(blocks[i]);
         }
         return blocks;
 
@@ -1144,6 +1145,27 @@ public sealed class ControlFlow
         // A block with nothing in it is the one a routine opens with when its first line is a
         // label, and running none of it takes no time at all.
         return total;
+    }
+
+    /// <summary>
+    /// Records what the conditional branch ending <paramref name="block"/> costs taken and not
+    /// taken, where the block ends in one and has a count.
+    /// </summary>
+    private void Branched(BasicBlock block)
+    {
+        if (block.Cycles is null)
+            return;
+        var at = block.Steps.ToList().FindLastIndex(step => step.Statement is InstructionStatementSyntax);
+        if (at < 0)
+            return;
+        var last = block.Steps[at];
+        if (layout.Of(last.Statement, last.On) is not { Cycles: { } branch } line
+            || Transfers.Of(last.Statement, line.Mode) != Transfer.Branch)
+        {
+            return;
+        }
+        block.Taken = Cycles.WhenTaken(branch, line.Inverted);
+        block.NotTaken = Cycles.WhenNotTaken(branch, line.Inverted);
     }
 
     /// <summary>

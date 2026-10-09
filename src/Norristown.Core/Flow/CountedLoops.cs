@@ -199,12 +199,14 @@ internal static class CountedLoops
         if (layout.Of(last.Statement, last.On)?.Cycles is not { } branch)
             return null;
 
-        // A branch costs its fewest cycles when it is not taken, and one more than that when it
-        // is taken. A taken branch that crosses a page costs its most cycles.
-        var taken = new CycleCount(branch.Minimum + 1, branch.Maximum);
+        // The walk leaves the loop by the latch's branch not taken, so each bound holds that once.
+        // Every iteration but the last takes the branch instead, which costs one more than its
+        // least and its most where it crosses a page.
+        var taken = Cycles.WhenTaken(branch, inverted: false);
+        var notTaken = Cycles.WhenNotTaken(branch, inverted: false);
         return new CycleCount(
-            ((low - branch.Minimum) * iterations) + (taken.Minimum * (iterations - 1)) + branch.Minimum,
-            ((high - branch.Maximum) * iterations) + (taken.Maximum * (iterations - 1)) + branch.Minimum);
+            ((low - notTaken.Minimum) * iterations) + (taken.Minimum * (iterations - 1)) + notTaken.Minimum,
+            ((high - notTaken.Maximum) * iterations) + (taken.Maximum * (iterations - 1)) + notTaken.Maximum);
     }
 
     /// <summary>

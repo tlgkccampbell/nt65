@@ -195,20 +195,9 @@ public sealed partial class CodeLayout
         }
         return (edges, lost, unbounded);
 
-        // A branch whose count is exact costs the same either way. Otherwise the taken edge costs
-        // at least one cycle more than the branch's least, and a far branch, which nt65 writes as
-        // the inverted branch over a jump, costs its most when it is taken.
-        CycleCount Taken(CycleCount branch) =>
-            branch.IsExact ? branch
-            : line?.Inverted == true ? new CycleCount(branch.Maximum)
-            : new CycleCount(branch.Minimum + 1, branch.Maximum);
+        CycleCount Taken(CycleCount branch) => Cycles.WhenTaken(branch, line?.Inverted == true);
 
-        // The edge that falls through costs the branch's least, except for a far branch, whose
-        // inverted branch over the jump is the one taken.
-        CycleCount NotTaken(CycleCount branch) =>
-            branch.IsExact ? branch
-            : line?.Inverted == true ? new CycleCount(branch.Minimum, branch.Maximum - 1)
-            : new CycleCount(branch.Minimum);
+        CycleCount NotTaken(CycleCount branch) => Cycles.WhenNotTaken(branch, line?.Inverted == true);
 
         void Next(CycleCount cost)
         {

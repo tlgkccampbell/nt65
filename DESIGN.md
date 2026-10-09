@@ -2134,7 +2134,8 @@ instruction and per basic block on hover, and beside an interval what its top wo
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`
 block of one, what one pass through it costs: the shortest and the longest path from where it
-is entered to where its path ends. A routine no path leaves is shown as never returning,
+is entered to where its path ends. Each way out of a branch is charged what that way costs, as a
+span's is below, so both are costs of paths the code has. A routine no path leaves is shown as never returning,
 rather than as one nothing could be worked out for.
 
 A path that can come back on itself has no longest, and the count is a fewest with a `+`,
