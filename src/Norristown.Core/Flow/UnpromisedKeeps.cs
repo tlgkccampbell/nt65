@@ -94,10 +94,10 @@ internal static class UnpromisedKeeps
                 }
 
                 // A return that hands the register back unchanged relies on it as well, where this
-                // routine promises to keep it.
+                // routine promises to keep it. A `.next .return` is such a return as well.
                 foreach (var end in blocks)
                 {
-                    if (after[end.Index] is not { } entered || end.End != BlockEnd.Return || end.Next is not null)
+                    if (after[end.Index] is not { } entered || end.End != BlockEnd.Return)
                         continue;
                     var left = walk.Through(end, entered, of, null);
                     foreach (var register in RegisterEffects.Each(unpromised & promised & ~Used(sites)))

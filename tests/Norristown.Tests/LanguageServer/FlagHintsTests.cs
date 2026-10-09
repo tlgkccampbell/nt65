@@ -229,9 +229,10 @@ public sealed class FlagHintsTests
 
     /// <summary>
     /// A load stays where a store may rewrite it, where the register's value came through a call
-    /// that does not promise to keep it, and where it comes from memory.
+    /// that does not promise to keep it or a software interrupt, and where it comes from memory.
     /// </summary>
     [Theory]
+    [InlineData("    ldx #0\n    brk #0\n    ldx #0\n    stx $10\n    rts\n")]
     [InlineData("    ldx #0\n    stx $10\n@load:\n    ldx #0\n    stx $11\n    inc @load+1\n    .patch @load\n    rts\n")]
     [InlineData("    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n")]
     [InlineData("    ldx $12\n    stx $10\n    ldx $12\n    stx $11\n    rts\n")]
@@ -250,6 +251,24 @@ public sealed class FlagHintsTests
             ".export .proc main {\n    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n}\n.proc other: keeps x {\n    rts\n}\n");
 
         Assert.Contains(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "load-already-held");
+    }
+
+    /// <summary>
+    /// A call that keeps a register keeps its constant only where it returns the register at the
+    /// width it was entered with. A register made wider holds a high byte the load never set.
+    /// </summary>
+    [Theory]
+    [InlineData("a8, i8, keeps x -> a8, i16", "    rep #$10\n", "i16", false)]
+    [InlineData("a8, i8, keeps x", "", "i8", true)]
+    public void ACallKeepsAConstantOnlyAtItsWidth(string signature, string body, string exit, bool kept)
+    {
+        var (analysis, path) = Analyzed(
+            $".export .proc main: a8, i8 -> a8, {exit} {{\n    ldx #0\n    jsr other\n    ldx #0\n    stx $10\n    lda #1\n    rts\n}}\n"
+            + $".proc other: {signature} {{\n{body}    rts\n}}\n",
+            "65816");
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.Equal(kept, analysis.SuggestionsFor(path).Any(suggestion => suggestion.Id == "load-already-held"));
     }
 
     /// <summary>

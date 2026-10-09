@@ -31,9 +31,11 @@ public sealed class FlagAnalysisTests
     /// <summary>
     /// A flag is known only where every path agrees on it. One nothing in the routine sets is not
     /// known at the entry, a call to a routine with no body and no signature leaves every flag
-    /// unknown, and a label another routine names may be entered with anything.
+    /// unknown, and a label another routine names may be entered with anything. A software
+    /// interrupt's handler may return any flags, by editing those pushed on the stack.
     /// </summary>
     [Theory]
+    [InlineData(".proc p {\n    lda #0\n    brk #$40\n    bne p\n}\n")]
     [InlineData(".proc p {\n    bvc p\n}\n")]
     [InlineData(".proc p {\n    rol a\n    bne p\n}\n")]
     [InlineData(".proc rom = $1234\n.proc p {\n    lda #1\n    jsr rom\n    bne p\n}\n")]
@@ -52,6 +54,20 @@ public sealed class FlagAnalysisTests
     {
         var program = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n"
             + ".proc p: a8, i8 {\n    sep #$01\n    bcs q\n}\n.proc q: a8, i8 {\n    rts\n}\n"));
+
+        Assert.Empty(program.Problems());
+    }
+
+    /// <summary>
+    /// A <c>sep</c> whose mask is not known may set N and leave Z as it was, so a branch that
+    /// learns N is 1 learns nothing about Z, and the code that needs Z to be 1 is reached.
+    /// </summary>
+    [Fact]
+    public void ASepOfAnUnknownMaskLeavesNAndZApart()
+    {
+        var program = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.import mask\n.segment CODE\n"
+            + ".proc p: a8, i8 {\n    sep #<mask\n    .ensure a8, i8\n    bmi @negative\n    rts\n@negative:\n    beq @zero\n"
+            + "    rts\n@zero:\n    lda #1\n    rts\n}\n"));
 
         Assert.Empty(program.Problems());
     }

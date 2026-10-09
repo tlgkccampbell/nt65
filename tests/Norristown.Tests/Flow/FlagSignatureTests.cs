@@ -67,6 +67,35 @@ public sealed class FlagSignatureTests
     }
 
     /// <summary>
+    /// A branch into another routine hands control to it where the branch is taken, so it is
+    /// checked as a tail call is, against both that routine's entry flags and its exit flags.
+    /// </summary>
+    [Fact]
+    public void ABranchIntoAnotherRoutineIsCheckedAsATailCall()
+    {
+        Assert.Empty(Problems(".proc q: c = 0 -> c = 0 {\n    rts\n}\n.export .proc p: -> c = 0 {\n    lda $10\n    bcc q\n    clc\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:10: `p` declares it returns with `c = 1`, but `q`, which it hands control to, returns with C = 0"],
+            Problems(".proc q: -> c = 0 {\n    clc\n    rts\n}\n.export .proc p: -> c = 1 {\n    lda $10\n    bcc q\n    sec\n    rts\n}\n"));
+        Assert.Equal(
+            ["main.nt65:9: `q` needs `c = 1`, but C is not known here"],
+            Problems(".proc q: c = 1 {\n    rts\n}\n.export .proc p {\n    lda $10\n    beq q\n    rts\n}\n"));
+    }
+
+    /// <summary>
+    /// A <c>.next .return</c> returns with the flags its statement leaves, so it is checked
+    /// against the exit flags as <c>rts</c> is.
+    /// </summary>
+    [Fact]
+    public void ANextReturnIsCheckedAsAReturn()
+    {
+        Assert.Empty(Problems(".export .proc p: -> c = 1 {\n    sec\n    jmp ($20)\n    .next .return\n}\n"));
+        Assert.Equal(
+            ["main.nt65:6: `p` declares it returns with `c = 1`, but C is 0 here"],
+            Problems(".export .proc p: -> c = 1 {\n    clc\n    jmp ($20)\n    .next .return\n}\n"));
+    }
+
+    /// <summary>
     /// A flag a routine needs on entry is checked at each call, and is known inside the routine.
     /// This is the guide's example of a routine that adds to a pointer.
     /// </summary>
