@@ -206,13 +206,13 @@ public sealed class StackEffects
         var blocks = region.Blocks;
         var solver = new Dataflow<Height>(
             blocks, (block, height) => Through(walk, block, height, effects), Height.Merge, block => ControlFlow.Onward(blocks, block));
-        solver.Enter(start, new Height(returnSize, 0, 0, true));
+        solver.Enter(start, new Height(returnSize, 0, 0, true, returnSize, returnSize));
         var effect = StackEffect.NeverReturns;
         foreach (var block in blocks)
         {
             if (solver.Reached[block.Index] is not { } reached)
                 continue;
-            effect = StackEffect.Join(effect, Exit(block, Through(walk, block, reached, effects).Bytes));
+            effect = StackEffect.Join(effect, Exit(block, Through(walk, block, reached, effects, report).Bytes));
             if (effect.Kind == StackEffectKind.Unknown && report is null)
                 return effect;
         }
@@ -238,10 +238,6 @@ public sealed class StackEffects
                         return StackEffect.Unknown;
                 }
             }
-
-            // A return used as a jump pulls the address it jumps to before control arrives there.
-            if (last?.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is not null)
-                height -= last.MnemonicKind == MnemonicKind.Rts ? 2 : 3;
 
             // Control arrives at a routine handed it as at a call, with the top bytes taken for
             // its return address, and what that routine leaves is counted from there.
@@ -291,8 +287,11 @@ public sealed class StackEffects
     /// <summary>
     /// Returns the height after <paramref name="block"/>, from the <paramref name="height"/> that
     /// reaches it, with <paramref name="effects"/> giving what the call the block ends with leaves.
+    /// <paramref name="report"/>, where it is given, collects each return through bytes that are
+    /// not the return address and each call with too few arguments.
     /// </summary>
-    private static Height Through(RegisterWalk walk, BasicBlock block, Height height, StackEffects effects)
+    private static Height Through(
+        RegisterWalk walk, BasicBlock block, Height height, StackEffects effects, List<Diagnostic>? report = null)
     {
         foreach (var step in block.Steps)
         {
@@ -304,6 +303,16 @@ public sealed class StackEffects
             // A call pushes the return address its routine's return pulls, which the routine's
             // effect accounts for, and a return or an interrupt is where the path leaves.
             var mnemonic = statement.MnemonicKind;
+            if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is null && report is not null)
+                CheckReturn(statement, height, report);
+
+            // A return used as a jump pulls the address it jumps to before control arrives there,
+            // whether that is a label of this routine or another routine.
+            if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is not null)
+            {
+                height = (height with { Whole = height.Whole - (mnemonic == MnemonicKind.Rts ? 2 : 3) }).Lowered();
+                continue;
+            }
             if (Instructions.IsCall(mnemonic) || mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl or MnemonicKind.Rti
                 or MnemonicKind.Brk or MnemonicKind.Cop)
             {
@@ -315,44 +324,137 @@ public sealed class StackEffects
             if (facts.Pushes is { } push)
                 height = height.Moved(push, walk.Width(step, push), 1);
             else if (facts.Pulls is { } pull)
-                height = height.Moved(pull, walk.Width(step, pull), -1);
+                height = height.Moved(pull, walk.Width(step, pull), -1).Lowered();
         }
         if (!block.EndsInCall || !height.IsKnown)
             return height;
 
         // A relative call pushes its return address with `per`, and `phk` where it is far, which
         // the routine's return pulls.
-        if (block.Steps.Count > 0 && walk.Flow.RelativeCallAt(block.Steps[^1]) is { } relative)
-            height = height with { Whole = height.Whole - relative.Pushed };
+        var relative = block.Steps.Count > 0 ? walk.Flow.RelativeCallAt(block.Steps[^1]) : null;
+        if (report is not null)
+            CheckArguments(block, relative, height, report);
+        if (relative is { } call)
+            height = height with { Whole = height.Whole - call.Pushed };
         var effect = effects.OfCallIn(block);
         return effect.KeepsTheStack ? height
             : effect.Kind == StackEffectKind.Unknown ? Height.Unknown
-            : height with { Whole = height.Whole + effect.Bytes };
+            : effect.Bytes > 0 ? height with { Whole = height.Whole + effect.Bytes }
+            : (height with { Whole = height.Whole + effect.Bytes }).Lowered();
     }
+
+    /// <summary>
+    /// Reports a diagnostic for a return through bytes the routine pushed rather than through its
+    /// return address. While the stack has never been lower than the return address, the address
+    /// is still where the call put it, so a return with pushes above it pulls those pushes instead.
+    /// <para>
+    /// Once the stack has been lower, the routine may have pushed an address back, and a routine
+    /// entered by a jump may have been handed bytes above its return address to pull, so nothing
+    /// is reported.
+    /// </para>
+    /// </summary>
+    private static void CheckReturn(InstructionStatementSyntax statement, Height height, List<Diagnostic> report)
+    {
+        if (height is not { Least: { } least, KeepsTheReturn: true, Return: var returnSize } || least <= returnSize)
+            return;
+        var pushed = Bytes(least - returnSize);
+        report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
+            Catalogue.ReturnPastPushes.Message(
+                SyntaxFacts.TextOf(statement.MnemonicKind), height.AtLeast ? "at least " + pushed : pushed)));
+    }
+
+    /// <summary>
+    /// Reports a diagnostic for a call to a routine that takes <c>args n</c> where fewer than n
+    /// bytes are pushed. Only what this routine pushed since it was entered counts, and only while
+    /// the stack has never been lower than its return address, because after that its own bytes
+    /// cannot be told apart from its caller's. A relative call's own pushes are not arguments.
+    /// </summary>
+    private static void CheckArguments(BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
+    {
+        if (height is not { Bytes: { } bytes, KeepsTheReturn: true, Return: var returnSize } || block.Steps.Count == 0
+            || block.Steps[^1].Statement is not InstructionStatementSyntax statement)
+        {
+            return;
+        }
+        var have = bytes - returnSize - (relative?.Pushed ?? 0);
+        var callees = relative is { } call ? block.Calls.Append(call.Routine) : block.Calls;
+        foreach (var callee in callees.Distinct())
+        {
+            if (callee.Signature is not { Arguments: > 0 and var needed } || have >= needed)
+                continue;
+            var pushed = have <= 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here";
+            report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
+                Catalogue.ArgsNotPushed.Message(callee.DisplayName, needed, pushed)));
+        }
+    }
+
+    /// <summary>Returns a count of bytes in words, such as "1 byte" or "3 bytes".</summary>
+    private static string Bytes(int count) => count == 1 ? "1 byte" : $"{count} bytes";
 
     /// <summary>
     /// Represents how many bytes a routine's stack holds above its caller's, as the walk that works
     /// out effects counts them. On the 65816 a push of a register whose width is as the routine was
     /// entered with is not a known number of bytes, so it is counted apart.
     /// </summary>
-    /// <param name="Whole">The bytes whose number is known.</param>
+    /// <param name="Whole">
+    /// The bytes whose number is known, or the fewest there may be where <paramref name="AtLeast"/> is set.
+    /// </param>
     /// <param name="Accumulator">How many pushes of the accumulator at its entry width are on the stack.</param>
     /// <param name="Index">How many pushes of an index register at its entry width are on the stack.</param>
     /// <param name="IsKnown">Whether anything is known about the height at all.</param>
-    private sealed record Height(int Whole, int Accumulator, int Index, bool IsKnown)
+    /// <param name="Lowest">
+    /// The lowest the stack has been since the routine was entered, on any path here, or null where
+    /// that is not known. Every byte above it was pushed by the routine.
+    /// </param>
+    /// <param name="Return">The size of the routine's return address, where the height starts.</param>
+    /// <param name="AtLeast">
+    /// Whether paths that pushed different amounts meet here, so that only the fewest bytes any of
+    /// them holds is known. That is kept only while no path has been lower than the return address.
+    /// </param>
+    private sealed record Height(
+        int Whole, int Accumulator, int Index, bool IsKnown, int? Lowest, int Return, bool AtLeast = false)
     {
         /// <summary>Gets a height about which nothing is known.</summary>
-        public static Height Unknown { get; } = new(0, 0, 0, false);
+        public static Height Unknown { get; } = new(0, 0, 0, false, null, 0);
 
         /// <summary>Gets the number of bytes, or null where it is not known.</summary>
-        public int? Bytes => IsKnown && Accumulator == 0 && Index == 0 ? Whole : null;
+        public int? Bytes => AtLeast ? null : Least;
+
+        /// <summary>
+        /// Gets the fewest bytes the stack may hold, which is the number of bytes where that is
+        /// known, or null where not even that is known.
+        /// </summary>
+        public int? Least => IsKnown && Accumulator == 0 && Index == 0 ? Whole : null;
+
+        /// <summary>
+        /// Gets a value indicating whether no path here has been lower than the return address, so
+        /// that the return address is still where the call put it.
+        /// </summary>
+        public bool KeepsTheReturn => Lowest >= Return;
 
         /// <summary>
         /// Returns what is known where <paramref name="arriving"/> meets the height
-        /// <paramref name="known"/> already at a block, which is nothing where the two differ.
+        /// <paramref name="known"/> already at a block. Where they differ only in how low they have
+        /// been, the lower of the two is kept. Where they hold different amounts above a return
+        /// address neither has gone beneath, the fewer is kept as a least. Otherwise nothing is known.
         /// </summary>
-        public static Height Merge(Height? known, Height arriving) =>
-            known is null || known == arriving ? arriving : Unknown;
+        public static Height Merge(Height? known, Height arriving)
+        {
+            if (known is null || known == arriving)
+                return arriving;
+            if (known with { Lowest = arriving.Lowest } == arriving)
+                return arriving with { Lowest = known.Lowest is { } a && arriving.Lowest is { } b ? Math.Min(a, b) : null };
+            if (known is { Least: { } before, KeepsTheReturn: true } && arriving is { Least: { } now, KeepsTheReturn: true })
+                return arriving with { Whole = Math.Min(before, now), Lowest = Math.Min(known.Lowest!.Value, arriving.Lowest!.Value), AtLeast = true };
+            return Unknown;
+        }
+
+        /// <summary>
+        /// Returns this height with <see cref="Lowest"/> brought down to it, after a pull or a call
+        /// that may have lowered it.
+        /// </summary>
+        public Height Lowered() =>
+            !IsKnown ? this : this with { Lowest = Lowest is { } lowest && Least is { } least ? Math.Min(lowest, least) : null };
 
         /// <summary>
         /// Returns this height after a push, where <paramref name="sign"/> is 1, or a pull, where it

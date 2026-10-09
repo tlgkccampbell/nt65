@@ -105,11 +105,13 @@ main__ppu:
     stz a:$4200
     sta f:$7e2100
     pea $2100
+    pla
+    pla
     rts
 ; end of ppu
 
 .segment "BANK1": absolute
-; .proc from_k: a8, i8 -> a8, i8, dbr = $01  main.nt65:99
+; .proc from_k: a8, i8 -> a8, i8, dbr = $01  main.nt65:101
 main__from_k:
     phk
     plb
@@ -117,7 +119,7 @@ main__from_k:
 ; end of from_k
 
 .segment "CODE": absolute
-; .proc caller: a16, i8, native -> a16, i8, dp = $2100, dbr = $7e  main.nt65:107
+; .proc caller: a16, i8, native -> a16, i8, dp = $2100, dbr = $7e  main.nt65:109
 main__caller:
     jsr main__setup
     lda z:ptr
@@ -125,14 +127,14 @@ main__caller:
     rts
 ; end of caller
 
-; .proc move: a16, i16 -> a16, i16, dbr = $7e  main.nt65:115
+; .proc move: a16, i16 -> a16, i16, dbr = $7e  main.nt65:117
 main__move:
     mvn #$00, #$7e
     sta a:score
     rts
 ; end of move
 
-; .proc move_between: a8, i16, dbr = $7e  main.nt65:123
+; .proc move_between: a8, i16, dbr = $7e  main.nt65:125
 main__move_between:
     sta a:move_between__move+1
     phb
@@ -143,7 +145,7 @@ move_between__move:
     rts
 ; end of move_between
 
-; .proc relay: a8, i8, dp = $2100 -> a8, i8, dp = $2100  main.nt65:135
+; .proc relay: a8, i8, dp = $2100 -> a8, i8, dp = $2100  main.nt65:137
 main__relay:
     beq relay__skip
     lda #1
@@ -152,39 +154,39 @@ relay__skip:
     rts
 ; end of relay
 
-; .proc fast: a8, i8, dp = $2180  main.nt65:144
+; .proc fast: a8, i8, dp = $2180  main.nt65:146
 main__fast:
     lda z:$01
     rts
 ; end of fast
 
-; .proc tail: a8, i16, dp = $2100, dbr = $7e, native  main.nt65:150
+; .proc tail: a8, i16, dp = $2100, dbr = $7e, native  main.nt65:152
 main__tail:
     jmp main__hud
 ; end of tail
 
-; .proc standard: a8, i8, dp = 0, dbr = $80  main.nt65:155
+; .proc standard: a8, i8, dp = 0, dbr = $80  main.nt65:157
 main__standard:
     lda z:temp
     sta a:frames
     rts
 ; end of standard
 
-; .proc anywhere: a8, i8, dbr = [$00..$3f, $80..$bf]  main.nt65:163
+; .proc anywhere: a8, i8, dbr = [$00..$3f, $80..$bf]  main.nt65:165
 main__anywhere:
     sta a:$2100
     sta a:frames
     rts
 ; end of anywhere
 
-; .proc from_one: a8, i8, dbr = $80, native  main.nt65:170
+; .proc from_one: a8, i8, dbr = $80, native  main.nt65:172
 main__from_one:
     jsr main__anywhere
     jsr fewer
     rts
 ; end of from_one
 
-; .proc fewer: a8, i8, dbr = [$80..$bf] -> a8, i8, dbr = $80  main.nt65:176
+; .proc fewer: a8, i8, dbr = [$80..$bf] -> a8, i8, dbr = $80  main.nt65:178
 fewer:
     jsr main__anywhere
     lda #$80

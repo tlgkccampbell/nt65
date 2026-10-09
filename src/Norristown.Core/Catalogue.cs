@@ -2960,6 +2960,17 @@ public static class Catalogue
         "The block pushes an address and then executes a return, which jumps to that address (the \"RTS "
             + "trick\"), so nt65 cannot tell where it goes. A `.next` after it names the labels it may reach.");
 
+    internal static DiagnosticDescriptor ReturnPastPushes { get; } = Entry(
+        Area.ControlFlow,
+        "return-past-pushes",
+        Severity.Error,
+        "`{0}` returns through {1} this routine pushed rather than through its return address: pull them first, "
+            + "or add a `.next` naming where it goes",
+        "nt65 counts what a routine pushes and pulls from where it was called. Where nothing has pulled the return "
+            + "address, it is still beneath what the routine pushed, so a return with pushes left on the stack pulls "
+            + "them as the address to go to. A routine that pushes an address to jump through its return names where "
+            + "it goes with a `.next`.");
+
     internal static DiagnosticDescriptor JumpTargetNotALabel { get; } = Entry(
         Area.ControlFlow,
         "jump-target-not-a-label",
@@ -3536,6 +3547,17 @@ public static class Catalogue
         "A `.frame` names bytes on top of the stack, so it can cover at most what this routine has pushed so far. "
             + "This one covers more, so its last members would name the return address or the caller's bytes. Push "
             + "the frame's bytes before the `.frame`, or use a smaller type.");
+
+    internal static DiagnosticDescriptor FrameStackUnknown { get; } = Entry(
+        Area.ProcessorState,
+        "frame-stack-unknown",
+        Severity.Error,
+        "frame `{0}` names the top {1} bytes of the stack, but how many bytes are pushed here is not known{2}",
+        "A `.frame` names bytes on top of the stack, so it can cover at most what this routine has pushed so far. "
+            + "Here nt65 cannot count that, because paths that pushed different amounts meet, another routine may "
+            + "jump in having pushed nothing, or something pushed a width that is not known. On one of those paths "
+            + "the frame would name the return address or the caller's bytes. After `tcs` or `txs` the program has "
+            + "moved the stack itself, and a frame may reach beneath what is known.");
 
     internal static DiagnosticDescriptor FrameDepthUnknown { get; } = Entry(
         Area.ProcessorState,

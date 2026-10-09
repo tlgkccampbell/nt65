@@ -1090,6 +1090,9 @@ promise nt65 checks, and `.next .return ?` says it cannot be known. Labels may f
 `.next .return, step`, for a jump that goes back to the caller on some paths and to `step` on
 others.
 
+A plain `rts` or `rtl` is checked against the same count. One that would pull bytes the
+routine pushed in place of its return address, which nothing has pulled, is an error.
+
 The same annotation covers the `bit` skip trick, where one instruction's operand hides the
 next instruction:
 
@@ -1686,8 +1689,14 @@ push and pull since the frame:
 }
 ```
 
+A frame may cover only what the routine has pushed, and nt65 must be able to count that where
+the `.frame` stands. Where paths that pushed different amounts meet, the frame is an error,
+because on one of them it would name the return address. After `tcs` or `txs` the program has
+placed the stack itself, and a frame may cover bytes nt65 knows nothing about.
+
 `args n` says the caller pushes n bytes before the call. A frame can then reach the
-arguments above the return address, and every call is checked for having pushed enough.
+arguments above the return address, and every call is checked for having pushed enough, on
+every CPU.
 
 ### Direct page and data bank
 

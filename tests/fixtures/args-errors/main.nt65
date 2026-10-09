@@ -1,0 +1,41 @@
+; A routine that takes `args n` reads n bytes its caller pushed before the call. The count of
+; what the caller pushed is known on every CPU, so a call with too few is an error on each.
+.module main
+
+.cpu 6502
+
+.export takes2, short, enough, after
+
+.segment CODE
+.proc takes2: args 2 {
+    rts
+}
+
+; One byte is pushed, and the routine reads two.
+.proc short {
+    pha
+    jsr takes2              ;! error[args-not-pushed]: `takes2` declares `args 2`, bytes the caller pushes before the call, but only 1 byte is pushed here
+    pla
+    rts
+}
+
+; Two bytes are pushed, so the call is checked and passes.
+.proc enough {
+    pha
+    pha
+    jsr takes2
+    pla
+    pla
+    rts
+}
+
+; Bytes pulled since the call do not count.
+.proc after {
+    pha
+    pha
+    jsr takes2
+    pla
+    pla
+    jsr takes2              ;! error[args-not-pushed]: `takes2` declares `args 2`, bytes the caller pushes before the call, but nothing is pushed here
+    rts
+}

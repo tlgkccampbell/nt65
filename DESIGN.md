@@ -1359,8 +1359,8 @@ says where it goes, and is not reported.
 **Arguments.** `args n` says the caller pushes n bytes before the call. Inside the routine
 the analysis stack starts with those bytes and the return address above them, two bytes near
 and three far, so a `.frame` can lay out both (below). At a call, where what the caller has
-pushed is known, it must be at least n bytes. The call leaves the stack as it found it: the
-caller removes the arguments.
+pushed is known, it must be at least n bytes, on every CPU. The call leaves the stack as it
+found it: the caller removes the arguments.
 
 Three kinds of routine carry a signature: a proc with a body, an extern proc
 (`.proc CHROUT = $FFD2: a8, i8`, §6.1) and an imported routine
@@ -1452,7 +1452,7 @@ jump in has not, they disagree, and the stack after the label is one nothing is 
 nobody knows, and `keeps` cannot be shown. So a save and its restore belong on one side of such
 a label, and a second entry point that reads what its caller pushed says so with `args n`,
 which is on the stack there exactly as it is at the routine's own entry. Nothing carries a push
-across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
+or a `.frame` across an entry point, a routine a `.fallthrough` runs into (§7.4) included: each of those is
 entered with the stack of a call to it, which is what makes each of them callable.
 
 **Setting widths.** `.ensure` takes width items, `a8`, `a16`, `i8` and `i16`, and makes
@@ -1468,9 +1468,11 @@ control flow.
 
 **Stack frames.** `.frame name: T` names the top `.sizeof(T)` bytes of the analysis stack
 as a frame laid out as the struct `T`, usually directly after the instructions that make
-room for it. If the analysis stack is unknown there, it becomes those bytes with nothing
-known beneath them; over an unknown base, as after `tcs`, the frame may reach beneath what is
-known. In a stack-relative operand, `name::member,s`
+room for it. Over an unknown base, as after `tcs` or `txs`, the frame may reach beneath what is
+known. Where the analysis stack is not known at all, as where paths that pushed different
+amounts meet or below a label another routine jumps into, the frame could name the return
+address on one of them, so it is an error, `frame-stack-unknown`. In a stack-relative
+operand, `name::member,s`
 and `(name::member,s),y` are that member's offset from the current stack pointer,
 computed from the pushes and pulls since the `.frame`, so a push between two reads cannot
 silently shift them:
@@ -1528,13 +1530,19 @@ analysis stack, so a frame reaches them:
   emitted in emulation mode;
 - every `rts`/`rtl` reaches the declared exit state and matches the proc's
   `near`/`far` attribute;
+- on every CPU, no `rts`/`rtl` without a `.next` returns with bytes the routine pushed still
+  above a return address no pull has reached, `return-past-pushes`, even where paths that pushed
+  different amounts meet. Once a pull has reached beneath the return address, the routine may
+  have pushed one back, and a routine entered by a jump may have been handed bytes above it, so
+  a return is not checked there;
 - every `.ensure` of a 16-bit width is reached in native mode, and every frame slot where
   the stack depth is known;
 - every `jsr`/`jmp` targets a `near` routine and every `jsl`/`jml` a `far` one;
 - every tail call matches the target's entry, and the target's exit and `near`/`far`
   match this proc's, because the target returns to this proc's caller, unless nothing
   returns: this proc never does or is an interrupt handler, or the target never returns;
-- every call to a routine that takes `args n` has n bytes pushed, where that is known;
+- on every CPU, every call to a routine that takes `args n` has n bytes pushed, where what the
+  caller pushed since it was entered is known;
 - no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
   with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
@@ -5058,7 +5066,11 @@ Recorded so the reasoning survives. None is open.
   push. Each routine, and each label another routine enters, now has an effect: it never
   returns, it leaves a known number of bytes (negative where it takes the caller's), or what it
   leaves is unknown. Effects are read off each exit by counting bytes, solved over the whole
-  program, and applied after every call by all three trackers, on every CPU. The 65816's
+  program, and applied after every call by all three trackers, on every CPU. A byte a routine
+  leaves holds nothing known and has no push of its own to match, so a pull of any size takes
+  it, and a save and its restore on either side of the call still pair up. A plain return with
+  the routine's own pushes still above its return address is an error rather than an effect
+  (§7.3), because the caller is not where it returns to. The 65816's
   processor-state analysis still runs on one file at a time, because layout depends on its
   widths; it takes each callee's effect as the program last worked it out, and a file that
   took one the program turns out to differ on is analyzed again. Moving the whole state

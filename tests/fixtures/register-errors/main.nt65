@@ -27,6 +27,7 @@
     plp
     rts
 @quiet:
+    pla
     sec
     lda #0
     rts                     ;! error[keeps-broken]: `forgets_the_carry` promises `keeps a, c`, but A, C are not the same as on entry here: restore them before returning, or add `.state keeps a, c` at the point where the entry value is restored

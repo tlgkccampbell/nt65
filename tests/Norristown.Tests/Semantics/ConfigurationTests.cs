@@ -93,9 +93,11 @@ public sealed class ConfigurationTests
             .export .proc main {
             .if .target(65c02) {
                 phx
+                plx
             } .else {
                 txa
                 pha
+                pla
             }
                 rts
             }

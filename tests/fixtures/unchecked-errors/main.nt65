@@ -39,7 +39,7 @@
 ; `rts` used as a jump.
 .proc pushed: a8, i8 {
     pea @there - 1          ;! error[code-label-as-data]: taking the address of `@there` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `pushed`
-    rts                     ;! error[pushed-return-unchecked]: `rts` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it goes
+    rts                     ;! error[pushed-return-unchecked]: `rts` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it goes;! error[return-past-pushes]: `rts` returns through 2 bytes this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
 @there:
     rts
 }
