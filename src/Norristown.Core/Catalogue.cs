@@ -3520,7 +3520,7 @@ public static class Catalogue
         Area.ProcessorState,
         "range-bank-mismatch",
         Severity.Error,
-        "{0} is reachable only from banks {1}, but B is {2} here",
+        "{0} is reachable only from {1}, but B is {2} here",
         "The project file's `ranges` state which banks each absolute address can be reached from, for hardware that "
             + "is mirrored only in some banks. Here the data bank register B may hold a bank outside that set, so "
             + "the operand would reach something else. Set B to one of the listed banks, or use a long operand.");

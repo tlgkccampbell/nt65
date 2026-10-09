@@ -119,14 +119,11 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     }
 
     /// <summary>
-    /// Formats the segment's banks for a message, such as <c>in bank $7e</c>, or <c>in bank $7e
-    /// and mirrored in banks $00-$3f, $80-$bf</c>.
+    /// Formats the segment's banks for a message, such as <c>in bank $7e</c>, <c>in bank $00 and
+    /// mirrored in bank $80</c>, or <c>in bank $7e and mirrored in banks $00-$3f, $80-$bf</c>.
     /// </summary>
     public string FormatBanks() =>
-        $"in bank {StateValue.Hex(Bank ?? 0, 2)}"
-        + (Mirrors.Count == 0 ? "" : " and mirrored in banks " + string.Join(", ", Mirrors.Select(mirror => mirror.First == mirror.Last
-            ? StateValue.Hex(mirror.First, 2)
-            : $"{StateValue.Hex(mirror.First, 2)}-{StateValue.Hex(mirror.Last, 2)}")));
+        $"in bank {StateValue.Hex(Bank ?? 0, 2)}" + (Mirrors.Count == 0 ? "" : " and mirrored in " + StateValue.FormatBanks(Mirrors));
 
     /// <inheritdoc/>
     public bool Equals(Segment? other) =>
