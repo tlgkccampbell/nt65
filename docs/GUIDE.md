@@ -1270,7 +1270,9 @@ bottom:
 .assert .maxcycles(raster::top, raster::bottom) == 8, "the raster line moved"
 ```
 
-A span with a call or a loop in it has no fixed count, so it is an error.
+The pass follows the code as it runs, so a branch counts whichever way it goes and a jump skips
+what it jumps over. A path that returns before it reaches the second label is not counted. A
+span whose way through makes a call or loops has no fixed count, so it is an error.
 
 ## What a routine preserves
 

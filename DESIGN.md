@@ -2111,23 +2111,38 @@ call graph and shown as what it takes to get there and then never returning: the
 program's entry point, which sets up and hands over to a loop that runs for ever.
 
 **A span's cycles, for an `.assert`.** `.mincycles(from, to)` and `.maxcycles(from, to)` are
-what one pass from `from` to `to` costs: the fewest cycles and the most. Both ends are
-positions in code — a label, or a routine's own name for its first position — in one routine
-and one stream of bytes, and the span is the instructions from the first up to the second,
-which is where the pass arrives rather than a line it runs. The two answers are the sum of
-each instruction's own interval, so they are one number where every instruction is exact, and
-a range where a page crossing, a taken branch or a width nobody knows widens one of them:
+what a pass from `from` to `to` costs: the fewest cycles and the most. Both ends are positions
+in code — a label, or a routine's own name for its first position — in one routine and one
+stream of bytes. A pass starts at `from` and follows the code as it runs: a branch may go
+either way, a jump goes to its target, and the pass ends where it first arrives at `to`, which
+is where it arrives rather than a line it runs. `.mincycles` is the cheapest pass and
+`.maxcycles` the most expensive, so they are one number where there is one way through and
+every instruction on it is exact:
 
 ```nt65
 .assert .mincycles(raster::top, raster::bottom) == 17, "the raster line moved"
 .assert .maxcycles(raster::top, raster::bottom) == 17, "the raster line moved"
 ```
 
-A sum along a run of instructions bounds one pass only where the run is one pass, so **the
-span may hold no call and no loop**, and one that does is an error saying which it found: a
-call takes as long as the routine it names, a loop takes its body as many times as it turns,
-and a jump nt65 cannot follow could go anywhere, this span included. The ends being in two
-routines, or the second coming before the first, are errors of the same kind.
+Each way out of a branch is charged what that way costs: not taken, the branch's fewest cycles;
+taken, one more, and one more again where it crosses a page, which nt65 cannot know. So
+`lda zp` / `beq done` / `nop` / `done:` is 6 to 7 cycles, 6 or 7 taken and 7 not taken, and
+`jmp over` over three `nop`s is 3. A long branch laid out as an inverted branch over a `jmp` is
+charged the same way, per edge. A page crossing, a width nobody knows or a decimal-mode cycle
+still widens an instruction's own interval.
+
+Where `to` is reachable along several paths, the answers are the cheapest and the most expensive
+of them. A path that returns, or leaves the routine by a jump or a branch, before it arrives at
+`to` is not a pass from `from` to `to`: it never arrives, so it is no part of either answer,
+and a call on such a path does not matter. A span that no path from `from` arrives at is an
+error. The answers bound the paths the code allows, not the ones the data allows, so a branch
+that the flags decide still counts both ways here.
+
+A sum along a path bounds a pass only where the path runs once, so **no path that arrives may
+make a call or come back on itself**, and a span where one does is an error saying which it
+found: a call takes as long as the routine it names, and a loop takes its body as many times
+as it turns. A jump nt65 cannot follow could go anywhere, `to` included, so one that a pass from
+`from` can reach is an error too. The ends being in two routines is an error of the same kind.
 
 Like `.endof` and `.spanof`, a cycle span describes layout rather than a shape: it is usable in
 operands, data and `.assert`, and not where a constant is required (`.res`, `.repeat`, an
@@ -4786,8 +4801,11 @@ Recorded so the reasoning survives. None is open.
   that argument rules out is a count of a *routine*; it does not rule out a count of a span
   with neither in it, and §7.6 already works those out exactly — they are the raster lines and
   the interrupt prologues that anybody counting cycles is counting. So the refusal moves to
-  where it belongs: the span says what it may not hold, and an error names the call or the loop
-  it found rather than a number quietly standing for something it is not. There are two
+  where it belongs: the span says what its paths may not hold, and an error names the call or
+  the loop it found rather than a number quietly standing for something it is not. The span
+  follows paths rather than adding up the lines between its ends, because a sum in text order
+  counts what a branch or a jump skips and goes on past a return, and an assertion on that sum
+  passes with the wrong count. There are two
   built-ins rather than one because the count is an interval wherever a page crossing, a taken
   branch or an unknown width makes it one, and a single `.cyclesof` would have had to choose
   which end of the interval to be. `.mincycles` and `.maxcycles` say which end is being asserted
