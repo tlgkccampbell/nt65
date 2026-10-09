@@ -31,6 +31,12 @@ public enum StatePart
     Pushed,
 
     /// <summary>
+    /// The bytes a routine is entered with above its return address, and pulls before it
+    /// returns: <c>pulls n</c>.
+    /// </summary>
+    Pulls,
+
+    /// <summary>
     /// A routine the processor enters on an interrupt, and that leaves by <c>rti</c>:
     /// <c>interrupt</c>.
     /// </summary>

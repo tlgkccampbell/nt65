@@ -1,0 +1,33 @@
+; On the 65816 the bytes `pulls n` declares sit above a return address of two bytes for a near
+; routine and three for a far one, and the routine pulls them as on any other CPU.
+.module main
+
+.cpu 65816
+
+.export switch_bank, restore_bank, saves_far, restores_far
+
+.segment CODE
+; Saves the data bank, sets it to $7e, and hands the saved bank to `restore_bank`, which
+; restores it and returns to this routine's caller.
+.proc switch_bank: a8, i8, native {
+    phb
+    lda #$7e
+    pha
+    plb
+    jmp restore_bank
+}
+
+.proc restore_bank: a8, i8, native, pulls 1 {
+    plb
+    rts
+}
+
+.proc saves_far: a8, i8, native, far {
+    pha
+    jml restores_far
+}
+
+.proc restores_far: a8, i8, native, far, pulls 1 {
+    pla
+    rtl
+}

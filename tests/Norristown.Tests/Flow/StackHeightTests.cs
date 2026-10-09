@@ -73,7 +73,7 @@ public sealed class StackHeightTests
     [Fact]
     public void TheSourceStackKeepsTheHeight()
     {
-        var entered = SourceStack.Entered(2);
+        var entered = SourceStack.Entered(2, 0);
         var pulled = entered.Pull(PushSize.OneByte, Width.Eight);
 
         Assert.Equal(1, pulled?.Height);

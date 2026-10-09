@@ -336,7 +336,7 @@
 ;        5 -- (ARG)
 ;        2 -- ADDR OF PERFORMER
 ; ----------------------------------------------------------------------------
-.proc FRM_PERFORM1 {
+.proc FRM_PERFORM1: pulls BYTES_FP + 2 {
     cmp #$64
     beq L2D0E
     jsr CHKNUM

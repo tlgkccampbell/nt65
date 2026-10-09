@@ -182,7 +182,7 @@
     sta TXTPTR+1
     .fallthrough L3250
 }
-.proc L3250 {
+.proc L3250: pulls BYTES_FP {
     ldy #$00
     pla
     sta (FNCNAM),y

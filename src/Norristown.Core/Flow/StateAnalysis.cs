@@ -216,8 +216,8 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns a routine's state when it is entered. That is its entry, declared or inferred, with
-    /// nothing pushed except, for a routine that declares <c>pushed n</c>, the arguments and the return
-    /// address above them. Where the callers disagree on D, the cause names them.
+    /// the stack <see cref="EntryStack"/> gives. Where the callers disagree on D, the cause names
+    /// them.
     /// </summary>
     private static FlowState Entry(Signature signature, Symbol routine, InferredSignatures signatures) => new(signature.Entry, EntryStack(signature))
     {
@@ -243,11 +243,12 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the analysis stack where a routine is entered. It is empty except, for a routine
-    /// that declares <c>pushed n</c>, the arguments and the return address above them. Either way its
-    /// height starts at the return address, because the arguments belong to the caller.
+    /// that declares <c>pushed n</c>, the arguments and the return address above them, and, for one
+    /// that declares <c>pulls n</c>, the return address and the bytes it is handed above it. Either
+    /// way its height starts at the return address, because the arguments belong to the caller.
     /// </summary>
     private static AnalysisStack EntryStack(Signature signature) =>
-        AnalysisStack.Entered(signature.ReturnSize, signature.Pushed);
+        AnalysisStack.Entered(signature.ReturnSize, signature.Pushed, signature.Pulls);
 
     private static Cause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
@@ -641,6 +642,8 @@ public sealed class StateAnalysis : IProcessorStates
                 => new($"{quoted} restores a 16-bit width only in native mode, and the mode is not known", "a `.state` before it declares which mode it is"),
             MnemonicKind.Plp when state.Stack?.Top is { IsStatus: true }
                 => new($"{quoted} restores a width that is not known here", "an `.ensure` after it sets it"),
+            MnemonicKind.Plp when state.Stack?.Top is { Entered: EnteredByte.Handed }
+                => new($"{quoted} pulls a byte the routine is handed above its return address, which `pulls` declares and nt65 knows nothing of", "an `.ensure` after it sets it"),
             MnemonicKind.Plp => new($"{quoted} pulls a status that no `php` in this routine pushed", "an `.ensure` after it sets it"),
             MnemonicKind.Xce when FollowsClc(previous)
                 => new($"{quoted} enters native mode from a mode that is not known, and a 16-bit width is 8 bits if that was emulation mode", "a `.state` before it declares which mode it is"),
@@ -970,7 +973,11 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns what a call to <paramref name="callee"/> leaves on the stack, and records that the
     /// analysis took it.
     /// </summary>
-    private StackEffect EffectOf(Symbol callee) => consumed[callee] = effects.Of(callee);
+    private StackEffect EffectOf(Symbol callee)
+    {
+        consumed[callee] = effects.Of(callee);
+        return effects.OfCall(callee);
+    }
 
     /// <summary>
     /// Returns <paramref name="state"/> with the stack as the call at <paramref name="step"/> leaves
@@ -1263,7 +1270,7 @@ public sealed class StateAnalysis : IProcessorStates
         var processor = state.Processor;
         foreach (var item in StateItem.Read(step.Statement))
         {
-            if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Pushed
+            if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Pushed or StatePart.Pulls
                 or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set or StatePart.ProgramBank)
             {
                 report?.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Message(item.Text));

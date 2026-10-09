@@ -138,12 +138,13 @@ internal sealed class RegisterWalk
     {
         var blocks = region.Blocks;
         var solver = Solver(blocks, of, block => ControlFlow.Onward(blocks, block));
-        var called = SavedStack.Entered((region.Routine.Signature ?? Signature.Default).ReturnSize);
+        var signature = region.Routine.Signature ?? Signature.Default;
+        var called = SavedStack.Entered(signature.ReturnSize, signature.Pulls);
         solver.Enter(start, (entered ?? RegisterState.Entered) with { Stack = called });
 
         // A label a `.state` declares, or one that another routine names, may be jumped into
-        // from another routine, so the registers there hold nothing this routine put in them. The stack there is what a
-        // call to the routine leaves, which is empty. Code that jumps in has made none of
+        // from another routine, so the registers there hold nothing this routine put in them. The stack there is what
+        // entering the routine leaves, which is empty but for the bytes a `pulls n` hands it. Code that jumps in has made none of
         // this routine's saves, so a save that the path above the label leaves on the stack
         // cannot be shown to be the one a pull below the label takes back. Entered at a label,
         // the routine's other entry points are not part of the answer unless the path from
@@ -483,7 +484,7 @@ internal sealed class RegisterWalk
     /// <summary>
     /// Returns the state at a declared label that can also be entered from outside the routine.
     /// The registers are as the path from above leaves them, and its stack is merged with
-    /// <paramref name="called"/>, the empty stack a call to the routine leaves. Where the path
+    /// <paramref name="called"/>, the stack the routine is entered with. Where the path
     /// above has pushed something, the two stacks disagree and the stack becomes unknown. A pull
     /// below the label then restores nothing known.
     /// </summary>

@@ -78,10 +78,14 @@ public sealed class SavedStack : IEquatable<SavedStack>
     }
 
     /// <summary>
-    /// Returns the stack of a routine entered by a call, which holds no pushes and starts at the
-    /// <paramref name="returnSize"/> bytes of the return address.
+    /// Returns the stack of a routine when it is entered. It holds the <paramref name="handed"/>
+    /// bytes the routine is entered with above its return address, and its height starts at the
+    /// top of them, which is the <paramref name="returnSize"/> bytes of the return address where
+    /// there are none. A pull of any size takes the handed bytes, one byte at a time.
     /// </summary>
-    public static SavedStack Entered(int returnSize) => new([], returnSize);
+    public static SavedStack Entered(int returnSize, int handed) => new(
+        [.. Enumerable.Repeat(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Semantics.Width.Eight) { IsLeft = true, IsHanded = true }, handed)],
+        returnSize - handed);
 
     /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null when they do

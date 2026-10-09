@@ -86,7 +86,9 @@ internal static class CallerStack
         IReadOnlyDictionary<RoutineKey, (RoutineKey Owner, bool Pulls)> labels)
     {
         var model = file.Model;
-        var reads = false;
+
+        // A routine that declares `pulls n` pulls bytes it did not push, whatever its code shows.
+        var reads = region.Routine.Signature is { Pulls: > 0 };
         foreach (var block in region.Blocks)
         {
             if (!block.IsReached)

@@ -196,6 +196,7 @@ public readonly record struct StateItem(
             "near" or "far" => StatePart.Distance,
             "inline" => StatePart.Inline,
             "pushed" => StatePart.Pushed,
+            "pulls" => StatePart.Pulls,
             "interrupt" => StatePart.Interrupt,
             "noreturn" => StatePart.NoReturn,
             "keeps" => StatePart.Keeps,

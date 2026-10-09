@@ -275,7 +275,10 @@ public sealed class RegisterKeepsTests
         Assert.Empty(Wide(".proc p: a8, keeps a, native {\n    pha\n    lda #1\n    pla\n    rts\n}\n"));
         Assert.Equal(
             ["main.nt65:5: `p` promises `keeps a`, but A is not the same as on entry here: "
-                + "restore it before returning, or add `.state keeps a` at the point where the entry value is restored"],
+                + "restore it before returning, or add `.state keeps a` at the point where the entry value is restored",
+                "main.nt65:5: `rts` returns 1 byte beneath its return address, having pulled more than the routine pushed: "
+                + "declare the bytes the routine is entered with above its return address with `pulls n`, or add a "
+                + "`.next` naming where it goes"],
             Wide(".proc p: a8, keeps a, native -> a16 {\n    pha\n    rep #$20\n    pla\n    rts\n}\n"));
     }
 

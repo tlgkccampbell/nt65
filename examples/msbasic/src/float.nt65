@@ -459,7 +459,7 @@
         pha
         .fallthrough SHIFT_RIGHT4B
     }
-    .proc SHIFT_RIGHT4B {
+    .proc SHIFT_RIGHT4B: pulls 1 {
         lda #$00
         bcc L37D7
         lda #$80

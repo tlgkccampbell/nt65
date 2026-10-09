@@ -1,6 +1,8 @@
-; A return goes through the top bytes of the stack. nt65 counts what each routine pushes and
-; pulls, so a return with the routine's own pushes above a return address nothing has pulled is
-; an error. Once a pull has gone beneath the return address, nothing is reported.
+; A return goes through the top bytes of the stack, which must be the return address. nt65
+; counts what each routine pushes and pulls, so a return with the routine's own pushes above a
+; return address nothing has pulled is an error, and so is a return through bytes that were
+; beneath the return address. A routine that pulls its return address and pushes an address
+; back returns through that address, and is not reported.
 .module main
 
 .cpu 6502
@@ -34,25 +36,27 @@
     jmp @again
 }
 
-; Whoever jumps to `inside` may have pushed a byte for the `pla` below it to take, as
-; msbasic's operator stack does, so the return is not reported.
+; A jump to `inside` has not pushed the byte the `pla` below it takes, so the routine entered
+; there returns through a byte beneath its return address. A routine whose every entry is handed
+; such bytes declares them with `pulls n`.
 .proc entered {
     pha
     inside:
     .state ?
     pla
-    rts
+    rts                     ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address when the routine is entered at `inside`, having pulled more than the routine pushed: keep each push and its pull on one side of `inside`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
 
 .proc enters {
     jmp entered::inside
 }
 
-; Discarding the return address returns to the caller's caller, which is not reported either.
+; Discarding the return address returns to the caller's caller, through bytes beneath the
+; return address.
 .proc discards {
     pla
     pla
-    rts
+    rts                     ;! error[return-beneath-entry]: `rts` returns 2 bytes beneath its return address, having pulled more than the routine pushed: declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
 
 ; A routine that pulls its return address and pushes it back above a byte it leaves for its

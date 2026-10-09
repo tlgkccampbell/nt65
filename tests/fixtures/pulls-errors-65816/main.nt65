@@ -1,0 +1,19 @@
+; A handed byte holds nothing nt65 knows of, so a `plp` that pulls one restores no widths.
+.module main
+
+.cpu 65816
+
+.export restores_status, state_item
+
+.segment CODE
+.proc restores_status: a8, i8, pulls 1 {
+    plp
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `plp` pulls a byte the routine is handed above its return address, which `pulls` declares and nt65 knows nothing of: an `.ensure` after it sets it
+    sep #$30
+    rts
+}
+
+.proc state_item: a8, i8 {
+    .state pulls 1          ;! error[state-item-not-a-point]: `pulls 1` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`
+    rts
+}

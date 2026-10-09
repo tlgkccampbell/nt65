@@ -1,0 +1,82 @@
+; `pulls n` is a contract on the routine that declares it. Each return must find its return
+; address on top of the stack, beneath nothing the routine pushed or was handed, and a call
+; cannot enter it, because a call puts nothing above the return address.
+.module main
+
+.cpu 6502
+
+.export pulls_too_many, leaves_handed, pushes_more, called, called_inside, data_after
+.export varied, wide, twice, entered_only
+
+.segment CODE
+; The routine pulls more than it was handed.
+.proc pulls_too_many: pulls 1 {
+    pla
+    pla
+    rts                     ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address, having pulled more than the routine pushed and the 1 byte `pulls 1` declares: correct the count, or add a `.next` naming where it goes
+}
+
+; One of the handed bytes is still on the stack at the return.
+.proc leaves_handed: pulls 2 {
+    pla
+    rts                     ;! error[return-past-handed-bytes]: `rts` returns through 1 byte of the bytes `pulls 2` declares above the return address: pull them first, or correct the count
+}
+
+; A byte the routine pushed is above the return address at the return.
+.proc pushes_more: pulls 1 {
+    pla
+    pha
+    pha
+    rts                     ;! error[return-past-pushes]: `rts` returns through 2 bytes this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+}
+
+; A call to such a routine, by its name or at a label in it.
+.proc called {
+    jsr leaves_handed       ;! error[pulls-routine-called]: `leaves_handed` declares `pulls 2`, bytes it is entered with above its return address, and a call puts nothing there: enter it with a jump or a branch
+    jsr called_inside::inside ;! error[pulls-routine-called]: `called_inside` declares `pulls 1`, bytes it is entered with above its return address, and a call puts nothing there: enter it with a jump or a branch
+    rts
+}
+
+.proc called_inside: pulls 1 {
+    lda #0
+    inside:
+    pla
+    rts
+}
+
+; A routine that reads data after its call is entered by that call.
+.proc data_after: inline 2, pulls 1 { ;! error[pulls-with-inline]: `pulls 1` cannot be declared with `inline 2`: a routine that reads data after its call is entered by that call, which puts nothing above its return address
+    pla
+    rts
+}
+
+.data count: .byte
+
+.proc varied: pulls count { ;! error[stack-count-not-constant]: `pulls count` needs a constant byte count
+    rts
+}
+
+.proc wide: pulls $10000 {  ;! error[stack-count-out-of-range]: `pulls $10000` is out of range: the byte count must be from 0 to $ffff
+    rts
+}
+
+.proc twice: pulls 1, pulls 1 { ;! error[signature-item-twice]: `pulls 1` and `pulls 1` both describe the same part of the state
+    pla
+    rts
+}
+
+; An interrupt handler is not called or jumped to, so it is handed nothing.
+.proc entered_only: interrupt, pulls 1 { ;! error[handler-distance]: `pulls 1` describes how a routine is called, and an interrupt handler is never called: the processor enters it and `rti` leaves it
+    rti
+}
+
+; A macro is expanded in place.
+.macro m(): pulls 1 {       ;! error[macro-distance]: `pulls 1` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place
+    nop
+}
+
+; The bytes describe the entry, so they do not follow the arrow.
+.proc exit_side: pulls 1 -> pulls 1 { ;! error[item-belongs-at-entry]: `pulls 1` belongs before `->`
+    pla
+    rts
+}
