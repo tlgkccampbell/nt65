@@ -1,4 +1,4 @@
-// Follows the caret for the direct page map. When the caret is inside a routine, the locations
+// Follows the caret for the data map. When the caret is inside a routine, the locations
 // that routine reaches are marked in the tree and the grid, and the location named under the
 // caret is marked more strongly. The map says which routines reach each location, so the only
 // questions put to the editor are which routine holds the caret and what the name under it means.
@@ -13,7 +13,7 @@ const SCHEME = 'nt65-direct-page';
 // The colour of a location the caret's routine reaches, and of the one under the caret.
 const COLOUR = new vscode.ThemeColor('nt65.directPages.caret');
 
-// Returns the key a location goes by in the tree and the grid: its page and its name.
+// Returns the key a location goes by in the tree and the grid: its page or segment and its name.
 function keyOf(page, location) {
   return `${page.id}/${location.name}`;
 }
@@ -54,6 +54,9 @@ function reachedBy(result, uri, position) {
       walk(key, node.children || []);
     }
   };
+  for (const segment of result.segments || []) {
+    for (const location of segment.locations) walk(keyOf(segment, location), location.routines);
+  }
   for (const page of result.pages) {
     for (const location of page.locations) walk(keyOf(page, location), location.routines);
     for (const group of page.groups) {
@@ -71,7 +74,7 @@ function declaredAt(result, definitions) {
   for (const definition of definitions || []) {
     const uri = (definition.targetUri || definition.uri).toString();
     const range = definition.targetSelectionRange || definition.targetRange || definition.range;
-    for (const page of result.pages) {
+    for (const page of [...result.pages, ...(result.segments || [])]) {
       for (const location of page.locations) {
         if (same(location.declaration, uri, range.start)) return keyOf(page, location);
       }

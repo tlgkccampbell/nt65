@@ -1,7 +1,7 @@
 namespace Norristown.Flow;
 
 /// <summary>
-/// Specifies what one routine does with one location on a <see cref="DirectPage"/>, from its own
+/// Specifies what one routine does with one location of a <see cref="DataMap"/>, from its own
 /// instructions alone.
 /// </summary>
 public enum DataRole

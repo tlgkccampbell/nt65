@@ -3,7 +3,8 @@ namespace Norristown.Flow;
 /// <summary>
 /// Says where the address of a <see cref="DataLocation"/> comes from, and so how far a
 /// <see cref="DataMap"/> can trust it. Where data lands is decided by ld65, which nt65 does
-/// not run, so the address of data in a segment is either read from the last build or predicted.
+/// not run, so the address of data in a segment is read from the last build. Without a build, it is
+/// predicted on a page and not known off the pages.
 /// </summary>
 public enum DataLayout
 {
@@ -18,4 +19,10 @@ public enum DataLayout
 
     /// <summary>The address is guessed from the page's base, because no linked configuration places the segment.</summary>
     Guessed,
+
+    /// <summary>
+    /// The address is not known, because the data lies on no page and there is no build. The map
+    /// predicts addresses only on a page, whose layout it can work out from the segments alone.
+    /// </summary>
+    Unknown,
 }

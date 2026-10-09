@@ -9,7 +9,8 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// Answers the <c>nt65/directPages</c> request. It converts the <see cref="DataMap"/> of a
-/// program into what the client's tree and grid show. Under each location, it arranges the
+/// program into what the client's tree and grid show, which is every direct page and every
+/// segment of data. Under each location, it arranges the
 /// routines that reach it into call trees, from the outermost callers down.
 /// </summary>
 internal static class DirectPages
@@ -34,6 +35,7 @@ internal static class DirectPages
         return new Protocol.DirectPagesResult(
             CpuNames.Format(cpu),
             [.. map.Pages.Select(page => Page(page, graph, uriOf))],
+            [.. map.Segments.Select(segment => Segment(segment, graph, uriOf))],
             built is null ? null : new Protocol.DirectPageBuild(built.DebugFilePath, built.BuiltAtUtc.ToString("o", CultureInfo.InvariantCulture), built.IsStale));
     }
 
@@ -48,7 +50,7 @@ internal static class DirectPages
         page.Direct,
         [.. page.Overlaps.Select(overlap => new Protocol.DirectPageOverlap(
             Id(overlap.Page), overlap.First, overlap.Last, [.. overlap.Shared.Select(Shared)]))],
-        [.. page.Locations.Select(location => Location(page, location, graph, uriOf))],
+        [.. page.Locations.Select(location => Location(location, graph, uriOf))],
         [.. page.Notes.Select(note => Note(note, uriOf))],
         [.. page.Unknown
             .GroupBy(use => use.Reason)
@@ -70,7 +72,15 @@ internal static class DirectPages
                         use.Use.Hazards.Count > 0,
                         [.. use.Use.Hazards.Select(note => Note(note, uriOf))]))]))]))]);
 
-    private static Protocol.DirectPageLocation Location(DirectPage page, DataLocation location, Graph graph, Func<string, string> uriOf)
+    private static Protocol.DirectPageSegment Segment(DataSegment segment, Graph graph, Func<string, string> uriOf) => new(
+        segment.Name ?? (segment.IsHardware ? "hardware" : "fixed"),
+        segment.Name,
+        segment.IsHardware,
+        Name(segment.Relation),
+        segment.IsHazard,
+        [.. segment.Locations.Select(location => Location(location, graph, uriOf))]);
+
+    private static Protocol.DirectPageLocation Location(DataLocation location, Graph graph, Func<string, string> uriOf)
     {
         var trees = graph.Trees(location.Uses);
         var (perPass, uncounted) = (0L, 0);
@@ -91,14 +101,19 @@ internal static class DirectPages
             location.Symbol is { } symbol ? Declaration(symbol, uriOf) : null,
             location.Offset,
             location.Size,
-            page.Base is { } at && location.Offset is { } offset ? at + offset : null,
+            location.Address,
             Name(location.Layout),
             location.Type,
             Name(location.Relation),
             location.IsHazard,
             location.IsReached,
             [.. location.Shared.Select(Shared)],
-            [.. location.References.Select(reference => Line(reference, uriOf))],
+            [.. location.References.Select(reference => Line(reference.Line, uriOf))],
+            [.. location.References
+                .Where(reference => reference.Routine is not null)
+                .GroupBy(reference => reference.Routine!)
+                .Select(routine => new Protocol.DirectPageReferrer(
+                    routine.Key.Name, Declaration(routine.Key, uriOf), [.. routine.Select(reference => Line(reference.Line, uriOf))]))],
             location.Uses.Sum(use => use.Accesses.Count),
             perPass,
             uncounted,
@@ -140,7 +155,8 @@ internal static class DirectPages
         DataLayout.Fixed => "fixed",
         DataLayout.Built => "built",
         DataLayout.Configured => "configured",
-        _ => "guessed",
+        DataLayout.Guessed => "guessed",
+        _ => "unknown",
     };
 
     private static string Name(DataRole role) => role switch

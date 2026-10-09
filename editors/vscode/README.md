@@ -54,13 +54,15 @@ build tasks and a schema for the project file.
   before it, and the inlay hint at its end says what they become. The status bar, beside the
   caret's position, shows the caret line's stripes with the register each stands for, such as
   `A 8  XY 16`, and its tooltip is the key to the colors.
-- **Where the direct page goes.** The nt65 view in the activity bar lists every direct page the
-  program reaches memory through: each `D` with its segments, the locations in it and the
-  routines that use each one, down the calls that reach them. Colour says how a location is
+- **Who uses which data.** The **Data** view in the nt65 activity bar lists every direct page
+  the program reaches memory through, and then every other segment of data. Each `D` comes with
+  its segments, the locations in it and the routines that use each one, down the calls that
+  reach them, and each segment with its locations in the same way. Colour says how a location is
   shared, a glyph says what each routine does with it (`↓` in, `↑` out, `↕` both, `◦` temp),
   `⧉` marks pages that overlap and `⚠` a hazard, which the toolbar hides and shows. Selecting
   a row marks the lines it stands for, with a solid bar where they write and a dashed one where
-  they only read. Code that runs with `D` not known is grouped under `D = ?`. **Show Grid**
+  they only read. The routines that take a location's address, to make a pointer to it, are
+  listed under it with `◎`. Code that runs with `D` not known is grouped under `D = ?`. **Show Grid**
   opens a page as 16 rows of 16 bytes beside the source, with each location's bytes outlined
   and brighter the more they are used, what is free, and what the page shares with others,
   with a legend under it. With the caret in a routine, both views mark the locations it uses,

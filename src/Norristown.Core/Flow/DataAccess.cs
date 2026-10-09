@@ -2,7 +2,7 @@ using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
-/// <summary>Represents one instruction that reaches a location on a <see cref="DirectPage"/>.</summary>
+/// <summary>Represents one instruction that reaches a location of a <see cref="DataMap"/>.</summary>
 /// <param name="Line">
 /// The statement to show for the instruction. Inside a macro expansion, it is the outermost call in
 /// the routine's own file.

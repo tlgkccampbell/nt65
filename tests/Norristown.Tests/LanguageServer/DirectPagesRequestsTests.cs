@@ -4,7 +4,7 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests the <c>nt65/directPages</c> request, which says how the program's routines share the
-/// zero page and the direct pages. These tests check the shape the client draws from. The map's
+/// zero page, the direct pages and the data in every other segment. These tests check the shape the client draws from. The map's
 /// own findings are checked in <see cref="Flow.DataMapTests"/>.
 /// </summary>
 public sealed class DirectPagesRequestsTests
@@ -281,6 +281,53 @@ public sealed class DirectPagesRequestsTests
         var shared = Assert.Single(low.Shared);
         Assert.Equal(("low", "ptr", "$0000", 0xFBL, 0xFBL, "deliberate"), (shared.Here, shared.There, shared.Page, shared.First, shared.Last, shared.Kind));
         Assert.Empty(low.References);
+    }
+
+    /// <summary>
+    /// Data off the pages comes as segments, after the pages. A location there has no offset, and
+    /// no address without a build. A routine that takes a location's address comes with the lines
+    /// that take it, and a table that takes it is only among the references.
+    /// </summary>
+    [Fact]
+    public async Task DataOffThePagesComesAsSegments()
+    {
+        var timeout = TestTimeout.Token();
+        const string Text = """
+            .module main
+            .segment BSS
+            .data buffer: .byte[64]
+            .segment CODE
+            .export .proc fill {
+                ldx #63
+            @next:
+                sta buffer,x
+                dex
+                bpl @next
+                rts
+            }
+            .export .proc point {
+                lda #<buffer
+                ldx #>buffer
+                rts
+            }
+            .segment RODATA
+            .data table: .addr buffer
+            """;
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
+
+        var result = await DirectPagesAsync(client, timeout);
+        Assert.NotNull(result);
+        Assert.Empty(result.Pages);
+        Assert.Equal(["BSS", "RODATA"], result.Segments.Select(segment => segment.Id));
+        var bss = result.Segments[0];
+        Assert.Equal(("BSS", false, "own", false), (bss.Name, bss.Hardware, bss.Relation, bss.Hazard));
+        var buffer = Assert.Single(bss.Locations);
+        Assert.Equal(("buffer", null, null, 64L, "unknown"), (buffer.Name, buffer.Offset, buffer.Address, buffer.Size!.Value, buffer.Layout));
+        Assert.Equal(("fill", "out"), (Assert.Single(buffer.Routines).Name, buffer.Routines[0].Role));
+        Assert.Equal([13, 14, 18], buffer.References.Select(place => place.Range.Start.Line));
+        var point = Assert.Single(buffer.Referrers);
+        Assert.Equal(("point", 12), (point.Name, point.Declaration.Range.Start.Line));
+        Assert.Equal([13, 14], point.Places.Select(place => place.Range.Start.Line));
     }
 
     private static Task<DirectPagesResult?> DirectPagesAsync(TestClient client, CancellationToken timeout) =>

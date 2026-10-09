@@ -80,13 +80,13 @@
       },
       {
         "command": "nt65.directPages.refresh",
-        "title": "Refresh Direct Pages",
+        "title": "Refresh Data",
         "category": "nt65",
         "icon": "$(refresh)"
       },
       {
         "command": "nt65.directPages.toggleHazards",
-        "title": "Toggle Direct Page Hazards",
+        "title": "Toggle Data Hazards",
         "category": "nt65"
       },
       {
@@ -133,7 +133,7 @@
       "nt65": [
         {
           "id": "nt65.directPages",
-          "name": "Direct Pages",
+          "name": "Data",
           "contextualTitle": "nt65"
         },
         {
@@ -146,12 +146,12 @@
     "viewsWelcome": [
       {
         "view": "nt65.directPages",
-        "contents": "Open a file of an nt65 program to see the direct pages it uses.",
+        "contents": "Open a file of an nt65 program to see its data and the routines that use it.",
         "when": "nt65.directPages.empty == noProgram"
       },
       {
         "view": "nt65.directPages",
-        "contents": "This program reaches no memory through the direct page.",
+        "contents": "This program declares no data and reaches no memory through the direct page.",
         "when": "nt65.directPages.empty == noPages"
       },
       {
@@ -458,7 +458,7 @@
       },
       {
         "id": "nt65.directPages.shared",
-        "description": "A direct page location that several routines use at different times, in the direct page map.",
+        "description": "A location that several routines use at different times, in the Data view.",
         "defaults": {
           "dark": "#89D185",
           "light": "#388A34",
@@ -468,7 +468,7 @@
       },
       {
         "id": "nt65.directPages.nested",
-        "description": "A direct page location that routines use while another use of it is live, and the mark of a hazard or of bytes two pages share, in the direct page map.",
+        "description": "A location that routines use while another use of it is live, and the mark of a hazard or of bytes two pages share, in the Data view.",
         "defaults": {
           "dark": "#CCA700",
           "light": "#BF8803",
@@ -478,7 +478,7 @@
       },
       {
         "id": "nt65.directPages.irq",
-        "description": "A direct page location an interrupt uses, and an interrupt handler, in the direct page map.",
+        "description": "A location an interrupt uses, and an interrupt handler, in the Data view.",
         "defaults": {
           "dark": "#F48771",
           "light": "#C72E0F",
@@ -488,7 +488,7 @@
       },
       {
         "id": "nt65.directPages.own",
-        "description": "A direct page location that one routine owns, in the direct page map.",
+        "description": "A location that one routine owns, in the Data view.",
         "defaults": {
           "dark": "#75BEFF",
           "light": "#0070C1",
@@ -498,7 +498,7 @@
       },
       {
         "id": "nt65.directPages.unused",
-        "description": "A direct page location that no instruction accesses, in the direct page map.",
+        "description": "A location that no instruction accesses, in the Data view.",
         "defaults": {
           "dark": "#6E6E6E",
           "light": "#A0A0A0",
@@ -508,7 +508,7 @@
       },
       {
         "id": "nt65.directPages.referenced",
-        "description": "A direct page location that no instruction accesses but whose address the program takes, and the mark of a line that takes it, in the direct page map.",
+        "description": "A location that no instruction accesses but whose address the program takes, and the mark of a line that takes it, in the Data view.",
         "defaults": {
           "dark": "#B180D7",
           "light": "#652D90",
@@ -518,7 +518,7 @@
       },
       {
         "id": "nt65.directPages.hw",
-        "description": "A hardware register reached through the direct page, in the direct page map.",
+        "description": "A hardware register, in the Data view.",
         "defaults": {
           "dark": "#8A8A8A",
           "light": "#6E6E6E",
@@ -528,7 +528,7 @@
       },
       {
         "id": "nt65.directPages.unknown",
-        "description": "The direct page whose D is not known, in the direct page map.",
+        "description": "The direct page whose D is not known, in the Data view.",
         "defaults": {
           "dark": "#9D9D9D",
           "light": "#717171",
@@ -538,7 +538,7 @@
       },
       {
         "id": "nt65.directPages.caret",
-        "description": "The direct page map's mark on the locations the routine at the caret reaches, and on the one under the caret.",
+        "description": "The Data view's mark on the locations the routine at the caret reaches, and on the one under the caret.",
         "defaults": {
           "dark": "#FF8AC8",
           "light": "#C2185B",
@@ -548,7 +548,7 @@
       },
       {
         "id": "nt65.directPages.inout",
-        "description": "The glyph of a routine that reads a direct page location it is passed and writes it back, in the direct page map.",
+        "description": "The glyph of a routine that reads a location it is passed and writes it back, in the Data view.",
         "defaults": {
           "dark": "#4EC9B0",
           "light": "#16825D",
@@ -558,7 +558,7 @@
       },
       {
         "id": "nt65.directPages.access",
-        "description": "The bar and ruler mark of a line that accesses the selected direct page location, and the glyph of a routine that reads it as an input.",
+        "description": "The bar and ruler mark of a line that accesses the selected location, and the glyph of a routine that reads it as an input.",
         "defaults": {
           "dark": "#4FC1FF",
           "light": "#0070C1",
@@ -568,7 +568,7 @@
       },
       {
         "id": "nt65.directPages.accessBackground",
-        "description": "The tint of a line that accesses the selected direct page location, or calls a routine that does.",
+        "description": "The tint of a line that accesses the selected location, or calls a routine that does.",
         "defaults": {
           "dark": "#4FC1FF21",
           "light": "#0070C11A",
@@ -578,7 +578,7 @@
       },
       {
         "id": "nt65.directPages.warningBackground",
-        "description": "The tint of a line that makes a hazard for the selected direct page location.",
+        "description": "The tint of a line that makes a hazard for the selected location.",
         "defaults": {
           "dark": "#CCA7002B",
           "light": "#BF88031F",
@@ -588,7 +588,7 @@
       },
       {
         "id": "nt65.directPages.interruptBackground",
-        "description": "The tint of a line in an interrupt handler that accesses the selected direct page location.",
+        "description": "The tint of a line in an interrupt handler that accesses the selected location.",
         "defaults": {
           "dark": "#F4877126",
           "light": "#C72E0F1A",

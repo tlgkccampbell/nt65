@@ -2,7 +2,7 @@ using Norristown.Semantics;
 
 namespace Norristown.Flow;
 
-/// <summary>Represents what one routine does with one location on a <see cref="DirectPage"/>.</summary>
+/// <summary>Represents what one routine does with one location of a <see cref="DataMap"/>.</summary>
 /// <param name="Routine">The routine.</param>
 /// <param name="Role">What the routine's own instructions do with the location.</param>
 /// <param name="Accesses">The routine's instructions that reach the location, in the order they are emitted.</param>

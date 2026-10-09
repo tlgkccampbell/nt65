@@ -7,24 +7,33 @@ using Norristown.Syntax;
 namespace Norristown.Flow;
 
 /// <summary>
-/// Represents how a program's routines share the zero page, or on the 65816 each direct page, for
-/// an editor to show. It groups every location the program reaches through a page by the value of
-/// D, and says which routines use each one and how.
+/// Represents how a program's routines share its data, for an editor to show. It groups every
+/// location the program reaches through the zero page, or on the 65816 a direct page, by the value
+/// of D, and every other data declaration by its segment. For each location, it says which
+/// routines use it and how.
 /// <para>
 /// The map is only for showing, so it may track memory on a best-effort basis. Where data lands is
 /// decided by ld65, which nt65 does not run, so each location says where its address comes from as
-/// a <see cref="DataLayout"/>. An address that neither the source nor the last build fixes is
-/// predicted. A segment starts where its linked configuration puts it, or at the start of its page
-/// without one, and the files' bytes follow in the order the program lists the files. Pages are
-/// found to share bytes only through addresses the map trusts, which excludes guessed ones. Nothing
-/// warns or errors because of the map.
+/// a <see cref="DataLayout"/>. An address on a page that neither the source nor the last build
+/// fixes is predicted. A segment starts where its linked configuration puts it, or at the start of
+/// its page without one, and the files' bytes follow in the order the program lists the files.
+/// Data off the pages is never predicted, so its address is known only from the source or a build.
+/// Pages are found to share bytes only through addresses the map trusts, which excludes guessed
+/// ones. Nothing warns or errors because of the map.
+/// </para>
+/// <para>
+/// An instruction is attributed to the location its operand names, and an indexed one to the
+/// location it starts from. An access through a pointer names no location, so it is never
+/// attributed. The statements that take a location's address are listed instead, as
+/// <see cref="DataLocation.References"/>.
 /// </para>
 /// </summary>
 public sealed class DataMap
 {
-    private DataMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<DataCall> calls)
+    private DataMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<DataSegment> segments, IReadOnlyList<DataCall> calls)
     {
         Pages = pages;
+        Segments = segments;
         Calls = calls;
     }
 
@@ -34,6 +43,13 @@ public sealed class DataMap
     /// </summary>
     public IReadOnlyList<DirectPage> Pages { get; }
 
+    /// <summary>
+    /// Gets the data that lies on no page, by segment, in the order the program declares its
+    /// segments. The locations at addresses the source fixes come after the segments, and the
+    /// hardware registers last.
+    /// </summary>
+    public IReadOnlyList<DataSegment> Segments { get; }
+
     /// <summary>Gets every call in the program that names a routine, in the order the files list them.</summary>
     public IReadOnlyList<DataCall> Calls { get; }
 
@@ -41,7 +57,8 @@ public sealed class DataMap
     /// <param name="analysis">The analysis of the program.</param>
     /// <param name="built">
     /// The absolute address the last build gave each symbol, or null when there is no build. A
-    /// zero-page data symbol found here is laid out at that address rather than at a predicted one.
+    /// zero-page data symbol found here is laid out at that address rather than at a predicted one,
+    /// and a data symbol off the pages has an address only when it is found here.
     /// </param>
     /// <param name="cancellation">The token that cancels the work.</param>
     public static DataMap Of(
@@ -67,8 +84,11 @@ public sealed class DataMap
         private readonly List<DataCall> calls = [];
         private readonly Dictionary<Symbol, List<Symbol>> callees = [];
 
-        // The locations that live on a page, by key, before their uses are known.
+        // The locations, on a page or off every page, by key, before their uses are known.
         private readonly Dictionary<LocationKey, Home> homes = [];
+
+        // The routine each instruction step belongs to, by the step's key.
+        private readonly Dictionary<StepKey, Symbol> owners = [];
 
         // Every access found, in the order the walk found them.
         private readonly List<Found> found = [];
@@ -77,7 +97,7 @@ public sealed class DataMap
 
         // The statements that take each location's address without reaching it, in the order the
         // walk found them.
-        private readonly Dictionary<LocationKey, List<SyntaxNode>> references = [];
+        private readonly Dictionary<LocationKey, List<DataReference>> references = [];
 
         // The notes about each page's layout, by the page's base.
         private readonly Dictionary<long, List<DataNote>> notes = [];
@@ -94,7 +114,7 @@ public sealed class DataMap
             var uses = Uses(interrupt, main);
             var pages = Pages(uses);
             Overlap(pages);
-            return new DataMap(pages, calls);
+            return new DataMap(pages, Segments(uses), calls);
         }
 
         /// <summary>Returns the canonical symbol for <paramref name="symbol"/>, the one every file's model agrees on.</summary>
@@ -143,9 +163,10 @@ public sealed class DataMap
         }
 
         /// <summary>
-        /// Collects the locations that live on a page: the data declared in a zero-page segment, and
-        /// the addresses below $100 that a data alias or <c>.mmio</c> names. Data is given the
-        /// address the last build gave it, or else its predicted address, segment by segment.
+        /// Collects the locations that live on a page, which are the data declared in a zero-page
+        /// segment and the addresses below $100 that a data alias or <c>.mmio</c> names. Data on a
+        /// page is given the address the last build gave it, or else its predicted address, segment
+        /// by segment. The data declared in any other segment is collected too, off the pages.
         /// </summary>
         private void CollectHomes()
         {
@@ -164,8 +185,14 @@ public sealed class DataMap
                 var placed = new List<(string Segment, int Stream, Symbol Symbol, long Offset, string Type)>();
                 foreach (var step in layout.Steps)
                 {
-                    if (step.Segment is not { } name || segments.Find(name) is not { Size: AddressSize.ZeroPage })
+                    if (step.Segment is not { } name || segments.Find(name) is not { } segment)
                         continue;
+                    if (segment.Size != AddressSize.ZeroPage)
+                    {
+                        if (step.Label is { Kind: SymbolKind.Data } elsewhere && step.Statement is DataDeclarationSyntax declared)
+                            homes.TryAdd(Key(elsewhere), OffThePages(elsewhere, TypeOf(declared)));
+                        continue;
+                    }
                     if (step.Label is { Kind: SymbolKind.Data } data && layout.PositionOf(data, step.On) is { } start)
                     {
                         placed.Add((name, start.Stream, data, start.Offset, TypeOf(step.Statement as DataDeclarationSyntax)));
@@ -199,7 +226,7 @@ public sealed class DataMap
                     if (symbol.Kind == SymbolKind.AddressAlias && symbol.ValueExpression?.Parent is DataDeclarationSyntax declaration
                         && symbol.Value.AsNumber() is { } address and >= 0 and < 0x100)
                     {
-                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration)));
+                        homes.TryAdd(Key(symbol), new Home(0, address, symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration), address));
                     }
                 }
             }
@@ -225,7 +252,7 @@ public sealed class DataMap
                     var inPage = fromPage is >= 0 and <= 0xff;
                     if (!inPage)
                         outside = (Math.Min(outside.First, address), Math.Max(outside.Last, address + Math.Max(1, symbol.Size ?? 1) - 1));
-                    homes.TryAdd(Key(symbol), new Home(page, inPage ? fromPage : null, symbol.Size, layout, type, false));
+                    homes.TryAdd(Key(symbol), new Home(page, inPage ? fromPage : null, symbol.Size, layout, type, false, inPage ? address : null));
                 }
 
                 if (outside.First <= outside.Last)
@@ -308,6 +335,15 @@ public sealed class DataMap
             list.Add(note);
         }
 
+        /// <summary>
+        /// Returns the home of a data symbol that lies on no page. Its address is the one the last
+        /// build gave it, or else not known, because the map predicts addresses only on a page.
+        /// </summary>
+        private Home OffThePages(Symbol symbol, string type) =>
+            built is not null && (built.TryGetValue(symbol, out var at) || built.TryGetValue(Current(symbol), out at))
+                ? new Home(null, null, symbol.Size, DataLayout.Built, type, false, at)
+                : new Home(null, null, symbol.Size, DataLayout.Unknown, type, false, null);
+
         /// <summary>Returns the page a zero-page segment's symbols are reached through.</summary>
         private long BaseOf(Segment segment) => HasDirectPage ? segment.DirectPage ?? 0 : 0;
 
@@ -334,6 +370,7 @@ public sealed class DataMap
                     {
                         foreach (var step in block.Steps)
                         {
+                            owners.TryAdd(step.Key, routine);
                             if (!step.Closes && Access(file, step) is { } access)
                                 found.Add(access with
                                 {
@@ -348,8 +385,8 @@ public sealed class DataMap
                 }
             }
 
-            // Every location a page holds is known once the accesses are, because an access can
-            // give a page an address the source fixes.
+            // Every location is known once the accesses are, because an access can give a page, or
+            // the addresses off the pages, an address the source fixes.
             foreach (var file in analysis.Files)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -370,8 +407,8 @@ public sealed class DataMap
                         var shown = Shown(step, file.Model.Tree);
                         if (shown is DataDirectiveSyntax { Parent: DataDeclarationSyntax declaration })
                             shown = declaration;
-                        if (!list.Contains(shown))
-                            list.Add(shown);
+                        if (!list.Exists(reference => reference.Line == shown))
+                            list.Add(new DataReference(shown, owners.GetValueOrDefault(step.Key)));
                     }
                 }
             }
@@ -390,7 +427,7 @@ public sealed class DataMap
         /// </remarks>
         private void CollectRegisters()
         {
-            var bases = homes.Values.Select(home => home.Page).Distinct().Order().ToList();
+            var bases = homes.Values.Select(home => home.Page).OfType<long>().Distinct().Order().ToList();
             foreach (var file in analysis.Files)
             {
                 cancellation.ThrowIfCancellationRequested();
@@ -405,7 +442,7 @@ public sealed class DataMap
                     {
                         if (address - page is >= 0 and <= 0xff)
                         {
-                            homes[Key(symbol)] = new Home(page, address - page, symbol.Size, DataLayout.Fixed, TypeOf(declaration), true);
+                            homes[Key(symbol)] = new Home(page, address - page, symbol.Size, DataLayout.Fixed, TypeOf(declaration), true, address);
                             break;
                         }
                     }
@@ -553,15 +590,20 @@ public sealed class DataMap
                 offset = target.Offset;
                 if (!homes.ContainsKey(key))
                 {
-                    // An address the source fixes that only a known direct page reaches, such as a
-                    // hardware register reached with D at the start of the registers.
-                    if (page is not { } at || target.Symbol.Value.AsNumber() is not { } address || address + target.Offset - at is < 0 or > 0xff
-                        || target.Symbol.Kind != SymbolKind.AddressAlias)
-                    {
+                    if (target.Symbol.Kind != SymbolKind.AddressAlias || target.Symbol.Value.AsNumber() is not { } address)
                         return null;
-                    }
+
+                    // An address the source fixes that only a known direct page reaches, such as a
+                    // hardware register reached with D at the start of the registers. A data
+                    // declaration's address reached without the page lies off the pages, such as
+                    // the C64's screen.
                     var declaration = target.Symbol.ValueExpression?.Parent as DataDeclarationSyntax;
-                    homes[key] = new Home(at, address - at, target.Symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration));
+                    if (page is { } at && address + target.Offset - at is >= 0 and <= 0xff)
+                        homes[key] = new Home(at, address - at, target.Symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration), address);
+                    else if (!throughPage && declaration is not null)
+                        homes[key] = new Home(null, null, target.Symbol.Size, DataLayout.Fixed, TypeOf(declaration), IsMmio(declaration), address);
+                    else
+                        return null;
                 }
             }
             else if (!indexed && Anonymous(file.Model, operand, expression, step.On, page, width) is { } anonymous)
@@ -601,7 +643,7 @@ public sealed class DataMap
                 return null;
             var key = new LocationKey(null, at + offset);
             if (!homes.TryGetValue(key, out var home) || home.Size < size)
-                homes[key] = new Home(at, offset, size, DataLayout.Fixed, "", false);
+                homes[key] = new Home(at, offset, size, DataLayout.Fixed, "", false, at + offset);
             return key;
         }
 
@@ -745,7 +787,7 @@ public sealed class DataMap
                 var mains = location.Where(item => item.Value is { InMain: true, IsUnknownPage: false }).Select(item => item.Value).ToList();
                 foreach (var (key, use) in location.Where(item => item.Value.InInterrupt).ToList())
                 {
-                    if (use.IsUnknownPage && !held.Contains(homes[location.Key].Page))
+                    if (use.IsUnknownPage && (homes[location.Key].Page is not { } home || !held.Contains(home)))
                         continue;
                     if (mains.FirstOrDefault(other => Clobbers(use.Role, other.Role)) is not { } victim)
                         continue;
@@ -835,8 +877,8 @@ public sealed class DataMap
         /// </summary>
         private (string Name, long Start)? LocationAt(long address, long page)
         {
-            var home = homes.Where(item => item.Value.Offset is not null)
-                .Select(item => (item.Key.Name, item.Value.Page, Start: item.Value.Page + item.Value.Offset!.Value, item.Value.Size))
+            var home = homes.Where(item => item.Value is { Page: not null, Offset: not null })
+                .Select(item => (item.Key.Name, item.Value.Page, Start: item.Value.Page!.Value + item.Value.Offset!.Value, item.Value.Size))
                 .Where(item => Takes(item.Start, item.Size))
                 .OrderBy(item => item.Page == page ? 0 : 1)
                 .Select(item => ((string Name, long Start)?)(item.Name, item.Start))
@@ -1037,20 +1079,11 @@ public sealed class DataMap
                 .ToLookup(BaseOf, segment => segment.Name);
             var reached = found.ToLookup(access => access.Location);
             var pages = new List<DirectPage>();
-            foreach (var page in homes.GroupBy(home => home.Value.Page).OrderBy(page => page.All(home => home.Value.IsMmio)).ThenBy(page => page.Key))
+            foreach (var page in homes.Where(home => home.Value.Page is not null).GroupBy(home => home.Value.Page!.Value).OrderBy(page => page.All(home => home.Value.IsMmio)).ThenBy(page => page.Key))
             {
                 var locations = new List<DataLocation>();
                 foreach (var (key, home) in page.OrderBy(home => home.Value.Offset ?? long.MaxValue).ThenBy(home => home.Key.DisplayName, StringComparer.Ordinal))
-                {
-                    var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
-                        .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<DataUse>().ToList();
-                    var location = new DataLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses)
-                    {
-                        References = references.GetValueOrDefault(key) ?? [],
-                    };
-                    location.Relation = RelationOf(location, home);
-                    locations.Add(location);
-                }
+                    locations.Add(Location(key, home, uses, reached));
                 var hardware = locations.Count > 0 && locations.All(location => location.Relation == DataRelation.Hardware);
                 var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol?.Segment == name)).ToList();
                 List<DataNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
@@ -1100,6 +1133,50 @@ public sealed class DataMap
                 pages.Add(new DirectPage(null, [], false, [], list, 0, []));
             }
             return pages;
+        }
+
+        /// <summary>
+        /// Returns the data that lies on no page, grouped by segment, then the locations at
+        /// addresses the source fixes, then the hardware registers. A group's locations are in
+        /// address order where the addresses are known, and otherwise in the order they are declared.
+        /// </summary>
+        private List<DataSegment> Segments(Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> uses)
+        {
+            var reached = found.ToLookup(access => access.Location);
+            var order = analysis.Program.Segments.Segments.Select((segment, index) => (segment.Name, index))
+                .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
+            var groups = homes.Where(home => home.Value.Page is null)
+                .GroupBy(home => (Name: home.Value.Layout == DataLayout.Fixed ? null : home.Key.Symbol?.Segment, home.Value.IsMmio))
+                .OrderBy(group => group.Key.Name is { } name ? order.GetValueOrDefault(name, int.MaxValue - 2) : group.Key.IsMmio ? int.MaxValue : int.MaxValue - 1)
+                .ThenBy(group => group.Key.Name, StringComparer.Ordinal);
+            var segments = new List<DataSegment>();
+            foreach (var group in groups)
+            {
+                cancellation.ThrowIfCancellationRequested();
+                var locations = group
+                    .OrderBy(home => home.Value.Address ?? long.MaxValue)
+                    .ThenBy(home => home.Key.Symbol?.Tree.Path, StringComparer.Ordinal)
+                    .ThenBy(home => home.Key.Symbol?.NameSpan.Start)
+                    .Select(home => Location(home.Key, home.Value, uses, reached))
+                    .ToList();
+                segments.Add(new DataSegment(group.Key.Name, group.Key.IsMmio, locations));
+            }
+            return segments;
+        }
+
+        /// <summary>Returns the location that <paramref name="key"/> names, with what each routine that reaches it does with it.</summary>
+        private DataLocation Location(
+            LocationKey key, Home home, Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> uses, ILookup<LocationKey, Found> reached)
+        {
+            var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
+                .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<DataUse>().ToList();
+            var location = new DataLocation(key.Symbol, key.Name, home.Offset, home.Size, home.Layout, home.Type, routineUses)
+            {
+                Address = home.Page is { } page && home.Offset is { } offset ? page + offset : home.Page is null ? home.Address : null,
+                References = references.GetValueOrDefault(key) ?? [],
+            };
+            location.Relation = RelationOf(location, home);
+            return location;
         }
 
         /// <summary>Returns how the routines that use a location share it.</summary>
@@ -1250,9 +1327,12 @@ public sealed class DataMap
         /// <summary>Returns the element a data declaration names, such as <c>.word</c>, without any values it gives.</summary>
         private static string TypeOf(DataDeclarationSyntax? declaration)
         {
-            var text = declaration?.Directive?.GetText().Trim() ?? "";
-            var equals = text.IndexOf('=', StringComparison.Ordinal);
-            return (equals < 0 ? text : text[..equals]).Trim();
+            // Values on the line, as in `.addr buf`, follow the element without an `=`, so the
+            // element is put together from its parts rather than cut from the directive's text.
+            if (declaration?.Directive is not { } directive)
+                return "";
+            var type = directive.Type is { } name ? $" {name.GetText().Trim()}" : "";
+            return $"{directive.Directive.Text}{type}{directive.Count?.GetText().Trim()}";
         }
 
         /// <summary>Returns whether <paramref name="declaration"/> declares a hardware register.</summary>
@@ -1275,14 +1355,15 @@ public sealed class DataMap
             return shown ?? step.Statement;
         }
 
-        /// <summary>Represents a location on its page before its uses are known.</summary>
-        /// <param name="Page">The page's base.</param>
-        /// <param name="Offset">The offset from the page's base, or null when it is not known.</param>
+        /// <summary>Represents a location on its page, or off every page, before its uses are known.</summary>
+        /// <param name="Page">The page's base, or null for a location on no page.</param>
+        /// <param name="Offset">The offset from the page's base, or null when it is not known or the location is on no page.</param>
         /// <param name="Size">The number of bytes, or null when it is not known.</param>
         /// <param name="Layout">Where the address comes from.</param>
         /// <param name="Type">The element it is declared with.</param>
         /// <param name="IsMmio">Whether it is a hardware register.</param>
-        private sealed record Home(long Page, long? Offset, long? Size, DataLayout Layout, string Type, bool IsMmio);
+        /// <param name="Address">The address of its first byte, or null when it is not known.</param>
+        private sealed record Home(long? Page, long? Offset, long? Size, DataLayout Layout, string Type, bool IsMmio, long? Address);
 
         /// <summary>
         /// Represents the key of a location in the builder. A location that a symbol names is keyed

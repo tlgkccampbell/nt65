@@ -182,6 +182,14 @@ public sealed class DataMapTests
                 "    screen_on Write 1",
                 "page ? [] Unused hazard=True used=0 direct=0",
                 "  ? nmi frames Interrupted InOut",
+                "segment BSS Own hazard=False",
+                "  map ? x2048 .word[1024] Own Unknown",
+                "    ◎ ldx #map in clear_map",
+                "    ◎ ldx #map in copy_title",
+                "    copy_title In 1",
+                "segment (hardware) Hardware hazard=False",
+                "  NMITIMEN $4200 x1 .byte Hardware Fixed",
+                "    screen_on Write 1",
             ],
             Render("65816", Snes));
     }
@@ -1161,15 +1169,17 @@ public sealed class DataMapTests
                 "page $0000 [ZEROPAGE] Unused hazard=False used=9 direct=0",
                 "  ◦ no config · layout guessed",
                 "  ptr +0 x2 .addr Unused Guessed",
-                "    ◎ lda #<ptr",
-                "    ◎ ldx #>ptr",
+                "    ◎ lda #<ptr in main",
+                "    ◎ ldx #>ptr in main",
                 "  tmp +2 x1 .byte Unused Guessed",
-                "    ◎ ldy #tmp",
+                "    ◎ ldy #tmp in main",
                 "  buf +3 x4 .byte[4] Unused Guessed",
                 "    ◎ .data table: .addr buf",
                 "  out +7 x1 .byte Unused Guessed",
-                "    ◎ ldx #.lobyte(p)",
+                "    ◎ ldx #.lobyte(p) in main",
                 "  idle +8 x1 .byte Unused Guessed",
+                "segment RODATA Unused hazard=False",
+                "  table ? x2 .addr Unused Unknown",
             ],
             Render("6502", """
                 .macro point(p: expr) {
@@ -1194,12 +1204,169 @@ public sealed class DataMapTests
                 """));
     }
 
-    /// <summary>Returns the map of <paramref name="text"/> as lines of text, one for each page, location, use and note.</summary>
+    /// <summary>
+    /// Data in a segment off the pages is shared like data on a page. A variable that the main
+    /// program reads and writes while an interrupt handler writes it without reading it is a
+    /// hazard, and a temporary relied on across a call to a routine that uses it too is nested.
+    /// Without a build, nt65 does not predict where such data lands, so its address is not known.
+    /// </summary>
+    [Fact]
+    public void DataOffThePagesIsSharedLikeDataOnThem()
+    {
+        Assert.Equal(
+            [
+                "segment BSS Nested hazard=True",
+                "  player_x ? x1 .byte Interrupt Unknown",
+                "    update_player InOut 2",
+                "    draw_sprites In 1",
+                "    irq_handler Out 1 handler",
+                "      ⚠ `irq_handler` writes it without reading it first @ sta player_x",
+                "      ⚠ and can interrupt `update_player` between its write and its read @ lda player_x",
+                "  tmp ? x1 .byte Nested Unknown",
+                "    mix_voice Temp 2",
+                "      ⚠ `jsr envelope` runs between a write and a read of it @ jsr envelope",
+                "      ⚠ `envelope` uses it as a temporary @ sta tmp",
+                "      ◦ read again here, after the call @ lda tmp",
+                "    envelope Temp 2",
+            ],
+            Render("6502", """
+                .segment BSS
+                .data player_x: .byte
+                .data tmp: .byte
+                .segment CODE
+                .export .proc main {
+                    jsr update_player
+                    jsr draw_sprites
+                    jsr mix_voice
+                    rts
+                }
+                .proc update_player {
+                    lda player_x
+                    clc
+                    adc #1
+                    sta player_x
+                    rts
+                }
+                .proc draw_sprites {
+                    lda player_x
+                    rts
+                }
+                .proc mix_voice {
+                    sta tmp
+                    jsr envelope
+                    lda tmp
+                    rts
+                }
+                .proc envelope {
+                    sta tmp
+                    lda tmp
+                    rts
+                }
+                .export .proc irq_handler: interrupt {
+                    lda #0
+                    sta player_x
+                    rti
+                }
+                """));
+    }
+
+    /// <summary>
+    /// An indexed access off the pages is attributed to the location it starts from. An access
+    /// through a pointer names no location, so it is not attributed; the routine that takes the
+    /// location's address for the pointer is listed with the line that takes it instead.
+    /// </summary>
+    [Fact]
+    public void AnIndexedAccessIsAttributedAndAPointerIsNot()
+    {
+        Assert.Equal(
+            [
+                "page $0000 [ZEROPAGE] Own hazard=False used=2 direct=3",
+                "  ◦ no config · layout guessed",
+                "  ptr +0 x2 .addr Own Guessed",
+                "    flush Temp 3",
+                "segment BSS Own hazard=False",
+                "  buffer ? x64 .byte[64] Own Unknown",
+                "    ◎ lda #<buffer in flush",
+                "    ◎ lda #>buffer in flush",
+                "    copy_line Out 1",
+            ],
+            Render("6502", """
+                .segment ZEROPAGE
+                .data ptr: .addr
+                .segment BSS
+                .data buffer: .byte[64]
+                .segment CODE
+                .export .proc copy_line {
+                    ldx #63
+                @next:
+                    sta buffer,x
+                    dex
+                    bpl @next
+                    rts
+                }
+                .export .proc flush {
+                    lda #<buffer
+                    sta ptr
+                    lda #>buffer
+                    sta ptr + 1
+                    ldy #0
+                    lda (ptr),y
+                    rts
+                }
+                """));
+    }
+
+    /// <summary>
+    /// The last build gives data off the pages its address, which orders the segment's locations.
+    /// A data declaration at an address the source fixes lies with the other fixed addresses, and a
+    /// hardware register with the hardware, each shown only once an instruction reaches it.
+    /// </summary>
+    [Fact]
+    public void TheLastBuildPlacesDataOffThePages()
+    {
+        var analysis = FlowFragment.Analyze("6502", """
+            .data screen: .byte[1000] = $0400
+            .data colors: .byte[1000] = $D800
+            .mmio BORDER: .byte = $D020
+            .segment BSS
+            .data lives: .byte
+            .data score: .word
+            .segment CODE
+            .export .proc main {
+                lda #0
+                sta lives
+                sta score
+                sta score + 1
+                sta screen
+                sta BORDER
+                rts
+            }
+            """);
+        var file = analysis.File(Analysis.Path);
+        var built = new Dictionary<Symbol, long> { [file.Symbol("lives")] = 0x0302, [file.Symbol("score")] = 0x0300 };
+        Assert.Equal(
+            [
+                "segment BSS Own hazard=False",
+                "  score $0300 x2 .word Own Built",
+                "    main Out 2",
+                "  lives $0302 x1 .byte Own Built",
+                "    main Out 1",
+                "segment (fixed) Own hazard=False",
+                "  screen $0400 x1000 .byte[1000] Own Fixed",
+                "    main Out 1",
+                "segment (hardware) Hardware hazard=False",
+                "  BORDER $d020 x1 .byte Hardware Fixed",
+                "    main Write 1",
+            ],
+            Render(analysis, built));
+    }
+
+    /// <summary>Returns the map of <paramref name="text"/> as lines of text, one for each page, segment, location, use and note.</summary>
     private static List<string> Render(string cpu, string text) => Render(FlowFragment.Analyze(cpu, text));
 
     /// <summary>
     /// Returns the map of <paramref name="analysis"/>'s program as lines of text, one for each
-    /// page, location, use and note, with the addresses in <paramref name="built"/> as the last
+    /// page, segment, location, use and note, with the addresses in <paramref name="built"/> as the last
     /// build's.
     /// </summary>
     private static List<string> Render(ProgramAnalysis analysis, IReadOnlyDictionary<Symbol, long>? built = null)
@@ -1223,20 +1390,35 @@ public sealed class DataMapTests
                     + (location.IsHardware && !location.IsReached ? " declared" : ""));
                 foreach (var shared in location.Shared)
                     lines.Add($"    ⧉ {shared.Kind} {shared.There} {StateValue.Hex(shared.First, 4)}-{StateValue.Hex(shared.Last, 4)}");
-                foreach (var reference in location.References)
-                    lines.Add($"    ◎ {reference.GetText().Trim()}");
-                foreach (var use in location.Uses)
-                {
-                    lines.Add($"    {use.Routine.Name} {use.Role} {use.Accesses.Count}{(use.IsHandler ? " handler" : "")}{(use.IsUnknownPage ? " unknown" : "")}"
-                        + $"{(use.InInterrupt && !use.IsHandler ? " irq" : "")}{(use.InInterrupt && use.InMain ? " main" : "")}");
-                    foreach (var note in use.Hazards)
-                        lines.Add($"      {note.Glyph} {note.Text} @ {note.At?.GetText().Trim()}");
-                }
+                RenderUses(lines, location);
             }
             foreach (var unknown in page.Unknown)
                 lines.Add($"  ? {unknown.Use.Routine.Name} {unknown.Location.Name} {unknown.Reason} {unknown.Use.Role}");
         }
+        foreach (var segment in map.Segments)
+        {
+            lines.Add($"segment {segment.Name ?? (segment.IsHardware ? "(hardware)" : "(fixed)")} {segment.Relation} hazard={segment.IsHazard}");
+            foreach (var location in segment.Locations)
+            {
+                lines.Add($"  {location.Name} {(location.Address is { } at ? StateValue.Hex(at, 4) : "?")} x{location.Size} {location.Type} {location.Relation} {location.Layout}");
+                RenderUses(lines, location);
+            }
+        }
         return lines;
+    }
+
+    /// <summary>Adds a line for each statement that takes <paramref name="location"/>'s address, and for each use of it with its notes.</summary>
+    private static void RenderUses(List<string> lines, DataLocation location)
+    {
+        foreach (var reference in location.References)
+            lines.Add($"    ◎ {reference.Line.GetText().Trim()}{(reference.Routine is { } routine ? $" in {routine.Name}" : "")}");
+        foreach (var use in location.Uses)
+        {
+            lines.Add($"    {use.Routine.Name} {use.Role} {use.Accesses.Count}{(use.IsHandler ? " handler" : "")}{(use.IsUnknownPage ? " unknown" : "")}"
+                + $"{(use.InInterrupt && !use.IsHandler ? " irq" : "")}{(use.InInterrupt && use.InMain ? " main" : "")}");
+            foreach (var note in use.Hazards)
+                lines.Add($"      {note.Glyph} {note.Text} @ {note.At?.GetText().Trim()}");
+        }
     }
 
     /// <summary>

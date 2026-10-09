@@ -1,11 +1,10 @@
 using Norristown.Semantics;
-using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
 /// <summary>
-/// Represents one location on a <see cref="DirectPage"/>, which is a data declaration or an address
-/// that the page reaches, with the routines that use it.
+/// Represents one location of a <see cref="DataMap"/>, with the routines that use it. A location is a
+/// data declaration, or an address that the source fixes and that the program reaches.
 /// </summary>
 /// <param name="Symbol">
 /// The symbol that names the location, or null for a constant address that an instruction reaches
@@ -15,7 +14,10 @@ namespace Norristown.Flow;
 /// The name the location is shown by. It is the symbol's name, or for a location without a symbol
 /// its address in four hexadecimal digits, such as <c>$00FB</c>. No two locations on a page share one.
 /// </param>
-/// <param name="Offset">The offset from D to the location's first byte, or null when it is not known.</param>
+/// <param name="Offset">
+/// The offset from D to the location's first byte, or null when it is not known or the location
+/// lies on no <see cref="DirectPage"/>.
+/// </param>
 /// <param name="Size">The number of bytes the location takes, or null when it is not known.</param>
 /// <param name="Layout">
 /// Where the location's address comes from. Only the source or the last build fixes it, because
@@ -42,13 +44,20 @@ public sealed record DataLocation(
     public IReadOnlyList<SharedBytes> Shared { get; internal set; } = [];
 
     /// <summary>
+    /// Gets the address of the location's first byte, or null when it is not known. On a page it
+    /// may be predicted, as <see cref="Layout"/> says. Off the pages it comes only from the source
+    /// or the last build.
+    /// </summary>
+    public long? Address { get; init; }
+
+    /// <summary>
     /// Gets the statements that take the location's address without reaching it, such as
     /// <c>ldx #tmp</c>, <c>lda #&lt;ptr</c> or <c>.addr tmp</c> in a table. The program uses such a
     /// location through a pointer or an index that the map cannot follow, so it is not unused even
     /// when its <see cref="Relation"/> is <see cref="DataRelation.Unused"/>. Inside a macro
-    /// expansion, the statement is the outermost call in the location's file.
+    /// expansion, the statement is the outermost call in the statement's file.
     /// </summary>
-    public IReadOnlyList<SyntaxNode> References { get; init; } = [];
+    public IReadOnlyList<DataReference> References { get; init; } = [];
 
     /// <summary>Gets a value indicating whether the location is a hardware register, which <c>.mmio</c> declares.</summary>
     public bool IsHardware => Relation == DataRelation.Hardware;

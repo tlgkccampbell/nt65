@@ -1,7 +1,8 @@
-// The direct page map: a tree of the direct pages a program reaches memory through, the
-// locations in each and the routines that use them. The server works the map out
-// (`nt65/directPages`), and this file only draws it. Selecting a row marks the lines it stands
-// for in the source, and the grid panel in directPagesGrid.js shows one page byte by byte.
+// The data map: a tree of the direct pages a program reaches memory through and the segments
+// that hold the rest of its data, the locations in each and the routines that use them. The
+// server works the map out (`nt65/directPages`), and this file only draws it. Selecting a row
+// marks the lines it stands for in the source, and the grid panel in directPagesGrid.js shows
+// one page byte by byte.
 const vscode = require('vscode');
 const { Grid } = require('./directPagesGrid');
 const { Caret, keyOf, uriOf } = require('./directPagesCaret');
@@ -184,7 +185,31 @@ function build(result) {
       }
     }
   }
+  // A segment stands where a page would in the rows below it, so that its locations are drawn,
+  // selected and marked by the caret as a page's are.
+  for (const segment of result ? result.segments || [] : []) {
+    const top = make('segment', `s:${segment.id}`, null, { page: segment });
+    roots.push(top);
+    for (const location of segment.locations) {
+      if (declaredOnly(location)) continue;
+      const row = make('location', `${top.id}/l:${location.name}`, top, { page: segment, location });
+      for (const node of location.routines) routine(segment, location, node, row);
+    }
+  }
+  // The routines that take a location's address come after the routines that reach it.
+  for (const element of [...byId.values()]) {
+    if (element.kind !== 'location') continue;
+    for (const referrer of element.location.referrers || []) {
+      make('referrer', `${element.id}/a:${referrer.name}`, element, { page: element.page, location: element.location, referrer });
+    }
+  }
   return { roots, byId };
+}
+
+// Returns the label of a segment's row: its name, or what its fixed addresses hold.
+function segmentLabel(segment) {
+  if (segment.name) return segment.name;
+  return segment.hardware ? 'hardware' : 'fixed addresses';
 }
 
 // Returns a coloured codicon.
@@ -327,7 +352,22 @@ function pageTip(result, page, hazards) {
         coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
     }
   }
-  for (const location of page.locations) {
+  relationRows(tip, page.locations, hazards);
+  return tip.build();
+}
+
+// Builds the tooltip of a segment's row.
+function segmentTip(segment, hazards) {
+  const reached = segment.locations.filter(location => location.accesses > 0).length;
+  const tip = new Tip(segmentLabel(segment), `${reached} of ${count(segment.locations.length, 'location')} reached`);
+  relationRows(tip, segment.locations, hazards);
+  return tip.build();
+}
+
+// Adds a row for each location that is a hazard, is shared with an interrupt, or is clobbered by
+// a call, which are what a page's or a segment's tooltip names.
+function relationRows(tip, locations, hazards) {
+  for (const location of locations) {
     if (hazards && location.hazard) {
       tip.row('⚠', COLOUR.nested, `\`${location.name}\` · ${RELATIONS[location.relation] || ''}`, '');
     } else if (location.relation === 'irq') {
@@ -336,7 +376,6 @@ function pageTip(result, page, hazards) {
       tip.row('●', COLOUR.nested, `\`${location.name}\` · ${RELATIONS.nested}`, '');
     }
   }
-  return tip.build();
 }
 
 // Returns the glyph and colour that stand for a relation in a tooltip row.
@@ -351,9 +390,10 @@ function relationMark(relation) {
 
 // Builds the tooltip of a location's row.
 function locationTip(result, page, location, hazards) {
-  const where = location.address === null
-    ? '?'
-    : addresses(location.address, location.address + Math.max(1, location.size || 1) - 1);
+  // Data off the pages has an address only once a build gives it one.
+  const where = location.address !== null
+    ? addresses(location.address, location.address + Math.max(1, location.size || 1) - 1)
+    : location.layout === 'unknown' ? 'address known after a build' : '?';
   const source = location.address !== null ? LAYOUTS[location.layout] || '' : '';
   const tip = new Tip(location.name, `${where}${location.type ? ` · ${location.type}` : ''}${source}`);
   const nodes = flatten(location.routines);
@@ -432,6 +472,14 @@ function routineTip(location, node, hazards) {
   return tip.build();
 }
 
+// Builds the tooltip of a routine's row that takes a location's address without reaching it.
+function referrerTip(location, referrer) {
+  return new Tip(referrer.name, `${location.name} · address taken`)
+    .row('◎', COLOUR.referenced, 'takes its address', lineLinks(referrer.places))
+    .row('?', COLOUR.dim, 'accesses through the address are not followed', '')
+    .build();
+}
+
 // Builds the tooltip of a routine's row on the page whose D is not known.
 function unknownRoutineTip(group, routine, hazards) {
   const tip = new Tip(routine.name, group.reason === 'interrupted' ? 'D left as the interrupted code had it' : 'D not known');
@@ -498,10 +546,22 @@ function itemOf(result, element, hazards) {
       item.contextValue = page.base === null ? 'unknownPage' : 'page';
       break;
     }
+    case 'segment': {
+      item = new vscode.TreeItem(segmentLabel(page), state(!page.hardware));
+      item.description = marks(false, page.hazard, hazards);
+      item.iconPath = page.hardware ? icon('circuit-board', COLOUR.hw) : icon('database', COLOUR[page.relation]);
+      item.tooltip = segmentTip(page, hazards);
+      item.contextValue = 'segment';
+      break;
+    }
     case 'location': {
       const { location } = element;
+      // A location on a page is placed by its offset from D, and one in a segment by its address.
+      const where = element.parent && element.parent.kind === 'segment'
+        ? location.address === null ? '' : hex4(location.address)
+        : offsets(location);
       item = new vscode.TreeItem(location.name, state(page.locations.length <= OPEN_LOCATIONS));
-      item.description = joined(offsets(location), marks(location.shared.length > 0, location.hazard, hazards));
+      item.description = joined(where, marks(location.shared.length > 0, location.hazard, hazards));
       item.iconPath = addressTaken(location) ? icon('target', COLOUR.referenced)
         : declaredOnly(location) ? icon('circle-outline', COLOUR.hw)
         : location.relation === 'unused' ? icon('circle-outline', COLOUR.unused)
@@ -520,6 +580,15 @@ function itemOf(result, element, hazards) {
       item.iconPath = node.unknown && !node.handler ? icon('symbol-method', COLOUR.unknown) : routineIcon(node);
       item.tooltip = routineTip(location, node, hazards);
       item.contextValue = 'routine';
+      break;
+    }
+    case 'referrer': {
+      const { referrer, location } = element;
+      item = new vscode.TreeItem(referrer.name, vscode.TreeItemCollapsibleState.None);
+      item.description = '◎';
+      item.iconPath = icon('target', COLOUR.referenced);
+      item.tooltip = referrerTip(location, referrer);
+      item.contextValue = 'referrer';
       break;
     }
     case 'group': {
@@ -647,6 +716,18 @@ class Marks {
           : `D = ${hex4(page.base)} · ${count(page.locations.length, 'variable')}`;
         break;
       }
+      case 'segment': {
+        const segment = element.page;
+        const first = segment.locations[0];
+        this.first = (first && first.declaration) || this.earliestMark();
+        this.summary = `${segmentLabel(segment)} · ${count(segment.locations.length, 'variable')}`;
+        break;
+      }
+      case 'referrer': {
+        this.first = earliest(element.referrer.places);
+        this.summary = `${element.referrer.name} → ${element.location.name} · address taken`;
+        break;
+      }
       case 'location': {
         const location = element.location;
         const routines = new Set();
@@ -702,7 +783,11 @@ class Marks {
   add(element) {
     switch (element.kind) {
       case 'page':
+      case 'segment':
         for (const child of element.children) this.add(child);
+        break;
+      case 'referrer':
+        for (const place of element.referrer.places) this.reference(place);
         break;
       case 'location':
         if (element.location.declaration) this.declaration(element.location.declaration);
@@ -926,7 +1011,7 @@ class DirectPages {
   // files of one program does not disturb the tree.
   take(result) {
     vscode.commands.executeCommand('setContext', EMPTY,
-      !result ? 'noProgram' : result.pages.length === 0 ? 'noPages' : '');
+      !result ? 'noProgram' : result.pages.length === 0 && (result.segments || []).length === 0 ? 'noPages' : '');
     const text = JSON.stringify(result);
     if (text === this.text) return;
     this.text = text;
@@ -976,7 +1061,7 @@ class DirectPages {
     this.view.message = marks.summary || undefined;
     let top = element;
     while (top.parent) top = top.parent;
-    if (top.page.base !== null) {
+    if (top.kind === 'page' && top.page.base !== null) {
       const location = element.kind === 'page' ? null : element.location ? element.location.name : null;
       this.grid.focus(top.page.id, location);
     }
@@ -1039,7 +1124,7 @@ class DirectPages {
     const pages = (this.result ? this.result.pages : []).filter(page => page.base !== null);
     let top = element || (this.selected && this.tree.byId.get(this.selected));
     while (top && top.parent) top = top.parent;
-    const page = top && top.page.base !== null ? top.page : pages[0];
+    const page = top && top.kind === 'page' && top.page.base !== null ? top.page : pages[0];
     const location = element && element.kind === 'location' ? element.location.name : null;
     this.grid.show(this.result, this.hazards, page ? page.id : null, location);
     if (this.stale || !this.result) this.schedule();

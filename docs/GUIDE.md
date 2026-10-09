@@ -2014,8 +2014,9 @@ everything below works across modules.
   caret's position, shows the caret line's stripes next to the registers they stand for, such
   as `A 8  XY 16` or `emulation`. Its tooltip is the key to the colors. The setting
   `nt65.widths.enabled`, or *Toggle Width Stripes*, turns them off.
-- **The direct page map**, in the nt65 view of the activity bar, shows how routines share the
-  zero page, or on the 65816 each direct page. Each page is a value of D, with the segments
+- **The Data view**, in the nt65 view of the activity bar, shows how routines share the
+  program's data, on the zero page or each 65816 direct page and in every other segment. Each
+  page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the
   routines that use it. Colour says how a location is shared: by one routine, by several, by an
   interrupt handler and the code it interrupts, or by a routine that relies on it across a call
@@ -2057,6 +2058,17 @@ everything below works across modules.
   segment. Overlaps and shared bytes between pages are reported only for addresses the map
   trusts, never for guessed ones. Like the input sources, the map only shows what the analysis
   found and never reports a problem.
+
+  The data in every other segment is listed after the pages, one row for each segment. The data
+  aliases at fixed addresses that an instruction reaches, such as a C64 program's screen at
+  $0400, are under *fixed addresses*, and the `.mmio` registers it reaches are under *hardware*.
+  These locations are shared, colored and marked `⚠` just as a page's are, so a variable in BSS
+  that an interrupt handler writes is flagged like one on the zero page. An indexed access, such
+  as `sta buffer,x`, counts for the location it starts from. An access through a pointer, such
+  as `lda (ptr),y`, names no location and is never counted. Instead, the routines that take a
+  location's address are listed under it with `◎`, which shows where each pointer to it is
+  made. nt65 predicts addresses only on a page, so a location in another segment has an address
+  only once a build gives it one.
 - **Interrupt context.** A routine that an interrupt handler reaches says so after its
   signature in the outline, as `under nmi`, or `under nmi and main` where the rest of the
   program reaches it too. Its hover has the same as a `context` row, and its name carries the
@@ -2065,7 +2077,7 @@ everything below works across modules.
   reached by the calls, tail calls, branches, `.next` targets and `.fallthrough` that lead out
   of a handler, but not into another handler. A transfer nt65 cannot follow, such as one under
   `.next ?`, stops the walk, and the hover of a routine under an interrupt lists the lines where
-  it does so in a `not followed` row. The direct page map uses the same walk.
+  it does so in a `not followed` row. The Data view uses the same walk.
 - **The Processor view**, in the nt65 view of the activity bar, shows what the instruction
   hover shows below its rule for the caret's line, and follows the caret. On the 65816 it gives
   the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the
