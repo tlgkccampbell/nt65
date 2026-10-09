@@ -532,7 +532,7 @@ public sealed partial class CodeLayout
                 CheckDirectPageSymbols(mnemonic, operand, mode);
             CheckReach(mnemonic, operand, mode);
             CheckIndirectJumpWrap(statement, operand, mode);
-            var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state);
+            var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state, DecimalBefore(statement));
             IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
             Laid(statement, new LineLayout(
                 length, mode, prefix, false, timing?.Count, bits,
@@ -551,6 +551,15 @@ public sealed partial class CodeLayout
                     branches.Add(new Branch(statement, expansion, target, Long: false));
             }
         }
+
+        /// <summary>
+        /// Returns whether the flag analysis found the decimal flag set before
+        /// <paramref name="statement"/>, or null where it does not know or has not run.
+        /// </summary>
+        private bool? DecimalBefore(StatementSyntax statement) =>
+            flags?.Invoke(statement, expansion) is { } known && known.Known.HasFlag(StatusFlags.Decimal)
+                ? known.Set.HasFlag(StatusFlags.Decimal)
+                : null;
 
         /// <summary>
         /// Returns the opcode byte the <c>.encoded</c> above <paramref name="statement"/> gives it,

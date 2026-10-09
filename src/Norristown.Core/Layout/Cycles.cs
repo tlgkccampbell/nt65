@@ -10,7 +10,7 @@ namespace Norristown.Layout;
 /// Provides the cycle count of each instruction on each CPU. The count is an interval, because
 /// some of what it depends on is not in the program. That includes whether an indexed read
 /// crosses a page, whether a branch is taken and crosses one, and, on the 65C02, whether the
-/// decimal flag is set. Every count that is an interval carries the causes of the extra cycles
+/// decimal flag is set where the flag analysis does not know it. Every count that is an interval carries the causes of the extra cycles
 /// at its top, so a reader never has to guess what decides where in the interval their line
 /// falls.
 /// <para>
@@ -83,7 +83,16 @@ public static class Cycles
     /// nt65 has no count for it. A branch is counted both taken and not taken, so its
     /// interval covers everything it can cost.
     /// </summary>
-    public static Timing? Of(Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, ProcessorState? state = null)
+    /// <param name="cpu">The CPU the instruction runs on.</param>
+    /// <param name="mnemonic">The instruction.</param>
+    /// <param name="mode">The addressing mode it is laid out in.</param>
+    /// <param name="state">On the 65816, the processor state reaching the instruction, where known.</param>
+    /// <param name="decimalMode">
+    /// Whether the decimal flag is set where the instruction runs, or null where that is not known.
+    /// On the 65C02 it decides whether arithmetic pays the decimal-mode cycle.
+    /// </param>
+    public static Timing? Of(
+        Cpu cpu, MnemonicKind mnemonic, AddressingMode mode, ProcessorState? state = null, bool? decimalMode = null)
     {
         if (cpu == Cpu.Wdc65816)
             return Of65816(mnemonic, mode, state ?? ProcessorState.Unknown);
@@ -94,7 +103,9 @@ public static class Cycles
             Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02 => wdc65C02,
             _ => throw new ArgumentOutOfRangeException(nameof(cpu), cpu, "not a CPU nt65 knows"),
         };
-        return table.TryGetValue((mnemonic, mode), out var cycles) ? cycles : null;
+        if (!table.TryGetValue((mnemonic, mode), out var cycles))
+            return null;
+        return decimalMode is { } set && cycles.Causes.Contains(Decimal) ? Resolved(cycles, set) : cycles;
     }
 
     /// <summary>
@@ -233,6 +244,18 @@ public static class Cycles
             (_, AddressingMode.Implied) => new Timing(2),
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Returns the timing of 65C02 arithmetic whose decimal flag is known to be
+    /// <paramref name="set"/>. The decimal-mode cycle is then paid always or never, rather than
+    /// being an interval.
+    /// </summary>
+    private static Timing Resolved(Timing arithmetic, bool set)
+    {
+        var binary = new Timing(
+            new CycleCount(arithmetic.Count.Minimum, arithmetic.Count.Maximum - 1), arithmetic.Causes.Remove(Decimal));
+        return set ? binary + new Timing(1) : binary;
     }
 
     /// <summary>
@@ -387,8 +410,8 @@ public static class Cycles
                 new Timing(new CycleCount(5, 7), [Taken, TakenCrossing]));
         }
 
-        // Decimal arithmetic costs one more on the 65C02, and nothing in the program says
-        // whether the decimal flag is set where the instruction runs.
+        // Decimal arithmetic costs one more on the 65C02. The table holds the count where the
+        // decimal flag is not known, and the flag analysis settles it where the flag is known.
         foreach (var mode in table.Keys.Where(key => key.Item1 is Adc or Sbc).ToList())
             table[mode] = table[mode].Maybe(1, Decimal);
         return table.ToFrozenDictionary();
