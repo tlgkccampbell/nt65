@@ -2243,7 +2243,10 @@ nt65 lsp
 ```
 
 `nt65 build` builds the program the nearest `nt65.json` describes. Naming files builds the
-whole program and writes only those files' output. Its options are:
+whole program and writes only those files' output. With no `nt65.json` in the directory it
+runs in or any above it, it writes nothing and says so: run `nt65 init` to make a project, or
+name one with `--project`. `--check` and `--stdout` write nothing either way, so they work on a
+lone file with no project. Its options are:
 
 | option | |
 |---|---|

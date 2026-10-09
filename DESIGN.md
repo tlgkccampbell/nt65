@@ -684,8 +684,10 @@ contents would stay inline in the byte stream, where fall-through does reach the
 
 ### 5.3 Project file
 
-A project is described by `nt65.json` in the project root. `nt65 build` reads it;
-`nt65 build main.nt65 --cpu 6502` works without one for single-file use.
+A project is described by `nt65.json` in the project root. `nt65 build` reads it, and
+writes nothing without one. `nt65 build --check main.nt65 --cpu 6502` and
+`nt65 build --stdout main.nt65` still build a single file with no project, because neither
+writes a file.
 
 ```json
 {
@@ -785,6 +787,14 @@ Numbers are JSON numbers or strings in nt65 number syntax.
 nearest one above it, or takes `--project`. Every path it writes into output, and every
 path in the dependency file, is from the project root, which is the directory a build
 normally runs in; what it tells the person running it is from where they are.
+
+A build that finds no `nt65.json` writes nothing. Without a project nothing says where output
+belongs, and output written into whatever directory the command ran in, with no word that a
+project was missing, is a `main.s` nobody asked for. The error names the directory the search
+started from and points at `nt65 init` and `--project`, and the build exits with the usage
+error's code. `--watch`, `--depfile`, `--c-header` and `--out` get the same answer. `--check`
+and `--stdout` write nothing, so they still build the named files as a program of their own,
+rooted where the command runs.
 
 | option | |
 |---|---|
