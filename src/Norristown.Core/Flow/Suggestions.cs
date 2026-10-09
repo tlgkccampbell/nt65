@@ -368,7 +368,8 @@ public static class Suggestions
     /// <summary>
     /// Returns a suggestion for each <c>jmp</c> to a label that a branch could reach, which saves a
     /// byte. On a CPU with <c>bra</c> that branch is <c>bra</c>. On any other it is a branch on a
-    /// flag known on every path to the <c>jmp</c>, the carry first.
+    /// flag known on every path to the <c>jmp</c>, the carry first. The message adds that a taken
+    /// branch may cost one more cycle across a page, wherever that can happen.
     /// </summary>
     private static IEnumerable<Diagnostic> JumpsAsBranches(
         FileAnalysis file, IReadOnlySet<StepKey> readAsData, IReadOnlyList<FlowRegion> regions, FlagAnalysis flags)
@@ -411,9 +412,14 @@ public static class Suggestions
             {
                 continue;
             }
+
+            // A taken branch costs a cycle more than the jump where it crosses a page, except in
+            // native mode. A target right after the branch is on the page the branch counts from.
+            var native = file.State?.Before(jump, step.On)?.Processor is { E: ProcessorMode.Native };
+            var page = native || reach == 0 ? "" : "; a taken branch may cost one more cycle across a page";
             var operand = jump.Operand!.GetText().Trim();
             yield return new Diagnostic(jump.Tree.GetSpan(jump.Span),
-                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why) + unpromised)
+                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why, page) + unpromised)
             {
                 Fix = new DiagnosticFix(FixKind.Branch, branch, Caveat: unpromised?.Caveat),
             };

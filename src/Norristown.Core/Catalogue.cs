@@ -4223,10 +4223,12 @@ public static class Catalogue
         Area.Suggestions,
         "jump-as-branch",
         Severity.Info,
-        "`{0}` can be `{1}`, which saves a byte{2}",
+        "`{0}` can be `{1}`, which saves a byte{2}{3}",
         "A conditional branch whose flag is known always branches, and takes 2 bytes where `jmp` takes 3. Where the "
             + "target is within a branch's reach, the `jmp` can be that branch. It takes the same 3 cycles, or 4 "
-            + "where it crosses a page. On the 65C02 and the 65816, `bra` always branches, and needs no known flag. "
+            + "where it crosses a page, which matters in code timed to the cycle. The message says so unless the "
+            + "65816 is known to be in native mode, where a branch never pays for a page. On the 65C02 and the "
+            + "65816, `bra` always branches, and needs no known flag. "
             + "nt65 follows the flags from what the instructions themselves set, so the suggestion holds on any "
             + "system.");
 

@@ -15,6 +15,9 @@ public sealed class FlagHintsTests
 {
     private const string Uri = "file:///c:/work/main.nt65";
 
+    /// <summary>The words a jump-as-branch message ends with where a taken branch may cross a page.</summary>
+    private const string Page = "; a taken branch may cost one more cycle across a page";
+
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     /// <summary>
@@ -135,11 +138,12 @@ public sealed class FlagHintsTests
 
     /// <summary>
     /// A <c>jmp</c> where a flag is known can be the branch on that flag, which is a byte shorter.
-    /// On the 65C02 it can be <c>bra</c>, which needs no flag.
+    /// On the 65C02 it can be <c>bra</c>, which needs no flag. Either way the message says that a
+    /// taken branch may cost a cycle more than the jump across a page.
     /// </summary>
     [Theory]
-    [InlineData("6502", "`jmp main` can be `bcs main`, which saves a byte, because C is 1 here", "bcs")]
-    [InlineData("65C02", "`jmp main` can be `bra main`, which saves a byte", "bra")]
+    [InlineData("6502", "`jmp main` can be `bcs main`, which saves a byte, because C is 1 here" + Page, "bcs")]
+    [InlineData("65C02", "`jmp main` can be `bra main`, which saves a byte" + Page, "bra")]
     public void AJumpCanBeABranch(string cpu, string message, string branch)
     {
         const string Body = ".export .proc main {\n    lda $10\n    bne @x\n    sec\n    jmp main\n@x:\n    rts\n}\n";
@@ -148,6 +152,24 @@ public sealed class FlagHintsTests
 
         Assert.Equal(message, suggestion.Message);
         Assert.Equal(Body.Replace("jmp main", $"{branch} main", StringComparison.Ordinal), text);
+    }
+
+    /// <summary>
+    /// On the 65816 a taken branch pays for a page only in emulation mode, so in native mode the
+    /// message leaves the page out. Where the mode is not known it may be emulation mode.
+    /// </summary>
+    [Theory]
+    [InlineData(": native", "")]
+    [InlineData(": emu", Page)]
+    [InlineData(": e*", Page)]
+    public void AJumpAsABranchSaysThePageOnlyWhereItCosts(string signature, string page)
+    {
+        var (analysis, path) = Analyzed(
+            $".export .proc main{signature} {{\n    lda $10\n    bne @x\n    jmp main\n@x:\n    rts\n}}\n", "65816");
+
+        Assert.Empty(analysis.Diagnostics);
+        var suggestion = Assert.Single(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "jump-as-branch");
+        Assert.Equal("`jmp main` can be `bra main`, which saves a byte" + page, suggestion.Message);
     }
 
     /// <summary>A jump to a target past a branch's reach stays a jump.</summary>
@@ -177,7 +199,7 @@ public sealed class FlagHintsTests
 
         Assert.NotEmpty(analysis.Diagnostics);
         var suggestion = Assert.Single(analysis.SuggestionsFor(path), suggestion => suggestion.Id == "jump-as-branch");
-        Assert.Equal("`jmp other` can be `bra other`, which saves a byte", suggestion.Message);
+        Assert.Equal("`jmp other` can be `bra other`, which saves a byte" + Page, suggestion.Message);
     }
 
     /// <summary>
