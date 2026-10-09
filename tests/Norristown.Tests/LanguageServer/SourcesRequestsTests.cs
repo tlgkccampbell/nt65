@@ -7,7 +7,7 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests the <c>nt65/sources</c> request, which says where each value that the instruction at the
-/// caret reads was set. Every range in the answer covers one whole line of the caret's document,
+/// caret reads was set, and where each value it writes is read. Every range in the answer covers one whole line of the caret's document,
 /// which is what the client highlights.
 /// </summary>
 public sealed class SourcesRequestsTests
@@ -180,6 +180,99 @@ public sealed class SourcesRequestsTests
             """);
         await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
         Assert.Null(await SourcesAsync(client, position, timeout));
+    }
+
+    /// <summary>
+    /// Each value the instruction writes is read by the instructions and calls that read it before
+    /// it is written again. The return is a reader too, since the caller may read what comes back.
+    /// </summary>
+    [Fact]
+    public async Task AnOutputIsReadByLinesCallsAndExits()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .segment CODE
+            .proc put_char: reads y, keeps y {
+                sty $10
+                rts
+            }
+            .export .proc draw_name {
+                ld|y #0
+            @next:
+                lda $20,y
+                beq @done
+                jsr put_char
+                iny
+                bne @next
+            @done:
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        Assert.Empty(result.Inputs);
+        var y = Assert.Single(result.Outputs);
+        Assert.Equal(("Y", "register"), (y.Name, y.Category));
+        Assert.Equal(
+            [(9, "instruction"), (11, "call"), (12, "instruction"), (15, "exit")],
+            y.Readers.Select(reader => (reader.Range.Start.Line, reader.Kind)));
+        Assert.All(y.Readers, reader => Assert.Equal("proven", reader.Confidence));
+    }
+
+    /// <summary>A value written again before anything reads it has no readers, so it is not listed.</summary>
+    [Fact]
+    public async Task AnOutputNothingReadsIsLeftOut()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .segment CODE
+            .export .proc main {
+                ld|x #1
+                ldx $11
+                stx $10
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        Assert.Empty(result.Outputs);
+    }
+
+    /// <summary>
+    /// A store to a named location is read by the lines that load it, and by the return, since
+    /// memory outlives the routine. Both are best guesses.
+    /// </summary>
+    [Fact]
+    public async Task AStoreIsReadByLaterLoadsAsABestGuess()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .segment ZEROPAGE
+            .data count: .byte[1]
+            .segment CODE
+            .export .proc main {
+                lda #3
+                st|a count
+                ldx count
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var result = await SourcesAsync(client, position, timeout);
+        Assert.NotNull(result);
+        var count = Assert.Single(result.Outputs, output => output.Category == "memory");
+        Assert.Equal("count", count.Name);
+        Assert.Equal(
+            [(7, "instruction", "bestEffort"), (8, "exit", "bestEffort")],
+            count.Readers.Select(reader => (reader.Range.Start.Line, reader.Kind, reader.Confidence)));
     }
 
     private static Task<SourcesResult?> SourcesAsync(TestClient client, Position position, CancellationToken timeout) =>

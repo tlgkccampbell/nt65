@@ -430,9 +430,9 @@ internal sealed class Server : IDisposable
     }
 
     /// <summary>
-    /// Returns where each value that the instruction at a position reads was set. On a call, the
-    /// values are the ones the routine called reads. The answer is for highlighting and feeds no
-    /// diagnostic.
+    /// Returns where each value that the instruction at a position reads was set, and where each
+    /// value it writes is read. On a call, the values read are the ones the routine called reads.
+    /// The answer is for highlighting and feeds no diagnostic.
     /// </summary>
     [JsonRpcMethod("nt65/sources")]
     public async Task<SourcesResult?> SourcesAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>

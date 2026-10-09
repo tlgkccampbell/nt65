@@ -44,6 +44,44 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         Find(analysis, model, position, held: true);
 
     /// <summary>
+    /// Returns each input of the step at <paramref name="index"/> in <paramref name="block"/>, with an
+    /// order key that sorts registers before flags. On a call, or a jump that hands control to a
+    /// routine, the inputs are what that routine reads. Where it may read anything, as a routine
+    /// with no body here and no <c>reads</c> may, every register is an input.
+    /// </summary>
+    internal static IEnumerable<(int Order, string Name, InputCategory Category, SourceValue Value)> InputsOf(
+        SourceWalk walk, BasicBlock block, int index, SourceState state, Func<Symbol, RoutineReads> readsOf)
+    {
+        var step = block.Steps[index];
+        if (index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block))
+        {
+            var callees = block.CallsUnknown ? [null] : block.Calls.Cast<Symbol?>().DefaultIfEmpty();
+            foreach (var callee in callees)
+            {
+                var read = callee is null ? Registers.All : readsOf(callee).Assumed;
+                foreach (var register in RegisterEffects.Each(read))
+                    yield return Register(register, SourceWalk.Given(callee, register, state));
+
+                // On the 65816 a routine reads the widths it declares on entry, which the caller
+                // has to have set. Each is named as a signature spells it, such as `a8` or `i16`,
+                // so the name says what the routine needs as well as which width it is.
+                if (walk.HasWidths && callee?.Signature?.Entry is { } entry)
+                {
+                    if (entry.A is Semantics.Width.Eight or Semantics.Width.Sixteen)
+                        yield return ((int)Tracked.M, $"a{Bits(entry.A)}", InputCategory.Width, state.Of(Tracked.M));
+                    if (entry.Index is Semantics.Width.Eight or Semantics.Width.Sixteen)
+                        yield return ((int)Tracked.Index, $"i{Bits(entry.Index)}", InputCategory.Width, state.Of(Tracked.Index));
+                }
+            }
+            yield break;
+        }
+
+        var statement = (InstructionStatementSyntax)step.Statement;
+        foreach (var register in RegisterEffects.Each(ReadBy(walk, step, statement)))
+            yield return Register(register, walk.Read(step, register, state));
+    }
+
+    /// <summary>
     /// Returns the inputs of the statement on the line at <paramref name="position"/>. With
     /// <paramref name="held"/>, the inputs are every register and flag, as <see cref="Held"/>
     /// says. Without it, they are what the instruction reads, as <see cref="At"/> says.
@@ -148,44 +186,6 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
             }
         }
         return found;
-    }
-
-    /// <summary>
-    /// Returns each input of the step at <paramref name="index"/> in <paramref name="block"/>, with an
-    /// order key that sorts registers before flags. On a call, or a jump that hands control to a
-    /// routine, the inputs are what that routine reads. Where it may read anything, as a routine
-    /// with no body here and no <c>reads</c> may, every register is an input.
-    /// </summary>
-    private static IEnumerable<(int Order, string Name, InputCategory Category, SourceValue Value)> InputsOf(
-        SourceWalk walk, BasicBlock block, int index, SourceState state, Func<Symbol, RoutineReads> readsOf)
-    {
-        var step = block.Steps[index];
-        if (index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block))
-        {
-            var callees = block.CallsUnknown ? [null] : block.Calls.Cast<Symbol?>().DefaultIfEmpty();
-            foreach (var callee in callees)
-            {
-                var read = callee is null ? Registers.All : readsOf(callee).Assumed;
-                foreach (var register in RegisterEffects.Each(read))
-                    yield return Register(register, SourceWalk.Given(callee, register, state));
-
-                // On the 65816 a routine reads the widths it declares on entry, which the caller
-                // has to have set. Each is named as a signature spells it, such as `a8` or `i16`,
-                // so the name says what the routine needs as well as which width it is.
-                if (walk.HasWidths && callee?.Signature?.Entry is { } entry)
-                {
-                    if (entry.A is Semantics.Width.Eight or Semantics.Width.Sixteen)
-                        yield return ((int)Tracked.M, $"a{Bits(entry.A)}", InputCategory.Width, state.Of(Tracked.M));
-                    if (entry.Index is Semantics.Width.Eight or Semantics.Width.Sixteen)
-                        yield return ((int)Tracked.Index, $"i{Bits(entry.Index)}", InputCategory.Width, state.Of(Tracked.Index));
-                }
-            }
-            yield break;
-        }
-
-        var statement = (InstructionStatementSyntax)step.Statement;
-        foreach (var register in RegisterEffects.Each(ReadBy(walk, step, statement)))
-            yield return Register(register, walk.Read(step, register, state));
     }
 
     /// <summary>

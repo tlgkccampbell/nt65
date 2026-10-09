@@ -1961,7 +1961,17 @@ everything below works across modules.
   counts the rest; `nt65.sources.chipLength` changes the limit. Hover the caret line for each
   source with its line and code, and for why the analysis lost track.
 
-  **Shift+Alt+PageDown** and **Shift+Alt+PageUp** move the caret through the sources and back,
+  The same caret shows where the instruction's own values go. Each line that reads a value the
+  instruction writes, before anything writes it again, is tinted and barred in the value's
+  colour like a source, and its tag starts with an arrow, as `→Y`. A call is such a line where
+  the routine it calls reads the value, and a store to a named location is read by the lines that
+  load it, as a best guess drawn dashed. Where the value leaves the routine, by a return, a tail
+  call or a run into the next routine, the line gets a dotted bar and a hollow tag such as `Y↱`,
+  because the caller may read it. So nothing is ever shown as dead. The caret line's chip counts
+  the readers, as `Y→3`, or is `Y↱` where the value only leaves. A value nothing reads gets no
+  chip. The hover lists every reader.
+
+  **Shift+Alt+PageDown** and **Shift+Alt+PageUp** move the caret through the sources and readers and back,
   leaving the highlights in place, and *Peek Input Sources* lists them all. The setting
   `nt65.sources.enabled`, or *Toggle Input Sources*, turns the feature off. It only shows what
   the analysis found and never reports a problem.

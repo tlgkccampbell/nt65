@@ -32,6 +32,9 @@ build tasks and a schema for the project file.
   the last store to it as its source, and a line that might also have changed it, such as a
   store through a pointer, gets a thin dashed bar and a faded tag ending in `?`. **Shift+Alt+PageDown** and
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
+  The same caret shows where its own values go: each line that reads a value it writes is
+  highlighted in that value's colour with a tag such as `→Y`, each place the value leaves the
+  routine gets a hollow `Y↱`, and the caret line's chip counts the readers, as `Y→3`.
 - **Loops and where control goes.** Set `nt65.margin` to `loops` and each loop of every
   routine has a bracket in front of its lines, nested where loops nest, and its trip count
   after its last line: `×16` for a loop that counts a register down from 16, `×?` where the
@@ -133,7 +136,7 @@ The extension carries the language server and runs it on the installed .NET 10 r
 | `nt65.cli.path` | the `nt65` command the build tasks run, in place of the one on the path |
 | `nt65.inlayHints.stateChanges`, `.longBranches`, `.impliedValues`, `.parameterNames` | each kind of hint, on unless switched off |
 | `nt65.sources.chipLength` | the most characters the chips after the caret line may take, 60 unless set; a `+N` box counts the rest, and 0 means no limit |
-| `nt65.sources.enabled` | where the values an instruction reads were set, shown when the caret rests on it; on unless switched off, and **nt65: Toggle Input Sources** switches it |
+| `nt65.sources.enabled` | where the values an instruction reads were set, and where the values it writes are read, shown when the caret rests on it; on unless switched off, and **nt65: Toggle Input Sources** switches it |
 | `nt65.widths.enabled` | the width stripes beside the line numbers on the 65816; on unless switched off, and **nt65: Toggle Width Stripes** switches it |
 | `nt65.margin` | what is drawn in front of a routine's lines: `off`, `loops` for a bracket and trip count on each loop of every routine, or `flow` for the loops and the arrows of the routine at the caret; `off` unless set, and **nt65: Choose What the Margin Shows** picks one |
 | `nt65.inlayHints.cycles` | cycle counts at the end of every instruction; off unless switched on |

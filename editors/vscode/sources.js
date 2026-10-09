@@ -1,7 +1,9 @@
-// Shows where each value that the instruction at the caret reads was set. The server works out
-// the answer (`nt65/sources`), and this file only draws it: a tint, a bar and a tag on each line
-// that set a value, a dotted bar on each line the value passed through, and a chip per input on
-// the caret line. Meaning is carried by colour and short glyphs, and anything longer goes in the
+// Shows where each value that the instruction at the caret reads was set, and where each value it
+// writes is read. The server works out the answer (`nt65/sources`), and this file only draws it: a
+// tint, a bar and a tag on each line that set a value or reads one, a dotted bar on each line a
+// value passed through or leaves the routine by, and a chip per input and per output on the caret
+// line. A reader's tag starts with `→` and an exit's ends with `↱`, so that a line that reads the
+// caret's value is told apart from one that set a value the caret reads. Meaning is carried by colour and short glyphs, and anything longer goes in the
 // hover, because lines crowded with inlays are hard to read.
 const vscode = require('vscode');
 
@@ -157,6 +159,32 @@ function chipOf(input, caret, visible) {
   return `${name}${arrow}${Math.abs(nearest - caret)}${times}`;
 }
 
+// Returns the chip for one output on the caret line, which says how many lines read the value, as
+// `Y→3`. A value that only leaves the routine is `Y↱`.
+function outputChipOf(output) {
+  const read = output.readers.filter(reader => reader.kind !== 'exit').length;
+  return read > 0 ? `${output.name}→${read}` : `${output.name}↱`;
+}
+
+// Merges the outputs that share a group, as `grouped` does for inputs.
+function groupedOutputs(outputs) {
+  const merged = new Map();
+  for (const output of outputs) {
+    const name = output.group || output.name;
+    const known = merged.get(name);
+    if (!known) {
+      merged.set(name, { ...output, name, readers: [...output.readers] });
+      continue;
+    }
+    for (const reader of output.readers) {
+      if (!known.readers.some(other => other.kind === reader.kind && other.range.start.line === reader.range.start.line)) {
+        known.readers.push(reader);
+      }
+    }
+  }
+  return [...merged.values()];
+}
+
 // Merges the inputs that share a group, such as the bytes of one pointer or the members of one
 // struct in memory, into one input named by the group, so that they get one chip and one tag. A
 // register or a flag has no group and stays as it is.
@@ -247,6 +275,28 @@ function hoverOf(document, result) {
     }
     hover.appendMarkdown('\n');
   }
+  for (const output of result.outputs || []) {
+    hover.appendMarkdown(`**${output.name}** is read by\n\n`);
+    for (const reader of output.readers) {
+      const line = reader.range.start.line;
+      const where = `line ${line + 1} ${code(document, line)}`;
+      const inferred = reader.confidence === 'bestEffort' ? ' (inferred)' : '';
+      switch (reader.kind) {
+        case 'exit':
+          hover.appendMarkdown(`- whatever the routine returns to, after ${where}${inferred}\n`);
+          break;
+        case 'call':
+          hover.appendMarkdown(`- ${where} (call)${inferred}\n`);
+          break;
+        case 'macro':
+          hover.appendMarkdown(`- ${where} (macro)${inferred}\n`);
+          break;
+        default:
+          hover.appendMarkdown(`- ${where}${inferred}\n`);
+      }
+    }
+    hover.appendMarkdown('\n');
+  }
   return hover;
 }
 
@@ -320,7 +370,7 @@ class Sources {
       || vscode.window.activeTextEditor !== editor || editor.selection.active.line !== position.line) {
       return;
     }
-    if (!result || result.inputs.length === 0) {
+    if (!result || result.inputs.length + (result.outputs || []).length === 0) {
       this.clear();
       return;
     }
@@ -357,6 +407,17 @@ class Sources {
         for (const range of input.through) addLabel(through, range.start.line, input.name);
         for (const range of input.possibly || []) addLabel(possible, range.start.line, `${input.name}?`);
         chips.push([group, chipOf(input, line, visible)]);
+      }
+
+      // Where the caret's values go: a reader is tagged like a source, with a `→` in front, and an
+      // exit like a through line, with a `↱` after.
+      for (const output of groupedOutputs((result.outputs || []).filter(item => groupOf(item) === group))) {
+        for (const reader of output.readers) {
+          const at = reader.range.start.line;
+          if (reader.kind === 'exit') addLabel(through, at, `${output.name}↱`);
+          else addLabel(reader.confidence === 'bestEffort' ? guesses : sources, at, `→${output.name}`);
+        }
+        chips.push([group, outputChipOf(output)]);
       }
       const types = this.types[group];
       editor.setDecorations(types.source, labelled(document, sources));
@@ -405,7 +466,8 @@ class Sources {
   }
 
   // The lines the navigation commands visit, in the order they come in the file: every line that
-  // set an input's value, and the routine's opening line where a value came from the caller.
+  // set an input's value, the routine's opening line where a value came from the caller, and every
+  // line that reads an output's value.
   targets() {
     if (!this.shown) return [];
     const lines = new Set();
@@ -413,6 +475,9 @@ class Sources {
       for (const source of input.sources) {
         if (source.kind !== 'unknown') lines.add(source.range.start.line);
       }
+    }
+    for (const output of this.shown.result.outputs || []) {
+      for (const reader of output.readers) lines.add(reader.range.start.line);
     }
     return [...lines].sort((a, b) => a - b);
   }
