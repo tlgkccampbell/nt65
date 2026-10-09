@@ -1,0 +1,67 @@
+; Where the flag analysis knows nothing, a branch goes both ways. Each routine here ends in a
+; branch whose flag only looks known, so each label after the branch is reached and nothing is
+; reported.
+.module main
+
+.cpu 65816
+
+.import mask
+.export after_brk, after_cop, after_widen, after_sep
+
+.segment CODE
+
+; A software interrupt comes back with the flags its handler's `rti` pulls, and an operating
+; system may return a status by editing the flags it pushed. Nothing is known after one.
+.proc after_brk: a8, i8 {
+    lda #0
+    brk #$40
+    bne @failed
+    rts
+@failed:
+    lda #1
+    rts
+}
+
+.proc after_cop: a8, i8 {
+    ldx #$80
+    cop #$01
+    bpl @failed
+    rts
+@failed:
+    lda #1
+    rts
+}
+
+; `widen` keeps A but returns it 16 bits wide, so the high byte is whatever it was before the
+; call, and the compare cannot know the result.
+.proc widen: a8, i8, keeps a -> a16, i8 {
+    rep #$20
+    rts
+}
+
+.proc after_widen: a8, i8 -> a16, i8 {
+    lda #0
+    jsr widen
+    cmp #0
+    bne @nonzero
+    rts
+@nonzero:
+    lda #1
+    rts
+}
+
+; A `sep` whose mask is not known may set N and leave Z alone, or set both at once, so learning
+; that N is 1 says nothing about Z. The `.ensure` sets the widths again and no flag the branches
+; test.
+.proc after_sep: a8, i8 {
+    sep #<mask
+    .ensure a8, i8
+    bmi @negative
+    rts
+@negative:
+    beq @zero
+    rts
+@zero:
+    lda #1
+    rts
+}

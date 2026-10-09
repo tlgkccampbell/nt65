@@ -4688,8 +4688,9 @@ Recorded so the reasoning survives. None is open.
   or a flag in two of a list's own items, is an error, and nt65 writes runs back zeros first, in
   the status register's order. Before `->` it is what every call must give it, after `->` what every return gives it, and a flag named
   alone after `->` is a result the routine sets on every path. They are checked as widths are,
-  on every CPU: an entry flag at each call, an exit flag at each return and against what a tail
-  call's target returns with, and a result through the register walk, which shows where the
+  on every CPU: an entry flag at each call and at each tail call or branch into another
+  routine, an exit flag at each return, `.next .return` included, and against what the target
+  of a tail call or such a branch returns with, and a result through the register walk, which shows where the
   caller's flag can still come back. A routine with no body is trusted. `.state c = 1` declares a
   flag and is checked where the flags prove the other value, and `.ensure c = 0` emits `clc` only
   where the flags do not already prove it. `.ensure` takes only `c`, `d` and `i`, and `v = 0`,
@@ -4716,7 +4717,10 @@ Recorded so the reasoning survives. None is open.
   unknown through each routine, before any other analysis reads its blocks. An immediate load,
   `clc`, `sec`, `clv`, `cld`, `sed`, `cli`, `sei`, and a `rep` or `sep` with a constant mask set a
   flag; a branch's taken edge knows its flag and its fall-through the opposite; an instruction
-  that sets N and Z from one result ties them, so N known to be 1 means Z is 0. Paths meet
+  that sets N and Z from one result ties them, so N known to be 1 means Z is 0; a `rep` or `sep`
+  whose mask is not known does not. A `brk` or `cop` leaves every flag unknown, because its
+  handler's `rti` returns whatever flags are on the stack, which an operating system may edit
+  to return a status. Paths meet
   keeping only what every one agrees on. A routine's entry knows the flags its signature gives
   before `->`. A call returns with what the callee returns with, declared or inferred (above);
   every other flag is unknown, and so is every flag at a
@@ -4735,9 +4739,11 @@ Recorded so the reasoning survives. None is open.
   register's value is known, so are N and Z, and a branch that finds Z set shows the register is
   0, so `ldx #8` then a `dex` and `bne` loop leaves X known to be 0. A call keeps a constant only
   in a register the callee declares it keeps: inferred keeps are worked out across the program
-  after each file's flags, so they come too late. On the 65816 only an immediate load gives a
-  constant, and a `rep`, `sep`, `xce`, `plp` or `.ensure` forgets them all, since the
-  arithmetic and the transfers depend on widths. It gives three more hints: a `cmp #0`, `cpx #0`
+  after each file's flags, so they come too late. A `brk` or `cop` forgets every constant. On
+  the 65816 only an immediate load gives a constant, and a `rep`, `sep`, `xce`, `plp` or
+  `.ensure` forgets them all, since the arithmetic and the transfers depend on widths. A call
+  there keeps one only where the callee returns the register at the width and in the mode it
+  was entered with, since a register made wider has a high byte the load never set. It gives three more hints: a `cmp #0`, `cpx #0`
   or `cpy #0` whose register N and Z already reflect, where C is already 1 or nothing reads the C
   it sets; an immediate load of a constant the register already holds, where N and Z already say
   what it would or nothing reads them; and an immediate load of a constant another register

@@ -159,6 +159,21 @@ public sealed class UnpromisedKeepsTests
             + "    jsr print_digit\n    sty $11\n    rts\n}\n"));
     }
 
+    /// <summary>
+    /// A return that hands back a register this routine promises to keep relies on the called
+    /// routine keeping it, and a <c>.next .return</c> is such a return as much as <c>rts</c> is.
+    /// </summary>
+    [Theory]
+    [InlineData("    rts\n")]
+    [InlineData("    jmp ($20)\n    .next .return\n")]
+    public void AReturnReliesOnTheKeepItPromises(string exit)
+    {
+        var diagnostic = Assert.Single(Diagnostics(PrintDigit + ".export .proc main: keeps y {\n    jsr print_digit\n" + exit + "}\n"));
+
+        Assert.Equal("unpromised-keep", diagnostic.Id);
+        Assert.Contains("`main` returns it here, promising `keeps`", diagnostic.Related.Select(related => related.Message));
+    }
+
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>.</summary>
     private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>
         Analysis.Program(("main.nt65", Header + text)).Diagnostics;

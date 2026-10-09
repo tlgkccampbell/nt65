@@ -35,6 +35,7 @@ internal sealed class FlagAnalysis
     private readonly CodeLayout layout;
     private readonly IReadOnlySet<StepKey> patched;
     private readonly IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants;
+    private readonly InferredSignatures signatures;
     private readonly Dictionary<StepKey, FlagState> before = [];
 
     // What is known after each block that leaves the routine by running into another, keyed by
@@ -55,17 +56,20 @@ internal sealed class FlagAnalysis
     /// <paramref name="layout"/> laid out. <paramref name="patched"/> holds the instructions the
     /// program rewrites, about which nothing is assumed unless <paramref name="variants"/> lists
     /// the instructions a store turns one into. <paramref name="exits"/> says what each routine
-    /// this file calls returns with.
+    /// this file calls returns with, and <paramref name="signatures"/> the widths each is entered
+    /// and left with.
     /// </summary>
     public FlagAnalysis(
         SemanticModel model, CodeLayout layout, IReadOnlySet<StepKey> patched,
-        IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants, FlagExits exits)
+        IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants, FlagExits exits,
+        InferredSignatures signatures)
     {
         this.model = model;
         this.layout = layout;
         this.patched = patched;
         this.variants = variants;
         this.exits = exits;
+        this.signatures = signatures;
     }
 
     /// <summary>
@@ -224,11 +228,7 @@ internal sealed class FlagAnalysis
             if (block.RunsInto is { } runsInto)
                 Leave(Returned(runsInto, through, of, track: false));
             else if (block.End == BlockEnd.Return)
-            {
-                Leave(block.Next is null && end.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl }
-                    ? last
-                    : FlagState.Unknown);
-            }
+                Leave(ReturnedWith(block, last, through) ?? FlagState.Unknown);
             else if (block.End is BlockEnd.TailCall or BlockEnd.Declared or BlockEnd.Elsewhere
                 && (block.CallsUnknown || block.Calls.Count > 0 || block.End == BlockEnd.Elsewhere))
             {
@@ -239,8 +239,7 @@ internal sealed class FlagAnalysis
             }
             else if (block.BranchesOut && TestOf(block) is { } test)
             {
-                var statement = (InstructionStatementSyntax)end.Statement;
-                var target = Targets.Of(model, Transfers.TargetOf(statement, layout.Of(statement, end.On)?.Mode), end.On)?.Symbol;
+                var target = BranchTarget(end);
                 Leave(target is null ? FlagState.Unknown : Returned(target, last.Learn(test.Flag, test.TakenWhen), of, track: false));
             }
         }
@@ -251,8 +250,9 @@ internal sealed class FlagAnalysis
 
     /// <summary>
     /// Reports where the flags break a signature or a <c>.state</c> in <paramref name="region"/>.
-    /// Every call is checked against the flags its routine needs on entry, and every return, tail
-    /// call and run into another routine against the flags this routine promises to return with.
+    /// Every call is checked against the flags its routine needs on entry. Every return, including
+    /// a <c>.next .return</c>, and every tail call, branch into another routine and run into one
+    /// is checked against the flags this routine promises to return with.
     /// Each <c>.state</c> that gives a flag a value is checked where the flags prove another, and
     /// each <c>.ensure</c> that names a flag it cannot set is reported. A branch, a call or a
     /// return that relies on a flag a routine called on the way gave without promising it is
@@ -282,10 +282,10 @@ internal sealed class FlagAnalysis
                     CheckEntry(end, callee, last, report);
                 continue;
             }
-            if (block.End == BlockEnd.Return && block.Next is null
-                && end.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl })
+            if (block.End == BlockEnd.Return)
             {
-                CheckExit(region.Routine, promised, end, last, null, report);
+                if (ReturnedWith(block, last, After(end, last)) is { } returned)
+                    CheckExit(region.Routine, promised, end, returned, null, report);
                 continue;
             }
             if (block.End == BlockEnd.TailCall && !block.CallsUnknown)
@@ -295,6 +295,15 @@ internal sealed class FlagAnalysis
                     CheckEntry(end, callee, last, report);
                     CheckExit(region.Routine, promised, end, Returned(callee, last, exits.Of), callee, report);
                 }
+                continue;
+            }
+            if (block.BranchesOut && TestOf(block) is { } test && BranchTarget(end) is { } target)
+            {
+                // Where the branch is taken, control goes to the other routine for good, as a
+                // tail call's does, knowing what the branch tested.
+                var taken = last.Learn(test.Flag, test.TakenWhen);
+                CheckEntry(end, target, taken, report);
+                CheckExit(region.Routine, promised, end, Returned(target, taken, exits.Of), target, report);
                 continue;
             }
             if (block.RunsInto is { } runsInto && after.TryGetValue(end.Key, out var left))
@@ -313,12 +322,20 @@ internal sealed class FlagAnalysis
         state.ValueOf(test.Flag) is { } value ? new ProvedBranch(test.Flag, value, value == test.TakenWhen) : null;
 
     /// <summary>
-    /// Returns the state after a call to <paramref name="callee"/>, from <paramref name="state"/>
-    /// before it, where <paramref name="of"/> says what each routine returns with. With
-    /// <paramref name="track"/>, each flag records that it depends on the callee's answer.
+    /// Returns the flags that <paramref name="block"/>, which ends in a return, hands back to the
+    /// routine's caller, or null where it goes back somewhere else, as <c>rti</c> does.
+    /// <paramref name="last"/> holds the flags before its last statement and
+    /// <paramref name="through"/> those after it. A <c>.next .return</c> returns with what its
+    /// statement leaves, as an <c>rts</c> returns with what it finds.
     /// </summary>
-    private static FlagState Returned(Symbol callee, FlagState state, Func<Symbol, RoutineFlags> of, bool track = true) =>
-        state.Returned(callee, of(callee), track);
+    private static FlagState? ReturnedWith(BasicBlock block, FlagState last, FlagState through)
+    {
+        if (block.Next is { ReturnToken: not null })
+            return through;
+        return block.Next is null && block.Steps[^1].Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl }
+            ? last
+            : null;
+    }
 
     /// <summary>Records <paramref name="state"/> for <paramref name="key"/>, keeping only what every recording agrees on.</summary>
     private static void Keep(Dictionary<StepKey, FlagState> states, StepKey key, FlagState state) =>
@@ -351,7 +368,7 @@ internal sealed class FlagAnalysis
     /// Returns the state after the call a block ends with, which is what any of the routines it
     /// may call returns with. <paramref name="track"/> is as for the state after one call.
     /// </summary>
-    private static FlagState Called(BasicBlock block, FlagState state, Func<Symbol, RoutineFlags> of, bool track)
+    private FlagState Called(BasicBlock block, FlagState state, Func<Symbol, RoutineFlags> of, bool track)
     {
         if (block.CallsUnknown || block.Calls.Count == 0)
             return FlagState.Unknown;
@@ -362,6 +379,41 @@ internal sealed class FlagAnalysis
             returned = returned is null ? one : returned.Merge(one);
         }
         return returned!;
+    }
+
+    /// <summary>
+    /// Returns the state after a call to <paramref name="callee"/>, from <paramref name="state"/>
+    /// before it, where <paramref name="of"/> says what each routine returns with. With
+    /// <paramref name="track"/>, each flag records that it depends on the callee's answer.
+    /// </summary>
+    private FlagState Returned(Symbol callee, FlagState state, Func<Symbol, RoutineFlags> of, bool track = true) =>
+        state.Returned(callee, of(callee), HeldThrough(callee), track);
+
+    /// <summary>
+    /// Returns the registers among A, X and Y that keep their constants across a call to
+    /// <paramref name="callee"/>. A register keeps its constant only where the callee declares
+    /// that it keeps it. On the 65816 the callee must also return the register at the width and
+    /// in the mode it was entered with, because a register made wider or narrower holds another
+    /// value than the one loaded.
+    /// </summary>
+    private Registers HeldThrough(Symbol callee)
+    {
+        var kept = callee.Signature?.Keeps ?? Registers.None;
+        if (layout.Cpu != Cpu.Wdc65816 || kept == Registers.None)
+            return kept;
+        if (signatures.Of(callee) is not { Entry: var entry, Exit: var exit }
+            || !(exit.E == ProcessorMode.Unchanged || (exit.E == entry.E && StateChecks.IsKnown(exit.E))))
+        {
+            return Registers.None;
+        }
+        if (!Unchanged(entry.A, exit.A))
+            kept &= ~Registers.A;
+        if (!Unchanged(entry.Index, exit.Index))
+            kept &= ~(Registers.X | Registers.Y);
+        return kept;
+
+        static bool Unchanged(Width entry, Width exit) =>
+            exit == Width.Unchanged || (exit == entry && StateChecks.IsKnown(exit));
     }
 
     /// <summary>
@@ -600,6 +652,16 @@ internal sealed class FlagAnalysis
     }
 
     /// <summary>
+    /// Returns the routine or the label that the conditional branch at <paramref name="end"/>
+    /// names, or null where its operand names neither.
+    /// </summary>
+    private Symbol? BranchTarget(Step end)
+    {
+        var statement = (InstructionStatementSyntax)end.Statement;
+        return Targets.Of(model, Transfers.TargetOf(statement, layout.Of(statement, end.On)?.Mode), end.On)?.Symbol;
+    }
+
+    /// <summary>
     /// Returns the flag that the conditional branch ending <paramref name="block"/> tests, or null
     /// where the block ends some other way. A branch with a <c>.next</c> under it counts, so a
     /// check can compare the two, though its edges are the ones the <c>.next</c> names.
@@ -769,14 +831,22 @@ internal sealed class FlagAnalysis
                         state = state.With(flag, mnemonic == MnemonicKind.Sep);
                 }
                 return state;
+
+            // A software interrupt runs a handler that may not even be in this program, and the
+            // `rti` that comes back pulls whatever flags the handler left on the stack. An
+            // operating system may return a status that way, so no flag is known after it.
+            case MnemonicKind.Brk or MnemonicKind.Cop:
+                return state.Forget(FlagState.Followed, shared: false);
         }
 
         // An add or a subtract in decimal mode sets N and Z on the NMOS 6502 from different
         // stages of the sum, and `bit` sets them from different values, so neither is one result.
+        // A `rep` or a `sep` whose mask is not known may clear one of N and Z and set the other.
         var written = FlagEffects.Written(mnemonic, mode, immediate);
         var group = SyntaxFacts.BitOf(mnemonic)?.Group ?? mnemonic;
         var shared = group is not (MnemonicKind.Adc or MnemonicKind.Sbc or MnemonicKind.Isc or MnemonicKind.Rra
-            or MnemonicKind.Arr or MnemonicKind.Bit or MnemonicKind.Plp or MnemonicKind.Rti);
+            or MnemonicKind.Arr or MnemonicKind.Bit or MnemonicKind.Plp or MnemonicKind.Rti
+            or MnemonicKind.Rep or MnemonicKind.Sep);
         return state.Forget(written, shared);
     }
 
@@ -793,6 +863,10 @@ internal sealed class FlagAnalysis
         var before = state.Held;
         var wide = cpu == Cpu.Wdc65816;
         if (wide && mnemonic is MnemonicKind.Rep or MnemonicKind.Sep or MnemonicKind.Xce or MnemonicKind.Plp)
+            return (KnownRegisters.Unknown, null);
+
+        // A software interrupt's handler may change any register, as the register walk assumes.
+        if (mnemonic is MnemonicKind.Brk or MnemonicKind.Cop)
             return (KnownRegisters.Unknown, null);
 
         var written = RegisterEffects.Written(mnemonic, mode, immediate);

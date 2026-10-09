@@ -1,0 +1,45 @@
+; A routine promises the flags it names after `->` at every way out of it, and two of those ways
+; are a `.next .return` and a branch into another routine.
+.module main
+
+.cpu 6502
+
+.export by_next_return, by_branch, into_needs_carry, slot
+
+.segment BSS
+.data slot: .word
+
+.segment CODE
+
+; A `.next .return` returns with what its statement leaves, as an `rts` returns with what it
+; finds, so the carry it promises has to be set there.
+.proc by_next_return: -> c = 1 {
+    clc
+    jmp (slot)          ;! error[return-flag-mismatch]: `by_next_return` declares it returns with `c = 1`, but C is 0 here
+    .next .return
+}
+
+; A branch into another routine hands control to it for good, so that routine must return
+; with the carry this one promises.
+.proc by_branch: -> c = 1 {
+    lda slot
+    bcc gives_clear     ;! error[return-flag-mismatch]: `by_branch` declares it returns with `c = 1`, but `gives_clear`, which it hands control to, returns with C = 0
+    sec
+    rts
+}
+
+.proc gives_clear: -> c = 0 {
+    clc
+    rts
+}
+
+; A branch into another routine also has to give it the flags it needs on entry.
+.proc into_needs_carry {
+    lda slot
+    beq needs_carry     ;! error[call-flag-mismatch]: `needs_carry` needs `c = 1`, but C is not known here
+    rts
+}
+
+.proc needs_carry: c = 1 {
+    rts
+}

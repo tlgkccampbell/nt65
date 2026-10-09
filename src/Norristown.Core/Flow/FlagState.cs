@@ -133,11 +133,12 @@ internal sealed class FlagState : IEquatable<FlagState>
     /// Returns the state after a call to <paramref name="callee"/>, which returns with
     /// <paramref name="returned"/>. The flags it keeps are as they were before the call and the
     /// ones it gives values have them. Every other flag is unknown. N and Z stay related only
-    /// where both are kept. With <paramref name="track"/>, every flag depends on the callee's answer
-    /// from here on; without it, as when a routine's own answer is being worked out, which
-    /// answers each flag depends on is not recorded.
+    /// where both are kept. Of A, X and Y, only the <paramref name="held"/> registers keep their
+    /// constants. With <paramref name="track"/>, every flag depends on the callee's answer from
+    /// here on; without it, as when a routine's own answer is being worked out, which answers
+    /// each flag depends on is not recorded.
     /// </summary>
-    public FlagState Returned(Symbol callee, RoutineFlags returned, bool track = true)
+    public FlagState Returned(Symbol callee, RoutineFlags returned, Registers held, bool track = true)
     {
         var values = returned.Values;
         var through = returned.Kept & ~values.Known;
@@ -168,10 +169,8 @@ internal sealed class FlagState : IEquatable<FlagState>
             }
             sources = builder.ToImmutable();
         }
-        // A register keeps its constant only where the callee declares that it keeps it.
-        var kept = callee.Signature?.Keeps ?? Registers.None;
-        var held = (Held with { NzFrom = Registers.None }).Forget(Registers.All & ~kept);
-        return new(known, set, Shared && (through & nz) == nz, Kept & through, unbacked, quiet, sources, origins, held);
+        return new(known, set, Shared && (through & nz) == nz, Kept & through, unbacked, quiet, sources, origins,
+            (Held with { NzFrom = Registers.None }).Forget(Registers.All & ~held));
     }
 
     /// <summary>

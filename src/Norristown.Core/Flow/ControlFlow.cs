@@ -494,7 +494,7 @@ public sealed class ControlFlow
         // A branch the flags decide is a jump, or transfers nothing, before anything else reads
         // the blocks. Which instructions the program rewrites is known only once every routine's
         // annotations have been gathered.
-        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, flow.Variants, exits ?? FlagExits.None);
+        flow.Flags = new FlagAnalysis(model, layout, flow.Patched, flow.Variants, exits ?? FlagExits.None, flow.Signatures);
         foreach (var (routine, units, blocks, _) in built)
             flow.Decide(routine, units, blocks);
 
