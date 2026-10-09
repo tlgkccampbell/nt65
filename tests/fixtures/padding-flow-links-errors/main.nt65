@@ -1,0 +1,59 @@
+; Padding with no fill byte of its own holds the fill the linked config gives its segment. None of
+; these fills runs on: $ff from a memory area, $00 from a segment that overrides its area's $ea,
+; ld65's default of $00, and a fill from ld65's command line that nt65 cannot see.
+.module main
+
+.export from_area, falls_in, from_segment, from_default, from_command_line
+
+.segment CODE
+.proc from_area {
+    ldx #0
+    .align 256
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.align 256`: it is filled with $ff by the memory area `ROM` in `rom.cfg`, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.proc falls_in {
+    ldx #0
+    .res 3      ;! error[runs-into-data]: the instruction above falls into this padding: it is filled with $ff by the memory area `ROM` in `rom.cfg`, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), and add a `.next` after it, or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.segment ZEROED
+.proc from_segment {
+    ldx #0
+    .res 3
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 3`: it is filled with $00 by segment `ZEROED` in `rom.cfg`, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.segment PLAIN
+.proc from_default {
+    ldx #0
+    .res 3
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 3`: it is filled with $00 by ld65's default, which does not run on; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}
+
+.segment ASKED
+.proc from_command_line {
+    ldx #0
+    .res 3
+    .next @loop ;! error[next-after-padding]: `.next` cannot follow `.res 3`: it is filled with a byte from the memory area `ASKED` in `rom.cfg` that nt65 cannot work out; give it a fill byte that runs on, such as `$ea` (`nop`), or `jmp` over it
+@loop:
+    dex
+    bne @loop
+    rts
+}

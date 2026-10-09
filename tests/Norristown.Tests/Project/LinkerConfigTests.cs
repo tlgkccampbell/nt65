@@ -60,6 +60,38 @@ public sealed class LinkerConfigTests
         Assert.Null(config.Area("LOOP")!.Start);
     }
 
+    /// <summary>
+    /// A <c>fillval</c> is read on memory areas and segments alike. One that nt65 cannot work out,
+    /// or that is not a byte, is given but unknown.
+    /// </summary>
+    [Fact]
+    public void ReadsFillValues()
+    {
+        var config = LinkerConfig.Parse("x.cfg", """
+            SYMBOLS { NOP: type = weak, value = $EA; }
+            MEMORY {
+                ROM:  start = $8000, size = $4000, fillval = $FF;
+                NOPS: start = $C000, size = $1000, fillval = NOP;
+                ASK:  start = $D000, size = $1000, fillval = %S;
+                WIDE: start = $E000, size = $1000, fillval = $100;
+                RAM:  start = $0200, size = $0600;
+            }
+            SEGMENTS {
+                CODE: load = ROM, type = ro, fillval = 0;
+                DATA: load = ROM, type = ro;
+            }
+            """);
+
+        Assert.Empty(config.Diagnostics);
+        Assert.Equal(new Given(0xFF), config.Area("ROM")!.Fill);
+        Assert.Equal(new Given(0xEA), config.Area("NOPS")!.Fill);
+        Assert.Equal(new Given(null), config.Area("ASK")!.Fill);
+        Assert.Equal(new Given(null), config.Area("WIDE")!.Fill);
+        Assert.Null(config.Area("RAM")!.Fill);
+        Assert.Equal(new Given(0), config.Segments[0].Fill);
+        Assert.Null(config.Segments[1].Fill);
+    }
+
     [Fact]
     public void ReportsTextLd65WouldRejectWhereItIs()
     {

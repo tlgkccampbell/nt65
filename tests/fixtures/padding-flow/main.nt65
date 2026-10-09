@@ -1,6 +1,7 @@
-; Padding inside a routine that flow runs through. A `.res` or `.align` with a fill byte says
-; what its bytes are, and `$ea` is `nop` on every CPU, so a `.next` after it may say that flow
-; runs on through it. A `jmp` over padding with no fill byte needs nothing.
+; Padding inside a routine that flow runs through. A `.res` or `.align` with a constant fill byte
+; holds that byte, and `$ea` is `nop` on every CPU, a one-byte instruction that does nothing, so a
+; `.next` after it may say that flow runs on through it. A `jmp` over padding whose fill nt65
+; cannot work out needs nothing.
 .module main
 
 .export filled_align, filled_res, jumped_over

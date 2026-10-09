@@ -40,6 +40,13 @@ public sealed class LinkerConfig
         var symbols = reader.Symbols;
         long? Value(IReadOnlyList<Token> tokens) => new Evaluator(tokens, symbols).Evaluate();
 
+        // ld65 takes a `fillval` from 0 to 255 and refuses anything else, so a value outside
+        // that range is as unknown as one nt65 cannot work out.
+        Given? FillOf(Dictionary<string, IReadOnlyList<Token>> attributes) =>
+            attributes.TryGetValue("fillval", out var fill)
+                ? new Given(Value(fill) is { } value and >= 0 and <= 0xFF ? value : null)
+                : null;
+
         var memory = new Dictionary<string, MemoryArea>(StringComparer.Ordinal);
         foreach (var (name, at, attributes) in reader.Memory)
         {
@@ -52,6 +59,7 @@ public sealed class LinkerConfig
                 // ld65 writes an area to the output file unless its `file` is empty. A `file` given
                 // as anything nt65 cannot read is taken as written, so nothing is reported for it.
                 IsWritten = Word(attributes, "file") != "",
+                Fill = FillOf(attributes),
             });
         }
 
@@ -67,6 +75,7 @@ public sealed class LinkerConfig
                 Offset = attributes.TryGetValue("offset", out var offset) ? new Given(Value(offset)) : null,
                 Align = attributes.TryGetValue("align", out var align) ? new Given(Value(align)) : null,
                 Defines = Word(attributes, "define")?.Equals("yes", StringComparison.OrdinalIgnoreCase) == true,
+                Fill = FillOf(attributes),
             });
         }
         return new LinkerConfig(path, memory, segments, reader.Diagnostics);
@@ -169,6 +178,12 @@ public sealed class LinkerConfig
         /// the area gives <c>file = ""</c>.
         /// </summary>
         public bool IsWritten { get; init; } = true;
+
+        /// <summary>
+        /// Gets the area's <c>fillval</c>, or null when it gives none. ld65 fills the padding of
+        /// each segment that loads into the area with it, unless the segment gives its own.
+        /// </summary>
+        public Given? Fill { get; init; }
     }
 
     /// <summary>Represents one entry of the <c>SEGMENTS</c> block.</summary>
@@ -199,6 +214,12 @@ public sealed class LinkerConfig
         /// defines its load address, run address and size.
         /// </summary>
         public bool Defines { get; init; }
+
+        /// <summary>
+        /// Gets the segment's <c>fillval</c>, or null when it gives none. ld65 fills the space a
+        /// <c>.res</c> or <c>.align</c> in the segment leaves with it.
+        /// </summary>
+        public Given? Fill { get; init; }
 
         /// <summary>Gets the memory area the segment's addresses are in, which is where it runs.</summary>
         public string? RunsIn => Run ?? Load;

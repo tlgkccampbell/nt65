@@ -35,6 +35,28 @@ public static class Opcodes
     public static (MnemonicKind Mnemonic, AddressingMode Mode)? Decode(Cpu cpu, byte opcode) =>
         tables[cpu].Decodings[opcode];
 
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="opcode"/> runs on <paramref name="cpu"/>
+    /// as a one-byte instruction that does nothing, as <c>nop</c> does. A run of such bytes carries
+    /// execution on to the byte after it with every register, flag and the stack as they were.
+    /// </summary>
+    /// <remarks>
+    /// An instruction that changes a register or a flag runs on too, but flow through padding is
+    /// not analyzed, so the change would go unseen. <c>wai</c> changes nothing, but it holds the
+    /// processor until an interrupt arrives, which may be never.
+    /// </remarks>
+    public static bool DoesNothing(Cpu cpu, byte opcode)
+    {
+        if (Decode(cpu, opcode) is not { } decoded)
+            return false;
+        var (mnemonic, mode) = decoded;
+        if (Instructions.Length(mode) != 1 || mnemonic == Wai)
+            return false;
+        var facts = Instructions.Facts(mnemonic);
+        return facts is { Control: Control.Through, Stores: false, Pushes: null, Pulls: null, Writes: Registers.None }
+            && FlagEffects.Written(mnemonic, mode, null) == StatusFlags.None;
+    }
+
     private static FrozenDictionary<Cpu, Table> Build()
     {
         var nmos = new Table();
