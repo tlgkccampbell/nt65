@@ -3606,13 +3606,15 @@ With a signature, the analysis treats a call the way it treats `jsr`: the state 
 match the entry and becomes the exit. Each expansion is checked against the signature,
 with errors reported at the body line and naming the call, so a caller in the wrong
 state gets "`add16!` needs `a8`" at the call rather than an unknown width inside the
-body. A block spliced into a macro with a signature must leave the state as it found it.
-In the body, and in a block spliced into it, a `*` item means the state at the call, not at
-the routine's entry. What a `php`, `phd` or `phb` there saves is kept in the routine's terms,
-the state at the call standing in for each `*`, so a pull after the body reads back the
-width or value that was pushed. A pull in the body gets back a `*` item only where what it
-pulls is what that item means; anything else known comes back as it is, and the rest is
-unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
+body. In the body a `*` item means the state at the call, not at the routine's entry. A block
+spliced into the body is the caller's code, so it sees the caller's state: where the body
+reaches the block, each `*` item is the state at the call, which the caller knows as well as
+it did before the call, and a part the body set is what the body set it to. The block must
+leave the state as it found it. What a `php`, `phd` or `phb` in either saves is kept in the
+routine's terms, the state at the call standing in for each `*`, so a pull after the body
+reads back the width or value that was pushed. A pull in the body gets back a `*` item only
+where what it pulls is what that item means; anything else known comes back as it is, and the
+rest is unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
 6502 and its CMOS variants, signatures on macros are accepted and have no effect.
 
 This is the checked replacement for macros that test ca65's `.asize` and `.isize`. A macro

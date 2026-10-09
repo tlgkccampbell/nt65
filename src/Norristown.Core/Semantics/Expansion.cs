@@ -137,6 +137,22 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>
+    /// Returns the expansions whose lines a line emitted in <paramref name="at"/> is part of, from
+    /// the innermost out. A block argument is the caller's code, not the macro's, so from a splice
+    /// the walk leaves out the macro whose body did the splicing and goes on from where that macro
+    /// was called.
+    /// </summary>
+    public static IEnumerable<Expansion> Enclosing(Expansion? at)
+    {
+        for (var level = at; level is not null; level = level.Outer)
+        {
+            yield return level;
+            if (level.splice && level.Item is { } line)
+                level = SplicedBy(level, line) ?? level;
+        }
+    }
+
+    /// <summary>
     /// Determines whether <paramref name="definition"/> is already being expanded in
     /// <paramref name="at"/> or in an expansion that encloses it. That happens when a macro
     /// expands itself, directly or indirectly. Such a macro is reported where it is declared and

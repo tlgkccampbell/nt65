@@ -16,6 +16,7 @@
 .export main__adder
 .export main__twice
 .export main__reenter
+.export main__spliced
 
 .segment "BSS": absolute
 total: .res 2
@@ -106,3 +107,15 @@ main__reenter:
     pea 0
     jmp twice__again
 ; end of reenter
+
+; .proc spliced: a8, i16, native  main.nt65:123
+main__spliced:
+    ; around!()  main.nt65:124
+    sep #$20
+    ldx #$1234
+    php
+    ; end of around!
+    plp
+    ldy #$5678
+    rts
+; end of spliced

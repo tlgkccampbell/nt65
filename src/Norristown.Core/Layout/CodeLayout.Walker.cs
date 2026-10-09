@@ -369,9 +369,12 @@ public sealed partial class CodeLayout
             }
 
             // A block spliced into a macro with a state signature has to leave the state as it
-            // found it, which is checked across the two ends of the splice.
+            // found it, which is checked across the two ends of the splice. The macro is the one
+            // whose body has the splice, which a block given to another macro there passes over.
             var outer = expansion;
-            var marked = cpu == Cpu.Wdc65816 && outer?.NearestCall is { } call && model.MacroAt(call) is { MacroSignature: not null };
+            var marked = cpu == Cpu.Wdc65816
+                && Expansion.Enclosing(outer).FirstOrDefault(level => level.Call is not null)?.Call is { } call
+                && model.MacroAt(call) is { MacroSignature: not null };
             if (marked)
                 layout.steps.Add(new Step(statement, outer, routine, Stream, segment, null));
             var saved = Save();

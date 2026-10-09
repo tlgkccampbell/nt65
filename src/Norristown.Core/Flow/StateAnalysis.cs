@@ -1425,8 +1425,13 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns the state where an expansion of a macro with a state signature, or a block spliced
     /// into one, starts or ends. A call is checked the way <c>jsr</c> is. The state must match the
     /// entry, the body starts from it, and its end must match the exit. The state after the call
-    /// is the exit with its <c>*</c> items kept from the call. A block given to such a macro has to
-    /// leave the state as it found it.
+    /// is the exit with its <c>*</c> items kept from the call.
+    /// <para>
+    /// A block given to such a macro is the caller's code, so it starts from the state in the
+    /// caller's terms, in which a <c>*</c> of the macro's is the state at the call. It has to leave
+    /// that state as it found it. Where the block leaves a part as it found it, the body goes on
+    /// with that part in its own terms again.
+    /// </para>
     /// </summary>
     private FlowState Marked(Step step, FlowState state, StateChecks? report)
     {
@@ -1434,16 +1439,28 @@ public sealed class StateAnalysis : IProcessorStates
         var processor = state.Processor;
         if (step.Statement is BlockSpliceSyntax)
         {
+            var splicing = Expansion.Enclosing(step.On).FirstOrDefault(level => level.Call is not null);
+            if (splicing?.Call is not { } call || model.MacroAt(call) is not { MacroSignature: not null } owner)
+                return state;
             if (!step.Closes)
             {
                 started[key] = processor;
+                return state with { Processor = AtCall(processor, splicing) };
             }
-            else if (started.TryGetValue(key, out var before) && before != processor
-                && step.On?.NearestCall is { } call && model.MacroAt(call) is { } owner)
+            if (!started.TryGetValue(key, out var before))
+                return state;
+            var found = AtCall(before, splicing);
+            if (found != processor)
+                report?.Report(step, Catalogue.BlockChangesState.Message(owner.DisplayName, found, processor));
+            return state with
             {
-                report?.Report(step, Catalogue.BlockChangesState.Message(owner.DisplayName, before, processor));
-            }
-            return state;
+                Processor = new ProcessorState(
+                    before.A == Width.Unchanged && processor.A == found.A ? before.A : processor.A,
+                    before.Index == Width.Unchanged && processor.Index == found.Index ? before.Index : processor.Index,
+                    before.E == ProcessorMode.Unchanged && processor.E == found.E ? before.E : processor.E,
+                    before.D.IsEntered && processor.D == found.D ? before.D : processor.D,
+                    before.B.IsEntered && processor.B == found.B ? before.B : processor.B),
+            };
         }
 
         if (step.Statement is not MacroCallSyntax expanded || model.MacroAt(expanded) is not { MacroSignature: { } signature } macro)
@@ -1466,24 +1483,36 @@ public sealed class StateAnalysis : IProcessorStates
     /// Returns <paramref name="state"/>, which holds at a statement in the expansion
     /// <paramref name="on"/>, in the routine's terms. Inside the body of a macro with a signature,
     /// a <c>*</c> item means the state at the call rather than at the routine's entry. Each such
-    /// item becomes the state at the call, through every enclosing call in turn. The stack keeps
+    /// item becomes the state at the call, through every enclosing call in turn. A block spliced
+    /// into a macro is already in its caller's terms, so that macro is passed over. The stack keeps
     /// what is pushed in these terms, so a pull outside the body reads what the push saved.
     /// </summary>
     private ProcessorState InRoutine(ProcessorState state, Expansion? on)
     {
-        for (var level = on; level is not null; level = level.Outer)
+        foreach (var level in Expansion.Enclosing(on))
         {
-            if (level.Call is not { } call || model.MacroAt(call) is not { MacroSignature: not null })
-                continue;
-            var at = started.TryGetValue(StepKey.Of(call, level.Outer), out var found) ? found : ProcessorState.Unknown;
-            state = new ProcessorState(
-                state.A == Width.Unchanged ? at.A : state.A,
-                state.Index == Width.Unchanged ? at.Index : state.Index,
-                state.E == ProcessorMode.Unchanged ? at.E : state.E,
-                state.D.IsEntered ? at.D : state.D,
-                state.B.IsEntered ? at.B : state.B);
+            if (level.Call is { } call && model.MacroAt(call) is { MacroSignature: not null })
+                state = AtCall(state, level);
         }
         return state;
+    }
+
+    /// <summary>
+    /// Returns <paramref name="state"/>, which holds in the body that the expansion
+    /// <paramref name="level"/> emits, in the terms of the code that made the call. Each
+    /// <c>*</c> item becomes the state at the call, where one was recorded, and unknown otherwise.
+    /// </summary>
+    private ProcessorState AtCall(ProcessorState state, Expansion level)
+    {
+        var at = level.Call is { } call && started.TryGetValue(StepKey.Of(call, level.Outer), out var found)
+            ? found
+            : ProcessorState.Unknown;
+        return new ProcessorState(
+            state.A == Width.Unchanged ? at.A : state.A,
+            state.Index == Width.Unchanged ? at.Index : state.Index,
+            state.E == ProcessorMode.Unchanged ? at.E : state.E,
+            state.D.IsEntered ? at.D : state.D,
+            state.B.IsEntered ? at.B : state.B);
     }
 
     /// <summary>
@@ -1494,12 +1523,9 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private ProcessorState Pulled(ProcessorState saved, Expansion? on)
     {
-        Signature? signature = null;
-        for (var level = on; level is not null && signature is null; level = level.Outer)
-        {
-            if (level.Call is { } call)
-                signature = model.MacroAt(call)?.MacroSignature;
-        }
+        var signature = Expansion.Enclosing(on)
+            .Select(level => level.Call is { } call ? model.MacroAt(call)?.MacroSignature : null)
+            .FirstOrDefault(found => found is not null);
         if (signature is null)
             return saved;
         var entry = signature.Entry;
