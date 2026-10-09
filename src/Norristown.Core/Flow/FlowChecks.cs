@@ -409,10 +409,11 @@ internal sealed class FlowChecks
 
     /// <summary>
     /// Reports each <c>rts</c> or <c>rtl</c> in a routine that never returns or in an interrupt
-    /// handler, and each call to an interrupt handler or to a label inside one. Neither kind of
-    /// routine returns with <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by
-    /// <c>rti</c>, is never called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which
-    /// the processor may enter in any state. These rules hold on every CPU.
+    /// handler, each call to an interrupt handler or to a label inside one, and each call to a
+    /// routine that declares <c>pulls n</c>. Neither of the first two kinds of routine returns with
+    /// <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by <c>rti</c>, is never
+    /// called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which the
+    /// processor may enter in any state. These rules hold on every CPU.
     /// </summary>
     private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<ControlFlow.Unit> units)
     {
@@ -451,6 +452,14 @@ internal sealed class FlowChecks
                     Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(
                         $"`{label.DisplayName}` is inside interrupt handler `{owner.DisplayName}`", "the path from it returns"));
                     break;
+            }
+
+            // A call puts nothing above the return address, so it cannot hand a routine the bytes
+            // `pulls n` says it is entered with. A label is entered as its routine is.
+            if (flow.CalledAt(unit.Step) is { } called
+                && RegisterWalk.Owner(called) is { Signature.Pulls: > 0 and var pulls } owner)
+            {
+                Report(statement, unit.Step.On, Catalogue.PullsRoutineCalled.Message(owner.DisplayName, pulls));
             }
 
             // An `rti` with a `.next` is a computed jump that says where it goes, and is not a

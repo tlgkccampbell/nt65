@@ -194,9 +194,9 @@
     L2C81:
     ldx CPRTYP
     bne FRM_RELATIONAL
-    bcs FRM_STACK3::L2D02
+    bcs L2D02
     adc #$07
-    bcc FRM_STACK3::L2D02
+    bcc L2D02
     adc VALTYP
     bne L2C92
     jmp CAT
@@ -209,7 +209,7 @@
     FRM_PRECEDENCE_TEST:
     pla
     cmp MATHTBL,y
-    bcs FRM_STACK3::FRM_PERFORM1
+    bcs FRM_PERFORM1
     jsr CHKNUM
     L2CA3:
     pha
@@ -219,8 +219,8 @@
     ldy LASTOP
     bpl PREFNC
     tax
-    beq FRM_STACK3::GOEX
-    bne FRM_STACK3::FRM_PERFORM2
+    beq GOEX
+    bne FRM_PERFORM1::FRM_PERFORM2
 
     ; ----------------------------------------------------------------------------
     ; FOUND ONE OR MORE RELATIONAL OPERATORS <,=,>
@@ -239,7 +239,7 @@
     bne FRM_PRECEDENCE_TEST
     PREFNC:
     cmp MATHTBL,y
-    bcs FRM_STACK3::FRM_PERFORM2
+    bcs FRM_PERFORM1::FRM_PERFORM2
     bcc L2CA3
     .fallthrough FRM_RECURSE
 }
@@ -317,21 +317,26 @@
     pha
     jmp (INDEX)
     .next .return, STEP
-    L2D02:
+}
+.proc L2D02 {
     ldy #$FF
     pla
-    GOEX:
+    .fallthrough GOEX
+}
+.proc GOEX {
     beq EXIT
+    .fallthrough FRM_PERFORM1
+}
 
-    ; ----------------------------------------------------------------------------
-    ; PERFORM STACKED OPERATION
-    ;
-    ; (A) = PRECEDENCE BYTE
-    ; STACK:  1 -- CPRMASK
-    ;        5 -- (ARG)
-    ;        2 -- ADDR OF PERFORMER
-    ; ----------------------------------------------------------------------------
-    FRM_PERFORM1:
+; ----------------------------------------------------------------------------
+; PERFORM STACKED OPERATION
+;
+; (A) = PRECEDENCE BYTE
+; STACK:  1 -- CPRMASK
+;        5 -- (ARG)
+;        2 -- ADDR OF PERFORMER
+; ----------------------------------------------------------------------------
+.proc FRM_PERFORM1: pulls BYTES_FP + 2 {
     cmp #$64
     beq L2D0E
     jsr CHKNUM
@@ -357,7 +362,9 @@
     sta ARGSIGN
     eor FACSIGN
     sta SGNCPR
-    EXIT:
+    .fallthrough EXIT
+}
+.proc EXIT {
     lda FAC
     rts
 }

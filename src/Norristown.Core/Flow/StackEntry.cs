@@ -28,4 +28,10 @@ public readonly record struct StackEntry(
 {
     /// <summary>Gets a byte the analysis knows nothing about.</summary>
     public static StackEntry Opaque => new(false, Width.Unknown, Width.Unknown, Held: StateValue.Unknown);
+
+    /// <summary>
+    /// Gets what the byte is, where it was already on the stack when the routine was entered, or
+    /// <see cref="EnteredByte.None"/> for any other byte. The analysis knows nothing of its value.
+    /// </summary>
+    public EnteredByte Entered { get; init; }
 }

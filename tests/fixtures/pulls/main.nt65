@@ -1,0 +1,67 @@
+; `pulls n` declares the bytes a routine is entered with above its return address, which it
+; pulls before it returns. A routine that pushes bytes and then jumps to such a routine hands
+; it those bytes, and the routine returns to whoever called the one that jumped. Every entry of
+; the routine, its own name and each label entered from outside, is handed the same bytes.
+.module main
+
+.cpu 6502
+
+.export saves_a, restores_a, saves_xy, restores_xy, into_second, forwards, takes1
+
+.segment ZEROPAGE
+.data saved: .byte
+
+.segment CODE
+; Saves A on the stack and hands it to `restores_a`, which returns to this routine's caller.
+.proc saves_a {
+    pha
+    lda #1
+    jmp restores_a
+}
+
+.proc restores_a: pulls 1 {
+    pla
+    sta saved
+    rts
+}
+
+; The count is a constant expression, so the configuration may decide it.
+.const HANDED = 1 + 1
+
+.proc saves_xy {
+    txa
+    pha
+    tya
+    pha
+    jmp restores_xy
+}
+
+; A label entered from outside is handed the same bytes as the routine's own name.
+.proc restores_xy: pulls HANDED {
+    lda #0
+    second:
+    pla
+    tay
+    pla
+    tax
+    rts
+}
+
+.proc into_second {
+    txa
+    pha
+    tya
+    pha
+    jmp restores_xy::second
+}
+
+; Handed bytes count towards what a call pushes for a routine that declares `pushed n`.
+.proc takes1: pushed 1 {
+    rts
+}
+
+.proc forwards: pulls 1 {
+    jsr takes1
+    pla
+    rts
+}

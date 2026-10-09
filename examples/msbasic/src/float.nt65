@@ -416,7 +416,7 @@
     sbc #$08
     tay
     lda FACEXTENSION
-    bcs SHIFT_RIGHT4::SHIFT_RIGHT5
+    bcs SHIFT_RIGHT5
     .if !CONFIG_ROR_WORKAROUND {
         LB588:
         asl 1,x
@@ -434,7 +434,7 @@
         ora 1,x
         sta 1,x
         .byte $24                       ; bit zp: skips the `pha` of SHIFT_RIGHT4
-        .next SHIFT_RIGHT4::SHIFT_RIGHT4B
+        .next SHIFT_RIGHT4B
     }
     .fallthrough SHIFT_RIGHT4
 }
@@ -442,8 +442,8 @@
 ; ----------------------------------------------------------------------------
 ; ENTER HERE FOR SHORT SHIFTS WITH NO SIGN EXTENSION
 ; ----------------------------------------------------------------------------
-.export .proc SHIFT_RIGHT4 {
-    .if !CONFIG_ROR_WORKAROUND {
+.if !CONFIG_ROR_WORKAROUND {
+    .export .proc SHIFT_RIGHT4 {
         ror 2,x
         ror 3,x
         .if !CONFIG_SMALL {
@@ -452,9 +452,14 @@
         ror a
         iny
         bne SHIFT_RIGHT::LB588
-    } .else {
+        .fallthrough SHIFT_RIGHT5
+    }
+} .else {
+    .export .proc SHIFT_RIGHT4 {
         pha
-        SHIFT_RIGHT4B:
+        .fallthrough SHIFT_RIGHT4B
+    }
+    .proc SHIFT_RIGHT4B: pulls 1 {
         lda #$00
         bcc L37D7
         lda #$80
@@ -485,8 +490,10 @@
         L37FD:
         iny
         bne SHIFT_RIGHT::L37C4
+        .fallthrough SHIFT_RIGHT5
     }
-    SHIFT_RIGHT5:
+}
+.proc SHIFT_RIGHT5 {
     clc
     rts
 }

@@ -92,7 +92,7 @@ main__adder:
     rts
 ; end of adder
 
-; .proc twice: a16, i16, args 2  main.nt65:98
+; .proc twice: a16, i16, pushed 2  main.nt65:98
 main__twice:
     lda 3,s                         ; call::value
     sta a:total

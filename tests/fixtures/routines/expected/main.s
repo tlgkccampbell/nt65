@@ -94,7 +94,7 @@ main__main:
     jmp main__main
 ; end of main
 
-; .proc add: std, a16, args 4  main.nt65:94
+; .proc add: std, a16, pushed 4  main.nt65:94
 main__add:
     lda 5,s                         ; f::left
     clc

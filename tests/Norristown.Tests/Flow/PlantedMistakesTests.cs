@@ -22,7 +22,7 @@ public sealed class PlantedMistakesTests
         ("src/main.nt65", "    mov16!(player_x, {#16})\n    sep #$20\n", "    mov16!(player_x, {#16})\n",
             "`rts`: `respawn` declares it returns with `a8`, but A is 16-bit here"),
         ("src/main.nt65", "    pea 2                       ; divisor\n", "",
-            "`div16` declares `args 4`, bytes the caller pushes before the call, but only 2 bytes are pushed here"),
+            "`div16` declares `pushed 4`, bytes the caller pushes before the call, but only 2 bytes are pushed here"),
         ("src/main.nt65", "        sta f:oam_shadow::tile", "        sta oam_shadow::tile",
             "is in segment `WRAM`, which is in bank $7e, but B is $80 here"),
         ("src/reset.nt65", "    rep #$30\n    pha\n", "    pha\n",

@@ -1472,7 +1472,8 @@ The signature items are:
 | `keeps a, x, y, c, z, n, v` | registers and flags handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
 | `reads a, x, y, c, z, n, v`, `reads none` | registers and flags whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
 | `inline n`, `inline .strz` | returns past data after each call |
-| `args n` | the caller pushes n bytes before the call |
+| `pushed n` | the caller pushes n bytes before the call |
+| `pulls n` | the routine is entered with n bytes above its return address, and pulls them before it returns |
 | `interrupt`, `noreturn` | an interrupt handler; a routine that never returns |
 
 **What a routine leaves out is inferred.** The state has five parts: A's width, the index
@@ -1716,9 +1717,36 @@ the `.frame` stands. Where paths that pushed different amounts meet, the frame i
 because on one of them it would name the return address. After `tcs` or `txs` the program has
 placed the stack itself, and a frame may cover bytes nt65 knows nothing about.
 
-`args n` says the caller pushes n bytes before the call. A frame can then reach the
+`pushed n` says the caller pushes n bytes before the call. A frame can then reach the
 arguments above the return address, and every call is checked for having pushed enough, on
 every CPU.
+
+`pulls n` says the routine is entered with n bytes above its return address, and pulls them
+before it returns. Such a routine is entered by a jump. The routine that pushed the bytes jumps
+to it, and it returns to that routine's caller:
+
+```nt65
+.proc switch_bank: a8, i8, native {
+    phb
+    lda #$7e
+    pha
+    plb
+    jmp restore_bank
+}
+
+.proc restore_bank: a8, i8, native, pulls 1 {
+    plb
+    rts
+}
+```
+
+Every entry of the routine, its name and any label another routine jumps to, holds those n
+bytes, and nt65 knows nothing of their values. A call to the routine is an error, because a
+call puts nothing above the return address. Every return, in any routine, must find its return
+address on top of the stack, with nothing the routine pushed or was handed above it and nothing
+beneath it pulled. Where only a jump enters a label with bytes above the return address, and
+the path above the label pushes them itself, the label starts a routine of its own that
+declares `pulls n`, and the path above runs into it with `.fallthrough`.
 
 ### Direct page and data bank
 

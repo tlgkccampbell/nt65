@@ -91,7 +91,7 @@
     left:  .word
 }
 
-.proc add: std, a16, args 4 {
+.proc add: std, a16, pushed 4 {
     .frame f: AddFrame
     lda f::left,s
     clc

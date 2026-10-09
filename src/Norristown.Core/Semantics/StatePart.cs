@@ -27,8 +27,14 @@ public enum StatePart
     /// <summary>The program bank a routine runs in: <c>pbr = e</c>, <c>pbr?</c>.</summary>
     ProgramBank,
 
-    /// <summary>What the caller pushes before the call: <c>args n</c>.</summary>
-    Arguments,
+    /// <summary>What the caller pushes before the call: <c>pushed n</c>.</summary>
+    Pushed,
+
+    /// <summary>
+    /// The bytes a routine is entered with above its return address, and pulls before it
+    /// returns: <c>pulls n</c>.
+    /// </summary>
+    Pulls,
 
     /// <summary>
     /// A routine the processor enters on an interrupt, and that leaves by <c>rti</c>:

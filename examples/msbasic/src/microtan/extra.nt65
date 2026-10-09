@@ -161,7 +161,7 @@
         lda #$00
         .fallthrough LE306
     }
-    .proc LE306 {
+    .proc LE306: pulls 2 {
         dex
         bmi LE312
         clc

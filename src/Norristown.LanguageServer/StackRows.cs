@@ -80,6 +80,15 @@ internal static class StackRows
         var top = entries.Count - 1;
         while (next < pushes.Count || top >= 0)
         {
+            // Without the processor-state stack, the bytes a routine is handed are one row, as
+            // that stack shows them.
+            if (top < 0 && pushes[next].IsHanded)
+            {
+                var run = pushes.Skip(next).TakeWhile(each => each.IsHanded).Count();
+                rows.Add((NameOf(EnteredByte.Handed), run));
+                next += run;
+                continue;
+            }
             var wide = next < pushes.Count ? Bytes(pushes[next]) : null;
             var group = top >= 0 ? Group(analysis, entries, top, wide) : (Bytes: 0, Name: (string?)null);
             top -= group.Bytes;
@@ -170,12 +179,31 @@ internal static class StackRows
         if (Framed(analysis, entries, top) is { } frame)
             return frame;
         var entry = entries[top];
+
+        // The bytes the routine was entered with are one row for each thing they are.
+        if (entry.Entered != EnteredByte.None)
+        {
+            var run = 1;
+            while (run <= top && entries[top - run].Entered == entry.Entered && entries[top - run].Frame is null)
+                run++;
+            return (run, NameOf(entry.Entered));
+        }
         if (entry.IsStatus)
             return (1, $"status {ProcessorState.Format(StateRegister.A, entry.A)}, {ProcessorState.Format(StateRegister.Index, entry.Index)}");
         if (entry is { Size: > 0, Byte: 0, Held.IsKnown: true } && entry.Size <= top + 1)
             return (entry.Size, StateValue.Hex(entry.Held.Value, entry.Size * 2));
         return (hint is { } wide && wide <= top + 1 ? wide : 1, null);
     }
+
+    /// <summary>
+    /// Returns what bytes a routine was entered with are, in words, such as <c>return address</c>.
+    /// </summary>
+    private static string NameOf(EnteredByte entered) => entered switch
+    {
+        EnteredByte.Argument => "pushed by the caller",
+        EnteredByte.ReturnAddress => "return address",
+        _ => "handed above the return address",
+    };
 
     /// <summary>
     /// Returns the <c>.frame</c> the byte at <paramref name="top"/> belongs to, as one push

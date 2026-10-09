@@ -85,7 +85,7 @@
     dividend:  .word
 }
 
-.proc div16: a16, i16, args 4 {
+.proc div16: a16, i16, pushed 4 {
     pea 0
     .frame f: DivFrame          ; the local, the return address, the caller's two words
     lda f::dividend,s

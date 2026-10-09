@@ -168,7 +168,7 @@ public static class Suggestions
                     || block.Steps is not [.., { Statement: InstructionStatementSyntax call } calling]
                     || !Own(model, calling) || Fixed(file, calling, readAsData)
                     || JumpFor(call.MnemonicKind) is not { } jump
-                    || callee is { IsInterrupt: true } or { NeverReturns: true } or { Inline: not null } or { Arguments: > 0 }
+                    || callee is { IsInterrupt: true } or { NeverReturns: true } or { Inline: not null } or { Pushed: > 0 }
                     || callee.IsFar != (call.MnemonicKind == MnemonicKind.Jsl)
                     || readsCallerStack(target)
                     || file.Flow.Registers?.Before(call) is not { Stack.Depth: 0 }

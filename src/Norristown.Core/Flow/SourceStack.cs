@@ -49,10 +49,13 @@ internal sealed class SourceStack : IEquatable<SourceStack>
     }
 
     /// <summary>
-    /// Returns the stack of a routine entered by a call, which holds no pushes and starts at the
-    /// <paramref name="returnSize"/> bytes of the return address.
+    /// Returns the stack of a routine when it is entered, as <see cref="SavedStack.Entered"/> does.
+    /// The <paramref name="handed"/> bytes above the <paramref name="returnSize"/> bytes of the
+    /// return address saved nothing that can be followed, and a pull of any size takes them.
     /// </summary>
-    public static SourceStack Entered(int returnSize) => new([], returnSize);
+    public static SourceStack Entered(int returnSize, int handed) => new(
+        [.. Enumerable.Repeat(new SourcePush([], PushSize.OneByte, Semantics.Width.Eight) { IsLeft = true }, handed)],
+        returnSize - handed);
 
     /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null where they do not

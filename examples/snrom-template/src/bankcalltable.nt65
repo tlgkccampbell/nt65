@@ -42,7 +42,7 @@
 
 ; Functions in the bankcall_table MUST NOT exit with 'rts'.
 ; Instead, they MUST exit with 'jmp bankrts'.
-.proc bankrts {
+.proc bankrts: pulls 1 {
     sta bankcallsaveA
     pla
     jsr setPRGBank

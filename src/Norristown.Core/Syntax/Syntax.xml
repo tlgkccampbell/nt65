@@ -2786,7 +2786,7 @@
     <TypeComment>
       <summary>
         Represents one processor-state item, such as <c>a16</c>, <c>i*</c>, <c>dp = 0</c>,
-        <c>dbr = [$00..$3f]</c>, <c>args 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>, <c>?</c> on
+        <c>dbr = [$00..$3f]</c>, <c>pushed 2</c>, <c>inline .strz</c>, <c>keeps a, x</c>, <c>?</c> on
         its own, or the name of a signature set.
       </summary>
     </TypeComment>
@@ -2922,7 +2922,7 @@
     <Kind Name="StateValueItem"/>
     <TypeComment>
       <summary>
-        Represents a state word and the value it is given, such as <c>dp = $2100</c>, <c>args 2</c>
+        Represents a state word and the value it is given, such as <c>dp = $2100</c>, <c>pushed 2</c>
         or <c>inline 4</c>.
       </summary>
     </TypeComment>
