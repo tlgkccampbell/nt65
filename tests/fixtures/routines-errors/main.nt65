@@ -9,10 +9,13 @@
 
 .const LIMIT = 3
 
-; A routine with no body need not declare its state. One that declares nothing returns with
-; every part of the state unknown, since nothing says what it does.
-.proc TOOLBOX = $E10000
-.import blind: proc()
+; A routine with no body has nothing to infer its state from, so on the 65816 it declares it,
+; at the declaration rather than at some caller's return. `?` says that nothing is known.
+.proc TOOLBOX = $E10000         ;! error[signature-required]: `TOOLBOX` has no body, so on the 65816 its signature must declare the state it is called and returns in: write `?` if nothing is known
+.import blind: proc()           ;! error[signature-required]: `blind` has no body, so on the 65816 its signature must declare the state it is called and returns in: write `?` if nothing is known
+.import kept: proc(keeps x)     ;! error[signature-required]: `kept` has no body, so on the 65816 its signature must declare the state it is called and returns in: write `?` if nothing is known
+.proc ROM_ENTRY = $E10004: ?
+.import unknown: proc(?)
 
 ; One that names another routine and writes nothing takes that routine's, which is a declaration.
 .proc also_stop = stop

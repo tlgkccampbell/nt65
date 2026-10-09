@@ -3385,6 +3385,18 @@ public static class Catalogue
             + "signature, cannot be checked, so the target has to be a `.proc`, an extern proc or a `proc(...)` "
             + "import.");
 
+    internal static DiagnosticDescriptor SignatureRequired { get; } = Entry(
+        Area.ProcessorState,
+        "signature-required",
+        Severity.Error,
+        "`{0}` has no body, so on the 65816 its signature must declare the state it is called and returns in: "
+            + "write `?` if nothing is known",
+        "A routine whose body is not in the program has nothing to infer its signature from, and on the 65816 "
+            + "every call to it is checked against that signature. An empty one would leave every caller with the "
+            + "mode, widths, D and B unknown after the call, and the error would surface far from here. Declare "
+            + "what the routine expects and leaves, such as `a8, i16`, or `?` to say that nothing is known. The "
+            + "6502 and its CMOS variants have none of that state, so there an empty signature is complete.");
+
     internal static DiagnosticDescriptor CallTargetNotARoutine { get; } = Entry(
         Area.ProcessorState,
         "call-target-not-a-routine",

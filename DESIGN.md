@@ -1378,11 +1378,15 @@ Three kinds of routine carry a signature: a proc with a body, an extern proc
 these.
 
 **A routine with no body has nothing to infer from.** An extern proc at a constant address
-or an imported routine that writes nothing about its state is called in any state and returns
-with every part unknown, since no body says what it does. The code after a call to it then sets
-what it needs. A routine with no body that writes some items takes the defaults for the rest,
-as before, and is trusted. An extern proc that names another routine and writes nothing takes
-that routine's signature.
+or an imported routine therefore declares its state wherever the processor has state to
+declare. On the 65816 one that writes nothing about its state, with no signature or with only
+`keeps` or `reads`, is the error `signature-required`, reported at the declaration rather than
+at some caller's return far from it. `?` is the declaration for a routine nothing is known
+about: it is called in any state and returns with every part unknown, and the code after a call
+to it then sets what it needs. On the 6502 and its CMOS variants there is no such state, so an
+empty signature is complete and means the same. A routine with no body that writes some items
+takes the defaults for the rest, as before, and is trusted. An extern proc that names another
+routine and writes nothing takes that routine's signature.
 
 **Transfer functions.** Every instruction has a fixed effect on the state:
 
@@ -3913,7 +3917,9 @@ is then checked as a name declared there: against the segment's bank, its direct
 address space (§5.2, §7.5).
 
 On the 6502 and its CMOS variants the signature of a `proc(...)` import or an extern proc may be
-empty, because there is no state for it to declare. On the 65816 it may not (§7.3).
+empty, because there is no state for it to declare. On the 65816 it may not: an empty one is
+`signature-required` at the declaration, and `proc(?)` declares a routine nothing is known
+about (§7.3).
 
 **A typed import** says what the bytes another object defines are, in the element types a
 `.data` declaration is written with (§8): `.import c_sp: .byte[2]`, `.import actors: .type Actor[8]`.

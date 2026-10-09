@@ -1898,6 +1898,10 @@ symbol, which is why they mix in one build without either knowing about the othe
 .import VIC_BORDER = $D020          ; a value nt65 needs, checked by ld65 at link time
 ```
 
+On the 65816 a routine's signature cannot be empty, because nt65 has no body to work out its
+state from: write the widths and mode it expects, as in `proc(a8, i16)`, or `proc(?)` if
+nothing is known about it.
+
 A typed import can be measured and indexed like local data: `.sizeof(actors)`,
 `actors[2]::hp`. A checked import, `NAME = value`, gives nt65 a value to use now, and the
 output asserts it with `lderror` so that ld65 fails the link if the ca65 side disagrees.
