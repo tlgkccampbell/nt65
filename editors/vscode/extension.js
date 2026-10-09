@@ -8,6 +8,7 @@ const views = require('./views');
 const sources = require('./sources');
 const margin = require('./margin');
 const widths = require('./widths');
+const processor = require('./processor');
 const directPages = require('./directPages');
 
 let client;
@@ -256,6 +257,7 @@ async function activate(context) {
   sources.register(context, client);
   margin.register(context, client);
   widths.register(context, client);
+  processor.register(context, client);
   directPages.register(context, client, outputChanged.event);
   await client.start();
 }

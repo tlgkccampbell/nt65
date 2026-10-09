@@ -30,11 +30,30 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
     /// where the line is inside a macro's definition, whose expansions would each give a different
     /// answer, and where the analysis reached no answer.
     /// </summary>
-    public static InputSources? At(ProgramAnalysis analysis, SemanticModel model, int position)
+    public static InputSources? At(ProgramAnalysis analysis, SemanticModel model, int position) =>
+        Find(analysis, model, position, held: false);
+
+    /// <summary>
+    /// Returns where the value each register and each flag holds just before the statement on the
+    /// line at <paramref name="position"/> in <paramref name="model"/>'s file was set, whether or
+    /// not the statement reads it. The inputs are A, X and Y and then the flags C, Z, N and V, and
+    /// nothing in memory. It returns null where <see cref="At"/> would, except that the statement
+    /// may be any that runs.
+    /// </summary>
+    public static InputSources? Held(ProgramAnalysis analysis, SemanticModel model, int position) =>
+        Find(analysis, model, position, held: true);
+
+    /// <summary>
+    /// Returns the inputs of the statement on the line at <paramref name="position"/>. With
+    /// <paramref name="held"/>, the inputs are every register and flag, as <see cref="Held"/>
+    /// says. Without it, they are what the instruction reads, as <see cref="At"/> says.
+    /// </summary>
+    private static InputSources? Find(ProgramAnalysis analysis, SemanticModel model, int position, bool held)
     {
         var tree = model.Tree;
         if (position >= tree.Text.Length
-            || tree.GetLine(tree.GetLineIndex(position)).Statement is not InstructionStatementSyntax statement
+            || tree.GetLine(tree.GetLineIndex(position)).Statement is not { } statement
+            || (!held && statement is not InstructionStatementSyntax)
             || statement.Ancestors().OfType<BlockSyntax>().Any(block => block.Opener.Statement is MacroDeclarationSyntax)
             || analysis.FileFor(tree.Path) is not { } file
             || file.Flow.KeepsOf is not { } keepsOf
@@ -65,7 +84,8 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 if (reached[block.Index] is not { } entered)
                     continue;
                 var state = walk.Before(block, entered, index);
-                foreach (var (order, name, category, value) in InputsOf(walk, block, index, state, readsOf))
+                var inputs = held ? Holding(file, block.Steps[index], state) : InputsOf(walk, block, index, state, readsOf);
+                foreach (var (order, name, category, value) in inputs)
                 {
                     found[order] = found.TryGetValue(order, out var known)
                         ? (Joined(known.Name, name), category, SourceValue.Merge(known.Value, value))
@@ -79,7 +99,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 mapping.Routine,
                 [
                     .. found.Values.Select(input => mapping.Input(input.Name, input.Category, input.Value)),
-                    .. Memory(analysis, file, region, occurrences)
+                    .. (held ? [] : Memory(analysis, file, region, occurrences))
                         .Select(input => mapping.Memory(input.Key, input.Value)),
                 ]);
         }
@@ -166,6 +186,23 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         var statement = (InstructionStatementSyntax)step.Statement;
         foreach (var register in RegisterEffects.Each(ReadBy(walk, step, statement)))
             yield return Register(register, walk.Read(step, register, state));
+    }
+
+    /// <summary>
+    /// Returns every register and flag as an input, with where the value it holds before
+    /// <paramref name="step"/> was set. A 16-bit accumulator holds both of its halves, so either
+    /// half's sources are the accumulator's, and an 8-bit one holds only its low byte.
+    /// </summary>
+    private static IEnumerable<(int Order, string Name, InputCategory Category, SourceValue Value)> Holding(
+        FileAnalysis file, Step step, SourceState state)
+    {
+        var wide = file.State?.Before(step.Statement, step.On)?.Processor.A == Semantics.Width.Sixteen;
+        foreach (var register in RegisterEffects.Each(Registers.All))
+        {
+            yield return Register(register, register == Registers.A && wide
+                ? state.Whole(register)
+                : state.Of(SourceState.Track(register)));
+        }
     }
 
     /// <summary>

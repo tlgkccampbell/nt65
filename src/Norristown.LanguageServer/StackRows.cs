@@ -41,13 +41,22 @@ internal static class StackRows
             return;
         card.Gap();
         for (var i = 0; i < rows.Count && i < MaximumPushes; i++)
-            card.Row(i == 0 ? "stack" : "", rows[i]);
+            card.Row(i == 0 ? "stack" : "", rows[i].Text);
 
         // A routine that has pushed a lot holds more than a reader can take in at a glance, and
         // the pushes it will pull back next are the ones on top, so only those are listed.
         if (rows.Count > MaximumPushes)
             card.Row("", $"and {rows.Count - MaximumPushes} more");
     }
+
+    /// <summary>
+    /// Returns one row per push, top first, each with how many bytes it took where that is known.
+    /// It returns null where the analysis lost track of the stack, and an empty list where the
+    /// routine has pushed nothing. Neither analysis reaching the line counts as losing track.
+    /// </summary>
+    public static IReadOnlyList<(string Text, int? Bytes)>? Of(
+        ProgramAnalysis analysis, RegisterState? registers, FlowState? state) =>
+        registers?.Stack is null && state?.Stack is null ? null : Pushes(analysis, registers?.Stack, state?.Stack);
 
     /// <summary>
     /// Returns one row per push, top first, from whichever of the two stacks knows about it. The
@@ -59,11 +68,11 @@ internal static class StackRows
     /// bytes from the processor-state stack and the saved pushes that group covers.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<string> Pushes(ProgramAnalysis analysis, SavedStack? saved, AnalysisStack? bytes)
+    private static IReadOnlyList<(string Text, int? Bytes)> Pushes(ProgramAnalysis analysis, SavedStack? saved, AnalysisStack? bytes)
     {
         List<SavedPush> pushes = saved is null ? [] : [.. saved.Pushes.Reverse()];
         IReadOnlyList<StackEntry> entries = bytes?.Entries ?? [];
-        var rows = new List<string>();
+        var rows = new List<(string Text, int? Bytes)>();
 
         // The next saved push, counting from the top, and the next byte of the processor-state
         // stack, which is kept bottom first.
@@ -79,6 +88,10 @@ internal static class StackRows
             // The saved-register stack's description is used only when this row covers exactly
             // one of its pushes.
             var push = covered == 1 ? pushes[next] : (SavedPush?)null;
+
+            // The processor-state stack counts every byte it holds. Without it, the row took what
+            // its pushes did, which is not known where any of them has an unknown width.
+            var taken = group.Bytes > 0 ? group.Bytes : Sum(pushes.Skip(next).Take(covered));
             next += covered;
             var text = group.Name ?? (push is { } held ? Described(held) : "unknown");
 
@@ -89,9 +102,22 @@ internal static class StackRows
             {
                 text += width == Width.Sixteen ? ", 16-bit" : ", 8-bit";
             }
-            rows.Add(text);
+            rows.Add((text, taken));
         }
         return rows;
+    }
+
+    /// <summary>Returns how many bytes some pushes took together, or null where any width is not known.</summary>
+    private static int? Sum(IEnumerable<SavedPush> pushes)
+    {
+        var total = 0;
+        foreach (var push in pushes)
+        {
+            if (Bytes(push) is not { } known)
+                return null;
+            total += known;
+        }
+        return total;
     }
 
     /// <summary>

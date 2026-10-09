@@ -169,6 +169,16 @@ public sealed class ControlFlow
         Build(model, layout, exits, signatures, whole: true);
 
     /// <summary>
+    /// Returns the flags and the register constants known just before
+    /// <paramref name="statement"/>, as every expansion of it agrees, or null where no path the
+    /// flag analysis follows reaches it.
+    /// </summary>
+    public KnownValues? KnownBefore(StatementSyntax statement) =>
+        Flags?.AnyBefore(statement) is { } state
+            ? new KnownValues(new FlagValues(state.Known, state.Set), state.Held.A, state.Held.X, state.Held.Y)
+            : null;
+
+    /// <summary>
     /// Works out where control goes in <paramref name="layout"/>'s file, as <see cref="Of"/> does,
     /// but stops once each routine's blocks are built and its branches decided. Its loops are not
     /// counted, its paths are not costed and nothing is checked, so its regions have no costs and

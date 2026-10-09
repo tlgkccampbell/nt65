@@ -68,6 +68,12 @@
         "category": "nt65"
       },
       {
+        "command": "nt65.chooseCaller",
+        "title": "Choose the Caller the Processor View Shows",
+        "category": "nt65",
+        "icon": "$(call-incoming)"
+      },
+      {
         "command": "nt65.chooseMargin",
         "title": "Choose What the Margin Shows",
         "category": "nt65"
@@ -129,6 +135,11 @@
           "id": "nt65.directPages",
           "name": "Direct Pages",
           "contextualTitle": "nt65"
+        },
+        {
+          "id": "nt65.processor",
+          "name": "Processor",
+          "contextualTitle": "nt65"
         }
       ]
     },
@@ -142,10 +153,19 @@
         "view": "nt65.directPages",
         "contents": "This program reaches no memory through the direct page.",
         "when": "nt65.directPages.empty == noPages"
+      },
+      {
+        "view": "nt65.processor",
+        "contents": "Put the caret in a routine of an nt65 file to see what the processor holds on that line."
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "nt65.chooseCaller",
+          "when": "view == nt65.processor",
+          "group": "navigation@1"
+        },
         {
           "command": "nt65.directPages.hideHazards",
           "when": "view == nt65.directPages && nt65.directPages.hazards",

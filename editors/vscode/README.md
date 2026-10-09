@@ -62,6 +62,12 @@ build tasks and a schema for the project file.
   and brighter the more they are used, what is free, and what the page shares with others,
   with a legend under it. With the caret in a routine, both views mark the locations it uses,
   and the one under the caret more strongly.
+- **The processor at the caret.** The **Processor** view in the nt65 activity bar keeps the
+  instruction hover's lower half in view for the caret's line: the mode, widths, D and B on the
+  65816, what A, X and Y hold, with the constant and the line that set it, the flags, and the
+  stack top first, keyed by `n,s` offset on the 65816. Clicking a register goes to the line that
+  set it. The stack ends where the routine was entered, unless **nt65: Choose the Caller the
+  Processor View Shows** picks one call, and then it goes on into that caller's pushes.
 - **What this became, beside the source.** **nt65: Show Output Beside** opens the ca65 for the
   file you are in, as the program stands with whatever you have not saved, and the caret is the
   link: move in the source and the lines it became are highlighted and scrolled to; move in the

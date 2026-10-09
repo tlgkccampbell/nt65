@@ -466,6 +466,20 @@ internal sealed class Server : IDisposable
             : null;
 
     /// <summary>
+    /// Returns what the analysis knows of the processor at a position, which is the rows the
+    /// instruction hover shows below its rule, for a view that follows the caret. Where the request
+    /// names a call to the caret's routine, the stack rows go on into that caller's stack. The
+    /// answer is for showing and feeds no diagnostic.
+    /// </summary>
+    [JsonRpcMethod("nt65/processor")]
+    public async Task<ProcessorResult?> ProcessorAsync(ProcessorParams request, CancellationToken cancellation) =>
+        await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation, settled: true)
+            .ConfigureAwait(false) is { } asked
+            ? CaretProcessor.At(
+                asked.Analysis, asked.Model, asked.Position, request.Callers ?? [], file => outgoing.ToClient(Uris.ToUri(file)))
+            : null;
+
+    /// <summary>
     /// Returns how the routines of the program that holds a document share the zero page, or on
     /// the 65816 each direct page. The answer is for showing and feeds no diagnostic. For a
     /// document that no program holds, the result is null.

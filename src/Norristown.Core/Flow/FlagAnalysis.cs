@@ -107,11 +107,27 @@ internal sealed class FlagAnalysis
 
     /// <summary>
     /// Returns what is known about the flags just before <paramref name="step"/>, or null where
-    /// no path the analysis follows reaches it. Only a <c>clc</c>, a <c>sec</c>, a <c>jmp</c>, a
-    /// load, a compare, a <c>.state</c>, an <c>.ensure</c> and the last statement of each block
-    /// are kept, since those are what the suggestions and the checks ask about.
+    /// no path the analysis follows reaches it.
     /// </summary>
     public FlagState? Before(Step step) => before.GetValueOrDefault(step.Key);
+
+    /// <summary>
+    /// Returns what every <see cref="Expansion"/> of <paramref name="statement"/> agrees is known
+    /// about the flags and the registers just before it, or null where no path reaches it. An
+    /// editor asks about a line, and a line in a macro body is emitted once per call, each copy
+    /// with its own answer. An expansion's line belongs to the file that holds the body it
+    /// expands.
+    /// </summary>
+    public FlagState? AnyBefore(StatementSyntax statement)
+    {
+        FlagState? merged = null;
+        foreach (var (key, state) in before)
+        {
+            if (key.Position == statement.Position && (key.On?.Body?.Tree ?? model.Tree) == statement.Tree)
+                merged = merged is null ? state : merged.Merge(state);
+        }
+        return merged;
+    }
 
     /// <summary>
     /// Returns what is known about the flags just before <paramref name="statement"/> in
@@ -638,29 +654,21 @@ internal sealed class FlagAnalysis
     /// <summary>
     /// Returns the flags before a block's last statement and after the whole block, starting from
     /// <paramref name="state"/>. With <paramref name="record"/>, it also keeps the state before
-    /// each statement a suggestion asks about, where a statement that two routines share keeps
-    /// what both agree on.
+    /// each statement, where a statement that two routines share keeps what both agree on. The
+    /// suggestions and the checks ask about a few kinds of statement, and an editor asks about
+    /// any line.
     /// </summary>
     private (FlagState Last, FlagState After) Walk(BasicBlock block, FlagState state, bool record)
     {
         var last = state;
-        for (var i = 0; i < block.Steps.Count; i++)
+        foreach (var step in block.Steps)
         {
-            var step = block.Steps[i];
             last = state;
-            if (record && (i == block.Steps.Count - 1
-                || step.Statement is StateDirectiveSyntax or EnsureDirectiveSyntax
-                || step.Statement is InstructionStatementSyntax { MnemonicKind: var mnemonic } && Asked(mnemonic)))
-            {
+            if (record)
                 Keep(before, step.Key, state);
-            }
             state = After(step, state);
         }
         return (last, state);
-
-        // The suggestions ask about the flags before these instructions.
-        static bool Asked(MnemonicKind mnemonic) => mnemonic is MnemonicKind.Clc or MnemonicKind.Sec or MnemonicKind.Jmp
-            or MnemonicKind.Lda or MnemonicKind.Ldx or MnemonicKind.Ldy or MnemonicKind.Cmp or MnemonicKind.Cpx or MnemonicKind.Cpy;
     }
 
     /// <summary>Returns the flags after <paramref name="step"/> runs, from those before it.</summary>

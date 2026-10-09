@@ -2047,6 +2047,18 @@ everything below works across modules.
   segment. Overlaps and shared bytes between pages are reported only for addresses the map
   trusts, never for guessed ones. Like the input sources, the map only shows what the analysis
   found and never reports a problem.
+- **The Processor view**, in the nt65 view of the activity bar, shows what the instruction
+  hover shows below its rule for the caret's line, and follows the caret. On the 65816 it gives
+  the mode and the widths, D and B. On every processor it gives what A, X and Y hold, with the
+  constant where the instructions give one and the line that set the value, the flags as `0`,
+  `1` or `?`, and the stack top first. On the 65816 each push is keyed by the stack-relative
+  offset that reads it, such as `3,s`. A line with nothing that runs, such as the one that
+  opens a routine, shows the next line that does. A fact that is not known says `unknown`
+  rather than being left out. The stack is known only from the routine's entry, so it ends at
+  the stack the routine was entered with. *Choose the Caller the Processor View Shows*, or the
+  view's last row, picks one `jsr` or `jsl` to the routine, and the stack then goes on through
+  the return address into what that caller had pushed. That is true only on the path through
+  that call, so it is a choice the reader makes, never the default.
 - **Inlay hints** at the end of a line, off by default for cycle counts: where a width or
   other state changes, where a long branch was written long, values a declaration implies,
   and parameter names in calls.
@@ -2084,8 +2096,10 @@ everything below works across modules.
   call out. *Select Configuration* chooses which configuration the editor analyzes, *Toggle
   Cycle Counts* switches the cycle hints on, *Toggle Input Sources* switches the
   highlights of where an instruction's inputs come from, *Toggle Width Stripes* switches the
-  65816 width stripes, and *Choose What the
-  Margin Shows* picks between nothing, loops, and loops with the caret routine's flow arrows.
+  65816 width stripes, *Choose What the
+  Margin Shows* picks between nothing, loops, and loops with the caret routine's flow arrows,
+  and *Choose the Caller the Processor View Shows* picks the call the Processor view's stack
+  goes on through.
 - **Formatting:** the same layout `nt65 fmt` writes.
 
 ## The command line
