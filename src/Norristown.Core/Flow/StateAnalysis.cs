@@ -949,12 +949,13 @@ public sealed class StateAnalysis : IProcessorStates
         }
 
         // An indirect call goes where its `.next` says, and it returns with what any of the
-        // routines it names return with. With nothing named, nothing is known after it. With no
-        // `.next` at all, that has been reported, and the state is left alone so the one
-        // mistake is not reported again wherever the state is used.
+        // routines or labels it names return with. Each is checked as a direct call to it is.
+        // With nothing named, nothing is known after it. With no `.next` at all, that has been
+        // reported, and the state is left alone so the one mistake is not reported again
+        // wherever the state is used.
         if (next is null)
             return state;
-        var named = Routines(next, step.On).ToList();
+        var named = Callees(next, step.On).ToList();
         if (named.Count == 0)
             return Returned(step, state with { Processor = ProcessorState.Unknown }, StackEffect.Unknown);
         FlowState? merged = null;
@@ -1005,6 +1006,15 @@ public sealed class StateAnalysis : IProcessorStates
     /// </summary>
     private IEnumerable<Symbol> Routines(NextDirectiveSyntax next, Expansion? on) =>
         flow.Named(next, on).Select(named => named.Symbol).Where(symbol => symbol.Signature is not null);
+
+    /// <summary>
+    /// Returns the places a call's <c>.next</c> names that the call may enter. They are the
+    /// routines it names and the labels inside routines, each of which is an entry point that
+    /// the call returns from by its routine's exits.
+    /// </summary>
+    private IEnumerable<Symbol> Callees(NextDirectiveSyntax next, Expansion? on) =>
+        flow.Named(next, on).Select(named => named.Symbol)
+            .Where(symbol => symbol.Signature is not null || symbol is { Kind: SymbolKind.Label, Routine: not null });
 
     /// <summary>
     /// Checks a call from <paramref name="routine"/> and returns the state after it, or null where

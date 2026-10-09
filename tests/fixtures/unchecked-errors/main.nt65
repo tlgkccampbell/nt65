@@ -117,6 +117,36 @@
     rts
 }
 
+; A label an indirect call's `.next` names is checked as a direct call to it is, and the call
+; returns with what the label's routine returns with, merged over every place named.
+.segment BSS
+.data vectors: .addr
+
+.segment CODE
+.proc calls_through: a8, i8, native {
+    ldx #0
+    jsr (vectors,x)         ;! error[entry-not-declared]: `inner` is inside routine `owner`: mark it an entry point with a `.state` after the label;! error[call-state-mismatch]: `jsr entry` needs `a16`, but A is 8-bit here
+    .next owner::inner, declared::entry
+    rts
+}
+
+.proc widens: a8, i8, native -> a16 {
+    rep #$20
+    rts
+    inside:
+    .state a8, i8, native
+    rep #$20
+    rts
+}
+
+.proc calls_wide: a8, i8, native -> a16 {
+    ldx #0
+    jsr (vectors,x)
+    .next widens::inside
+    lda #$1234
+    rts
+}
+
 ; A declared label is checked against for the parts its `.state` gives, so those are the only
 ; parts it may assume: what the routine's own path leaves is no promise to whoever jumps in.
 .proc partly: a8, i8 {
