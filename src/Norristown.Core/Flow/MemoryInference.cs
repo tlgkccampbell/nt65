@@ -27,6 +27,7 @@ internal sealed class MemoryInference
     private readonly Dictionary<RoutineKey, Inferred> found = [];
     private readonly HashSet<RoutineKey> active = [];
     private readonly Stack<RoutineKey> working = [];
+    private readonly Dictionary<Location, Location> anchors = [];
     private readonly Dictionary<FileAnalysis, RegisterWalk> walks = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Initializes an inference over every routine of <paramref name="analysis"/>'s program.</summary>
@@ -74,6 +75,11 @@ internal sealed class MemoryInference
     /// </summary>
     public Location Anchor(Location location)
     {
+        if (location.Root is not { Kind: SymbolKind.AddressAlias })
+            return location;
+        if (anchors.TryGetValue(location, out var known))
+            return known;
+        var spelled = location;
         for (var depth = 0; depth < 8; depth++)
         {
             if (location.Root is not { Kind: SymbolKind.AddressAlias, ValueExpression: { } value } alias
@@ -85,6 +91,7 @@ internal sealed class MemoryInference
             }
             location = named with { Offset = named.Offset + location.Offset };
         }
+        anchors[spelled] = location;
         return location;
     }
 
