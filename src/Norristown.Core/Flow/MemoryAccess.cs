@@ -16,16 +16,29 @@ namespace Norristown.Flow;
 /// </summary>
 /// <param name="Direct">The location a direct operand names, or null.</param>
 /// <param name="Width">
-/// How many bytes the access reaches in memory, from where it lands. That is 2 on the 65816
-/// where the register that sizes the access is known to be 16 bits, and 1 otherwise.
+/// How many bytes the access is sure to reach in memory, from where it lands. That is 2 on the
+/// 65816 where the register that sizes the access is known to be 16 bits, and 1 otherwise.
+/// </param>
+/// <param name="Wider">
+/// Whether the access may reach one byte more than <paramref name="Width"/> says, because on the
+/// 65816 the width of the register that sizes it is not known.
 /// </param>
 /// <param name="Reads">Whether the instruction reads the memory it reaches.</param>
 /// <param name="Stores">Whether the instruction writes the memory it reaches, including by a read-modify-write.</param>
 /// <param name="Indexed">The location an indexed operand starts from, or null.</param>
 /// <param name="Indirect">Whether the operand reaches memory through a pointer.</param>
 /// <param name="Pointer">The bytes of the pointer an indirect operand reads, where it names one directly.</param>
+/// <param name="Index">
+/// The constant the index register of an indexed operand holds, where the instructions on every
+/// path give it one, or null.
+/// </param>
+/// <param name="Reach">
+/// The largest value the index register of an indexed operand can hold, which is $FF for an 8-bit
+/// index and $FFFF for a 16-bit one or one whose width is not known.
+/// </param>
 internal readonly record struct MemoryAccess(
-    Location? Direct, int Width, bool Reads, bool Stores, Location? Indexed, bool Indirect, ImmutableArray<Location> Pointer)
+    Location? Direct, int Width, bool Wider, bool Reads, bool Stores, Location? Indexed, bool Indirect, ImmutableArray<Location> Pointer,
+    long? Index = null, long Reach = 0xff)
 {
     /// <summary>
     /// Gets each byte a direct operand reaches, from the location it names on, or nothing where the
@@ -34,6 +47,17 @@ internal readonly record struct MemoryAccess(
     public ImmutableArray<Location> DirectBytes => Direct is { } start
         ? [.. Enumerable.Range(0, Width).Select(i => start with { Offset = start.Offset + i })]
         : [];
+
+    /// <summary>
+    /// Gets each byte a direct operand reaches or may reach. That is <see cref="DirectBytes"/> and,
+    /// where the access is <see cref="Wider"/>, the byte after them.
+    /// </summary>
+    public ImmutableArray<Location> ReachedBytes => Wider && Direct is { } start
+        ? DirectBytes.Add(start with { Offset = start.Offset + Width })
+        : DirectBytes;
+
+    /// <summary>Gets the indexed store this access makes, or null where it makes none.</summary>
+    public IndexedStore? IndexedStore => Stores && Indexed is { } start ? new IndexedStore(start, Index, Reach) : null;
 
     /// <summary>
     /// Returns how the instruction at <paramref name="step"/> in <paramref name="file"/> reaches
@@ -56,21 +80,32 @@ internal readonly record struct MemoryAccess(
             return null;
         }
 
-        // On the 65816 an access is as wide as the register that sizes it, while that width is
-        // known. An unknown width is taken as one byte.
-        var width = layout.Cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(mnemonic) is { } register
-            && file.State?.Before(step.Statement, step.On)?.Processor.Of(register) == Semantics.Width.Sixteen ? 2 : 1;
+        // On the 65816 an access is as wide as the register that sizes it. While that width is
+        // not known, the access is sure of one byte and may reach the next one too.
+        var processor = layout.Cpu == Cpu.Wdc65816 ? file.State?.Before(step.Statement, step.On)?.Processor : null;
+        var sized = layout.Cpu == Cpu.Wdc65816 && Instructions.MemorySizedBy(mnemonic) is { } register
+            ? processor?.Of(register) ?? Semantics.Width.Unknown
+            : Semantics.Width.Eight;
+        var width = sized == Semantics.Width.Sixteen ? 2 : 1;
+        var wider = sized is not (Semantics.Width.Eight or Semantics.Width.Sixteen);
         var operand = StepOperands.Of(model, step);
         var location = operand is null ? null : Location.Of(model, CodeLayout.Expression(operand), step.On);
         if (file.Flow.Patched.Contains(step.Key))
-            return new MemoryAccess(null, width, reads, stores, location, false, []);
+            return new MemoryAccess(null, width, wider, reads, stores, location, false, [], null, 0xffff);
+
+        // An index register's constant narrows where an indexed store lands to one byte. Without
+        // one, the store may land anywhere the register can reach.
+        var known = file.Flow.KnownBefore(statement);
+        var reach = layout.Cpu == Cpu.Wdc65816 && processor?.Index != Semantics.Width.Eight ? 0xffff : 0xff;
         return mode switch
         {
             AddressingMode.Direct or AddressingMode.Absolute or AddressingMode.Long
-                => new MemoryAccess(location, width, reads, stores, null, false, []),
-            AddressingMode.DirectX or AddressingMode.DirectY or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
-                or AddressingMode.LongX => new MemoryAccess(null, width, reads, stores, location, false, []),
-            _ => new MemoryAccess(null, width, reads, stores, null, true, Bytes(location, mode)),
+                => new MemoryAccess(location, width, wider, reads, stores, null, false, []),
+            AddressingMode.DirectX or AddressingMode.AbsoluteX or AddressingMode.LongX
+                => new MemoryAccess(null, width, wider, reads, stores, location, false, [], known?.X, reach),
+            AddressingMode.DirectY or AddressingMode.AbsoluteY
+                => new MemoryAccess(null, width, wider, reads, stores, location, false, [], known?.Y, reach),
+            _ => new MemoryAccess(null, width, wider, reads, stores, null, true, Bytes(location, mode)),
         };
     }
 

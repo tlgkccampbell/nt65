@@ -9,8 +9,9 @@ namespace Norristown.Flow;
 /// linked, so a location is named by what the source says rather than by its address. That is a
 /// symbol, or a path to a member of a struct, and a constant offset from it, as in <c>ptr+1</c>.
 /// <para>
-/// Two spellings of one location that resolve differently are two locations here. This is a best
-/// guess for showing, and no check warns from it.
+/// Two spellings of one location that resolve differently are two locations here. A store to one
+/// is still a doubt on the other, where <see cref="MemoryInference.Overlaps"/> finds that both
+/// stand for one byte. This is a best guess for showing, and no check warns from it.
 /// </para>
 /// </summary>
 /// <param name="Root">

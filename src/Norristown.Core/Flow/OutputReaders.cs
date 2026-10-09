@@ -139,7 +139,7 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
             {
                 IEnumerable<Location> read = index == block.Steps.Count - 1 && RegisterWalk.CallsAtEnd(block)
                     ? block.Calls.SelectMany(inference.ReadsOf)
-                    : MemoryAccess.Of(file, block.Steps[index]) is { Reads: true } access ? [.. access.DirectBytes, .. access.Pointer] : [];
+                    : MemoryAccess.Of(file, block.Steps[index]) is { Reads: true } access ? [.. access.ReachedBytes, .. access.Pointer] : [];
                 var wanted = read.Where(found.ContainsKey).Distinct().ToList();
                 if (wanted.Count == 0 || Reader(tree, block, index) is not { } reader)
                     continue;

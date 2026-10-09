@@ -348,6 +348,94 @@ public sealed class InputSourcesTests
                 + ".proc p {\n@again:\n    jsr show\n    lda count\n    cmp #4\n    bne @again\n    rts\n}\n", "jsr show"));
     }
 
+    /// <summary>
+    /// A call to a routine whose body is not in the program, such as a ROM routine, may write any
+    /// location. So may a call to a routine that stores through a pointer, and one that reaches its
+    /// own caller again through another routine. A routine that calls only itself adds nothing.
+    /// </summary>
+    [Fact]
+    public void ACallThatCanBeSeenToWriteNothingCanStillBeADoubt()
+    {
+        // The header is 3 lines and Data 4 more, so `.proc CHROUT` is line 8. Then via_pointer
+        // takes lines 9-13 and p opens on line 14, which puts `jsr CHROUT` on 16 and
+        // `jsr via_pointer` on 17.
+        const string Data = ".segment ZEROPAGE\n.data count: .byte\n.data ptr: .word\n.segment CODE\n";
+        Assert.Equal(
+            ["count: sta count or possibly jsr CHROUT, jsr via_pointer "
+                + "[or possibly `jsr CHROUT` on line 16, `jsr via_pointer` on line 17]"],
+            Sources(Data + ".proc CHROUT = $FFD2: keeps x, y\n"
+                + ".proc via_pointer {\n    ldy #0\n    sta (ptr),y\n    rts\n}\n"
+                + ".proc p {\n    sta count\n    jsr CHROUT\n    jsr via_pointer\n    lda count\n    rts\n}\n", "lda count"));
+
+        // `there` reaches `back` again through `again`, so what `back` writes is not known while
+        // `again` is worked out. Lines 8-11 are `back`, 12-17 are `again`, and p opens on 18.
+        Assert.Equal(
+            ["count: sta count or possibly jsr back [or possibly `jsr back` on line 20]"],
+            Sources(Data + ".proc back {\n    jsr again\n    rts\n}\n"
+                + ".proc again {\n    beq @out\n    jsr back\n@out:\n    rts\n}\n"
+                + ".proc p {\n    sta count\n    jsr back\n    lda count\n    rts\n}\n", "lda count"));
+        Assert.Equal(
+            ["count: sta count"],
+            Sources(Data + ".proc self {\n    dex\n    beq @out\n    jsr self\n@out:\n    rts\n}\n"
+                + ".proc p {\n    sta count\n    jsr self\n    lda count\n    rts\n}\n", "lda count"));
+    }
+
+    /// <summary>
+    /// An indexed store may land on any location declared in the segment it starts in, since the
+    /// linker lays a segment's bytes out together. Data in another segment is not reached. A
+    /// constant in the index register narrows the store to one byte.
+    /// </summary>
+    [Fact]
+    public void AnIndexedStoreMayLandAnywhereInItsSegment()
+    {
+        // The header is 3 lines and Data 6 more, so p opens on line 10 and `sta buf-1,x` is 13.
+        const string Data = ".segment ZEROPAGE\n.data buf: .byte[4]\n.data ptr: .word\n"
+            + ".segment BSS\n.data other: .byte\n.segment CODE\n";
+        const string Unknown = ".proc p {\n    sta ptr\n    sta other\n    sta buf-1,x\n    lda ptr\n    lda other\n    rts\n}\n";
+        Assert.Equal(["ptr: sta ptr or possibly sta buf-1,x [or possibly `sta buf-1,x` on line 13]"], Sources(Data + Unknown, "lda ptr"));
+        Assert.Equal(["other: sta other"], Sources(Data + Unknown, "lda other"));
+
+        // X holds 2, so the store on line 13 lands on buf+2 and not on ptr.
+        const string Known = ".proc p {\n    sta ptr\n    ldx #2\n    sta buf,x\n    lda ptr\n    lda buf+2\n    rts\n}\n";
+        Assert.Equal(["ptr: sta ptr"], Sources(Data + Known, "lda ptr"));
+        Assert.Equal(["buf+2: entry or possibly sta buf,x [or possibly `sta buf,x` on line 13]"], Sources(Data + Known, "lda buf+2"));
+    }
+
+    /// <summary>
+    /// An address alias that names another location is another spelling of it, so a store through
+    /// the alias may change the location, byte for byte, even though linking decides the address.
+    /// </summary>
+    [Fact]
+    public void AStoreThroughAnAliasMayChangeWhatItNames()
+    {
+        // The header is 3 lines and Data 4 more, so p opens on line 8 and `sty TEMP3` is line 10.
+        const string Data = ".segment ZEROPAGE\n.data FNCNAM: .word\n.data TEMP3 = FNCNAM\n.segment CODE\n";
+        Assert.Equal(
+            ["FNCNAM: sta FNCNAM or possibly sty TEMP3 [or possibly `sty TEMP3` on line 10]"],
+            Sources(Data + ".proc p {\n    sta FNCNAM\n    sty TEMP3\n    lda FNCNAM\n    rts\n}\n", "lda FNCNAM"));
+        Assert.Equal(
+            ["FNCNAM: sta FNCNAM"],
+            Sources(Data + ".proc p {\n    sta FNCNAM\n    sty TEMP3+1\n    lda FNCNAM\n    rts\n}\n", "lda FNCNAM"));
+    }
+
+    /// <summary>
+    /// On the 65816 an access whose width is not known is sure of the byte it names and may reach
+    /// the byte after it. A store is the source of the first byte and a doubt on the second, and a
+    /// load reads both.
+    /// </summary>
+    [Fact]
+    public void AnAccessOfUnknownWidthMayReachTwoBytes()
+    {
+        // The header is 3 lines and Data 3 more, so p opens on line 7 and `sta ptr` is line 8.
+        const string Data = ".segment ZEROPAGE\n.data ptr: .word\n.segment CODE\n";
+        Assert.Equal(
+            ["ptr+1: entry or possibly sta ptr [or possibly `sta ptr` on line 8]"],
+            Wider(Data + ".proc p: a?, i8 {\n    sta ptr\n    sep #$20\n    lda ptr+1\n    rts\n}\n", "lda ptr+1"));
+        Assert.Equal(
+            ["ptr: entry", "ptr+1: entry"],
+            Wider(Data + ".proc p: a?, i8 {\n    lda ptr\n    rts\n}\n", "lda ptr"));
+    }
+
     private static IReadOnlyList<string>? Sources(string text, string line) =>
         FlowFragment.SourcesAt(FlowFragment.Analyze("6502", text), line);
 

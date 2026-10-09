@@ -4364,7 +4364,10 @@ alone and without an assembler:
   location when some path through it loads the location by name before storing to it; the
   source of the location's value is the last store to the same name on each path; and the
   hover names what else might have changed it since: a store through a pointer or an index, a
-  call that may write it, or a store to another name for the same address. A hardware register
+  call that may write it, or a store to another name for the same address. A call to a routine
+  whose body is not in the program, or one that stores through a pointer, may write anything; a
+  store indexed from one location may reach any other in its segment; and an alias that names
+  another location is another name for its address. A hardware register
   that `.mmio` declares (§8) is not followed at all, because the hardware sets what it holds.
   This does not go back on memory being the programmer's word (§7.7). Nothing warns, errors or checks a promise
   because of it, and it is wrong in exactly the cases a guess from names can be;

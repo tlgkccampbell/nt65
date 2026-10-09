@@ -1990,7 +1990,10 @@ everything below works across modules.
   A line that might also have changed the value since, such as a store through a pointer or a
   call that may write the location, is drawn as a doubt rather than a source: a thin dashed bar
   with no tint and no scrollbar mark, and a faded tag such as `ptr?`. The hover names those
-  lines too.
+  lines too. A call to a routine whose body is not in the program, such as one in ROM, may write
+  any location, and so may a routine that stores through a pointer. A store such as
+  `sta buf,x` may reach any location in the segment `buf` is in, or only `buf+2` where X is
+  known to hold 2.
 
   The caret line gets one chip per value. `A` means every line that set it is on screen;
   `A↑12` and `A↓3` give the distance to the nearest one, above or round a loop below; `A ×2`

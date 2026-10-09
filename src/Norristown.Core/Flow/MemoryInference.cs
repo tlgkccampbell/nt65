@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
@@ -13,19 +14,25 @@ namespace Norristown.Flow;
 /// <para>
 /// The answer is worked out on demand, for the routines a question reaches, and kept for the rest
 /// of the question. It is a best guess for showing, and no check warns from it. A routine that
-/// calls itself, directly or not, is taken to read nothing more through that call.
+/// calls itself directly is taken to read and write nothing more through that call, since what the
+/// call does is what the routine does. A routine whose body is not in the program, one reached
+/// again through another routine it calls, and one that stores through a pointer may write any
+/// location, as <see cref="WritesAnything"/> says.
 /// </para>
 /// </summary>
 internal sealed class MemoryInference
 {
+    private readonly ProgramAnalysis analysis;
     private readonly Dictionary<RoutineKey, (FlowRegion Region, FileAnalysis File)> routines = [];
     private readonly Dictionary<RoutineKey, Inferred> found = [];
     private readonly HashSet<RoutineKey> active = [];
+    private readonly Stack<RoutineKey> working = [];
     private readonly Dictionary<FileAnalysis, RegisterWalk> walks = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Initializes an inference over every routine of <paramref name="analysis"/>'s program.</summary>
     public MemoryInference(ProgramAnalysis analysis)
     {
+        this.analysis = analysis;
         foreach (var file in analysis.Files)
         {
             foreach (var region in file.Flow.Regions)
@@ -46,6 +53,55 @@ internal sealed class MemoryInference
     public ImmutableHashSet<Location> WritesOf(Symbol target) => Of(target).Writes;
 
     /// <summary>
+    /// Returns the indexed stores that a call to <paramref name="target"/> may make, directly or
+    /// through a routine it calls. Each says where else than its start such a store may land.
+    /// </summary>
+    public ImmutableHashSet<IndexedStore> IndexedStoresOf(Symbol target) => Of(target).Indexed;
+
+    /// <summary>
+    /// Returns whether a call to <paramref name="target"/> may write any location at all. That is
+    /// so where the routine's body is not in the program, or where the call reaches the routine
+    /// again through another routine. It is also so where the routine stores through a pointer,
+    /// calls somewhere nt65 cannot identify, or runs <c>brk</c> or <c>cop</c>, directly or through
+    /// a routine it calls.
+    /// </summary>
+    public bool WritesAnything(Symbol target) => Of(target).Anything;
+
+    /// <summary>
+    /// Returns the location that <paramref name="location"/> stands for once each address alias is
+    /// followed to the location its value names. <c>.data TEMP3 = FNCNAM</c> makes <c>TEMP3+1</c>
+    /// stand for <c>FNCNAM+1</c>, so two spellings of one byte are found to be one.
+    /// </summary>
+    public Location Anchor(Location location)
+    {
+        for (var depth = 0; depth < 8; depth++)
+        {
+            if (location.Root is not { Kind: SymbolKind.AddressAlias, ValueExpression: { } value } alias
+                || alias.Value.AsNumber() is not null
+                || analysis.ModelFor(alias.Tree.Path) is not { } model
+                || Location.Of(model, value, null) is not { } named)
+            {
+                break;
+            }
+            location = named with { Offset = named.Offset + location.Offset };
+        }
+        return location;
+    }
+
+    /// <summary>
+    /// Returns whether two different spellings may stand for the same byte. They do where both
+    /// follow to the same location through their address aliases, or where the source fixes both
+    /// addresses and they are equal.
+    /// </summary>
+    public bool Overlaps(Location a, Location b)
+    {
+        if (a == b)
+            return false;
+        var (x, y) = (Anchor(a), Anchor(b));
+        return x == y || (x.Address is { } at && at == y.Address);
+    }
+
+    /// <summary>
     /// Returns the locations a call to <paramref name="target"/> writes on every path that returns,
     /// directly or through a routine it calls. After such a call, the call is where a location's
     /// value came from, not just something that may have changed it.
@@ -54,17 +110,22 @@ internal sealed class MemoryInference
 
     /// <summary>
     /// Returns what a call to <paramref name="target"/> reads, may write and always writes, worked
-    /// out the first time it is asked. A routine whose body is not in the program, and one that is
-    /// already being worked out further up the calls, reads and writes nothing that can be seen.
+    /// out the first time it is asked. A routine whose body is not in the program may write
+    /// anything. So may one that is already being worked out further up the calls, unless it is
+    /// the routine being worked out now, whose own call adds nothing to what it does.
     /// </summary>
     private Inferred Of(Symbol target)
     {
         var key = RoutineKey.Of(RegisterWalk.Owner(target) ?? target);
         if (found.TryGetValue(key, out var known))
             return known;
-        if (!routines.TryGetValue(key, out var routine) || !active.Add(key))
-            return Inferred.Nothing;
+        if (!routines.TryGetValue(key, out var routine))
+            return Inferred.Unseen;
+        if (!active.Add(key))
+            return working.Peek() == key ? Inferred.Nothing : Inferred.Unseen;
+        working.Push(key);
         var inferred = Infer(routine.Region, routine.File);
+        working.Pop();
         active.Remove(key);
         found[key] = inferred;
         return inferred;
@@ -84,6 +145,8 @@ internal sealed class MemoryInference
         var blocks = region.Blocks;
         var reads = ImmutableHashSet.CreateBuilder<Location>();
         var writes = ImmutableHashSet.CreateBuilder<Location>();
+        var indexed = ImmutableHashSet.CreateBuilder<IndexedStore>();
+        var anything = false;
         var solver = new Dataflow<Stored>(
             blocks, (block, stored) => Through(block, stored, null, null), Stored.Merge, block => ControlFlow.Onward(blocks, block));
         if (blocks.Count == 0)
@@ -102,22 +165,30 @@ internal sealed class MemoryInference
                 var into = Of(target);
                 reads.UnionWith(into.Reads.Where(location => !after.Locations.Contains(location)));
                 writes.UnionWith(into.Writes);
+                indexed.UnionWith(into.Indexed);
+                anything |= into.Anything;
                 var left = after.Locations.Union(into.Always);
                 always = always is null ? left : always.Intersect(left);
             }
         }
-        return new Inferred(reads.ToImmutable(), writes.ToImmutable(), always ?? []);
+        return new Inferred(reads.ToImmutable(), writes.ToImmutable(), always ?? [], indexed.ToImmutable(), anything);
 
+        // The solver's passes only find what every path has stored. What the routine may write is
+        // collected on the last pass, the one that is given the builders.
         Stored Through(BasicBlock block, Stored stored, ImmutableHashSet<Location>.Builder? read, ImmutableHashSet<Location>.Builder? written)
         {
             var locations = stored.Locations;
+            var collect = written is not null;
             foreach (var step in block.Steps)
             {
+                // An interrupt the routine raises runs a handler that may write anything.
+                if (step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Brk or MnemonicKind.Cop })
+                    anything |= collect;
                 if (MemoryAccess.Of(file, step) is not { } access)
                     continue;
                 // A direct access reaches each of its bytes, so a 16-bit one reads or writes the
-                // byte after the one it names as well.
-                foreach (var loaded in access.Reads ? access.DirectBytes.AddRange(access.Pointer) : access.Pointer)
+                // byte after the one it names as well, and one of unknown width may.
+                foreach (var loaded in access.Reads ? access.ReachedBytes.AddRange(access.Pointer) : access.Pointer)
                 {
                     if (!locations.Contains(loaded))
                         read?.Add(loaded);
@@ -127,11 +198,17 @@ internal sealed class MemoryInference
                 if (access.Direct is not null)
                 {
                     locations = locations.Union(access.DirectBytes);
-                    written?.UnionWith(access.DirectBytes);
+                    written?.UnionWith(access.ReachedBytes);
                 }
-                else if (access.Indexed is { } start)
+                else if (access.IndexedStore is { } store)
                 {
-                    written?.Add(start);
+                    written?.Add(store.Start);
+                    if (collect)
+                        indexed.Add(store);
+                }
+                else if (access.Indirect)
+                {
+                    anything |= collect;
                 }
             }
             if (RegisterWalk.CallsAtEnd(block))
@@ -148,11 +225,19 @@ internal sealed class MemoryInference
                             read?.Add(location);
                     }
                     written?.UnionWith(called.Writes);
+                    if (collect)
+                    {
+                        indexed.UnionWith(called.Indexed);
+                        anything |= called.Anything;
+                    }
                     stores = stores is null ? called.Always : stores.Intersect(called.Always);
                 }
                 if (!block.CallsUnknown && stores is not null)
                     locations = locations.Union(stores);
             }
+
+            // A call or a jump nt65 cannot follow may run code that writes anything.
+            anything |= collect && block.CallsUnknown;
             return new Stored(locations);
         }
     }
@@ -172,11 +257,20 @@ internal sealed class MemoryInference
     /// <param name="Reads">The locations it reads before it writes them.</param>
     /// <param name="Writes">The locations it may write, counting an indexed store as a write of where it starts.</param>
     /// <param name="Always">The locations it writes on every path that returns.</param>
+    /// <param name="Indexed">The indexed stores it may make.</param>
+    /// <param name="Anything">Whether it may write any location at all.</param>
     private sealed record Inferred(
-        ImmutableHashSet<Location> Reads, ImmutableHashSet<Location> Writes, ImmutableHashSet<Location> Always)
+        ImmutableHashSet<Location> Reads, ImmutableHashSet<Location> Writes, ImmutableHashSet<Location> Always,
+        ImmutableHashSet<IndexedStore> Indexed, bool Anything)
     {
-        /// <summary>Gets what a routine nothing can be seen of reads and writes, which is nothing.</summary>
-        public static Inferred Nothing { get; } = new([], [], []);
+        /// <summary>Gets what a call that adds nothing to what is known reads and writes, which is nothing.</summary>
+        public static Inferred Nothing { get; } = new([], [], [], [], false);
+
+        /// <summary>
+        /// Gets what a routine nothing can be seen of reads and writes. It reads nothing that can
+        /// be named, and it may write anything.
+        /// </summary>
+        public static Inferred Unseen { get; } = new([], [], [], [], true);
     }
 
     /// <summary>Represents the locations every path to a point has stored to.</summary>
