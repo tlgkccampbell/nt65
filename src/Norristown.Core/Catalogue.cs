@@ -530,9 +530,11 @@ public static class Catalogue
         Area.ReadingALine,
         "export-declares-nothing",
         Severity.Error,
-        "`{0}` declares nothing, so there is nothing to export",
+        "{0}, so there is nothing to export{1}",
         "`.export` before a declaration exports what that declaration declares, so the directive after it has to "
-            + "be one that declares something.");
+            + "be one that declares something. An `.each` declares nothing itself: a family is the declarations "
+            + "in its body named after the binding, and `.export` before one of them, or before `.multiproc`, "
+            + "exports every instance.");
 
     internal static DiagnosticDescriptor DataBodyHoldsValues { get; } = Entry(
         Area.ReadingALine,

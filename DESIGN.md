@@ -3245,7 +3245,8 @@ The rules:
 - `.export` before a binding-named declaration, or before `.multiproc`, exports every instance;
   the list form, `.export play::pulse1`, exports one. It is the one `.export` a repetition body
   may hold, since the names it exports are the enum's. `.export .scope play { }` around a
-  family exports its instances by the ordinary rule.
+  family exports its instances by the ordinary rule. `.export .each` is an error that points at
+  these forms: the `.each` itself declares nothing, only the declarations in its body do.
 - A condition in the body may name the enum's members, `.if ch == Channel::noise`: the
   binding's own value is one of them, so they are known where a turn's conditions are answered.
 - What the body declares is the turn's, as a repetition's always is, and is named after the
