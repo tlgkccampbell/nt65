@@ -260,6 +260,12 @@ internal sealed class Requirements
         // always be written as a label, and a `.next ?` under it is an error.
         var branch = Transfers.Of(statement, mode) == Transfer.Branch;
 
+        // A jump to a constant address, such as a ROM entry point, is a tail call to a routine
+        // nothing is known about, as a call to one is a call to such a routine. The flow analysis
+        // already ends the path there and keeps nothing across it, so it needs no annotation.
+        if (!calls && !branch && IsConstantAddress(targetExpression, step.On))
+            return;
+
         // A name that resolves to nothing has already been reported where it appears. A call to
         // anything but a routine is reported by the state analysis, with the call's other checks.
         if (target is null)
@@ -296,6 +302,17 @@ internal sealed class Requirements
             Report(statement, Catalogue.JumpIntoData.Message(symbol.DisplayName));
         }
     }
+
+    /// <summary>
+    /// Returns whether a transfer's target is a constant address. It is one where its value is a
+    /// number and no name in it is a label, a routine or data, so that nothing places it inside
+    /// the program. <c>jmp $FFD2</c> and <c>jmp KERNAL + 3</c> are such transfers, and
+    /// <c>jmp table + 3</c> is not.
+    /// </summary>
+    private bool IsConstantAddress(SyntaxNode expression, Expansion? on) =>
+        model.ValueOf(expression, on).AsNumber() is not null
+        && !expression.DescendantNodes().Prepend(expression).OfType<NameExpressionSyntax>()
+            .Any(name => Targets.Of(model, name, on) is { Symbol.IsAddress: true });
 
     /// <summary>
     /// Returns whether a block pushes the address of code, which is what a return used as a jump
@@ -389,13 +406,6 @@ internal sealed class Requirements
     }
 
     /// <summary>
-    /// Reports each place a label on code is named, other than as the target of a branch, a jump
-    /// or a call, without the annotation it needs. A store into the label needs a <c>.patch</c>,
-    /// and an instruction that only reads the label's bytes needs nothing. Any other use hands
-    /// out the label's address, so flow may arrive at the label without the analysis seeing it,
-    /// which needs a declaration or a <c>.next</c>.
-    /// </summary>
-    /// <summary>
     /// Returns the fix that adds a <c>.fallthrough</c> naming the routine emitted after
     /// <paramref name="region"/>, or null where that routine is not known. Finding it searches the
     /// whole layout, so it is looked for only for a routine that runs off its end.
@@ -405,6 +415,13 @@ internal sealed class Requirements
             ? new DiagnosticFix(FixKind.Fallthrough, Named(next.Routine, region.Routine), next.Closer)
             : null;
 
+    /// <summary>
+    /// Reports each place a label on code is named, other than as the target of a branch, a jump
+    /// or a call, without the annotation it needs. A store into the label needs a <c>.patch</c>,
+    /// and an instruction that only reads the label's bytes needs nothing. Any other use hands
+    /// out the label's address, so flow may arrive at the label without the analysis seeing it,
+    /// which needs a declaration or a <c>.next</c>.
+    /// </summary>
     private void CheckUses()
     {
         foreach (var step in layout.Steps)

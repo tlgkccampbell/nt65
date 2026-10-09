@@ -2938,10 +2938,13 @@ public static class Catalogue
         Severity.Error,
         "{0} jumps to a computed address, which nt65 cannot follow: add a `.next` naming the labels it may reach, "
             + "or `.next ?` where they cannot be named",
-        "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
-            + "`.next` after the jump names the labels it may reach. Where the target is not the start of an "
-            + "instruction, such as a jump into the middle of one, use `.next ?`. The analysis then assumes "
-            + "the code it reaches may change anything.");
+        "The target is an expression built on a label, a routine or data, such as `table + 3`, rather than a bare "
+            + "name, so the analysis has no label at which to continue. A `.next` after the jump names the labels "
+            + "it may reach. Where the target is not the start of an instruction, such as a jump into the middle "
+            + "of one, use `.next ?`. The analysis then assumes the code it reaches may change anything. A jump "
+            + "to a constant address, such as `jmp $FFD2`, is not computed and needs neither. It is a tail call "
+            + "to a routine nothing is known about, as `jsr $FFD2` is a call to one, and an extern proc, "
+            + "`.proc NAME = $FFD2`, can say what that routine expects and returns with.");
 
     internal static DiagnosticDescriptor ComputedBranchUnchecked { get; } = Entry(
         Area.ControlFlow,
@@ -2977,12 +2980,11 @@ public static class Catalogue
         "jump-target-not-a-label",
         Severity.Error,
         "{0} goes to `{1}`, which is {2}, not a label, so nt65 cannot follow it: {3}",
-        "A jump or branch normally names a label in code. This one names something else, such as a constant, so "
-            + "the analysis cannot tell where flow goes. Where it names a fixed address outside the program, such "
-            + "as a ROM entry point, declare that address as an extern proc, `.proc NAME = $address`, with the "
-            + "signature it has, and jump to that. Otherwise a `.next` after a jump names the labels it reaches, "
-            + "or `.next ?` says it goes somewhere nt65 is not told about. A branch can only reach code within its "
-            + "range, so write the label it goes to as its operand.");
+        "A jump or branch normally names a label in code. This one names something that is not an address and "
+            + "has no constant value, such as a scope, so the analysis cannot tell where flow goes. A `.next` after "
+            + "a jump names the labels it reaches, or `.next ?` says it goes somewhere nt65 is not told about. A "
+            + "jump to a constant is not reported: it is a tail call to a routine nothing is known about. A branch "
+            + "can only reach code within its range, so write the label it goes to as its operand.");
 
     internal static DiagnosticDescriptor JumpIntoData { get; } = Entry(
         Area.ControlFlow,
