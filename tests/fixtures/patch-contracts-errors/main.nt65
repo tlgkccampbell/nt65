@@ -7,7 +7,8 @@
 .export variant_in_operand, opcode_unknown, operand_only, reads_opcode, calls_out
 .export jumps_out, calls_out_cleanly, listed_variant, calls_declared, indexed_listed
 .export through_name, through_name_listed, two_stores, past_into_next, past_into_data
-.export before_into_previous, patches_next, patches_nothing
+.export before_into_previous, patches_next, patches_nothing, into_expansion_label
+.export into_next_routine, after_next_routine
 
 .proc EXT = $FFD2
 .proc DECLARED = $FFE4: reads a
@@ -186,6 +187,37 @@
     lda #0
 @next:
     lda #0
+    rts
+}
+
+; A label inside a macro's expansion is not one the routine's `.patch` can name, even where it
+; is spelled the same as one of the routine's own labels.
+.macro patched_load() {
+@op:
+    lda #0
+}
+
+.proc into_expansion_label {
+    sta @op+2
+    .patch @op              ;! error[patch-misses-store]: `sta @op+2` writes past `@op`, which is 2 bytes, into `lda #0` after it: label that instruction and name it with a `.patch`
+@op:
+    lda #0
+    patched_load!()
+    rts
+}
+
+; Bytes past the end of a routine land in the next routine's code, which a `.patch` here cannot
+; name.
+.proc into_next_routine {
+    sta @op+3
+    .patch @op              ;! error[patch-misses-store]: `sta @op+3` writes past `@op`, which is 2 bytes, into `lda pointer`, the first instruction of routine `after_next_routine`, after it: a store into another routine's code is declared there
+@op:
+    lda #0
+    rts
+}
+
+.proc after_next_routine {
+    lda pointer
     rts
 }
 
