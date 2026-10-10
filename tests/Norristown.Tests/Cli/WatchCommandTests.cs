@@ -32,9 +32,7 @@ public sealed class WatchCommandTests : IDisposable
 
         var printed = new Lines();
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
-        var watching = Task.Run(
-            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, stopping.Token),
-            CancellationToken.None);
+        var watching = WatchAsync(root.FullName, printed, stopping.Token);
 
         Assert.Empty(await WaitAsync(printed, timeout));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
@@ -58,7 +56,7 @@ public sealed class WatchCommandTests : IDisposable
     /// <summary>
     /// A binary that an <c>.incbin</c> in another directory reads is watched like a source. Its
     /// path joins the root's separator to the <c>/</c> that the logical path uses, and the watch
-    /// still recognises it.
+    /// still recognizes it.
     /// </summary>
     [Fact]
     public async Task ItBuildsAgainWhenAnIncludedBinaryChanges()
@@ -70,9 +68,7 @@ public sealed class WatchCommandTests : IDisposable
 
         var printed = new Lines();
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
-        var watching = Task.Run(
-            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, stopping.Token),
-            CancellationToken.None);
+        var watching = WatchAsync(root.FullName, printed, stopping.Token);
         Assert.Empty(await WaitAsync(printed, timeout));
 
         root.Write("assets/font.bin", "ABCDEF");
@@ -97,9 +93,7 @@ public sealed class WatchCommandTests : IDisposable
         var printed = new Lines();
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
         var app = Path.Combine(root.FullName, "app");
-        var watching = Task.Run(
-            () => Commands.Run(["build", "--watch"], app, TextWriter.Null, printed, false, stopping.Token),
-            CancellationToken.None);
+        var watching = WatchAsync(app, printed, stopping.Token);
         Assert.Empty(await WaitAsync(printed, timeout));
 
         root.Write("lib/vic.nt65", ".module vic\n.export .const BORDER = nowhere\n");
@@ -126,9 +120,7 @@ public sealed class WatchCommandTests : IDisposable
         var timeout = TestTimeout.Token();
         var printed = new Lines();
 
-        var code = await Task.Run(
-            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, timeout),
-            CancellationToken.None);
+        var code = await WatchAsync(root.FullName, printed, timeout);
 
         Assert.Equal(ExitCode.UsageError, code);
         Assert.StartsWith("nt65: error: no nt65.json was found in ", await printed.NextAsync(timeout), StringComparison.Ordinal);
@@ -144,9 +136,7 @@ public sealed class WatchCommandTests : IDisposable
         var timeout = TestTimeout.Token();
         var printed = new Lines();
 
-        var code = await Task.Run(
-            () => Commands.Run(["build", "--watch", "--project", "nope/nt65.json"], root.FullName, TextWriter.Null, printed, false, timeout),
-            CancellationToken.None);
+        var code = await WatchAsync(root.FullName, printed, timeout, "--project", "nope/nt65.json");
 
         Assert.Equal(ExitCode.UsageError, code);
         Assert.Contains("does not exist", await printed.NextAsync(timeout), StringComparison.Ordinal);
@@ -165,9 +155,7 @@ public sealed class WatchCommandTests : IDisposable
 
         var printed = new Lines();
         using var stopping = CancellationTokenSource.CreateLinkedTokenSource(timeout);
-        var watching = Task.Run(
-            () => Commands.Run(["build", "--watch"], root.FullName, TextWriter.Null, printed, false, stopping.Token),
-            CancellationToken.None);
+        var watching = WatchAsync(root.FullName, printed, stopping.Token);
 
         Assert.NotEmpty(await WaitAsync(printed, timeout));
 
@@ -178,6 +166,18 @@ public sealed class WatchCommandTests : IDisposable
         await stopping.CancelAsync();
         Assert.Equal(ExitCode.Success, await watching);
     }
+
+    /// <summary>
+    /// Starts <c>nt65 build --watch</c> in <paramref name="directory"/> on a thread of its own,
+    /// with any further <paramref name="arguments"/>, writing what it prints to
+    /// <paramref name="printed"/>. The task ends with the exit code once <paramref name="stopping"/>
+    /// is canceled, or at once when the command line is refused.
+    /// </summary>
+    private static Task<ExitCode> WatchAsync(
+        string directory, Lines printed, CancellationToken stopping, params string[] arguments) =>
+        Task.Run(
+            () => Commands.Run(["build", "--watch", .. arguments], directory, TextWriter.Null, printed, false, stopping),
+            CancellationToken.None);
 
     /// <summary>
     /// Returns the lines the build printed, up to the line that says it is waiting for the next

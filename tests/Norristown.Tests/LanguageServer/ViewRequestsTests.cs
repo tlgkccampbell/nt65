@@ -1,9 +1,6 @@
 using System.Text.Json;
 using Norristown.LanguageServer.Protocol;
 
-// The protocol has a Range of its own, which is the one these tests mean.
-using Range = Norristown.LanguageServer.Protocol.Range;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -137,7 +134,6 @@ public sealed class ViewRequestsTests
     public async Task ALongExpansionIsSummarisedAndLinkedTo()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
         const string Text = """
             .module main
             .macro clear(n: const) {
@@ -152,8 +148,7 @@ public sealed class ViewRequestsTests
                 rts
             }
             """;
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(Uri, timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
         var hover = await client.HoverAsync(Uri, Locate.At(Text, "cl|ear!"), timeout);
         Assert.NotNull(hover);
@@ -180,7 +175,6 @@ public sealed class ViewRequestsTests
     {
         const string escaped = "file:///c%3A/work/main.nt65";
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
         const string Text = """
             .module main
             .macro clear(n: const) {
@@ -195,8 +189,7 @@ public sealed class ViewRequestsTests
                 rts
             }
             """;
-        await client.OpenAsync(escaped, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(escaped, timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (escaped, Text));
 
         var hover = await client.HoverAsync(escaped, Locate.At(Text, "cl|ear!"), timeout);
         Assert.NotNull(hover);
@@ -220,19 +213,13 @@ public sealed class ViewRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var actions = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
-            new CodeActionParams(
-                new TextDocumentIdentifier(Uri),
-                new Range(Locate.At(Source, "se|t16!"), Locate.At(Source, "se|t16!")),
-                new CodeActionContext([])),
-            timeout);
+        var actions = await client.CodeActionsAsync(Uri, Locate.Caret(Source, "se|t16!"), timeout);
         var inline = Assert.Single(actions, action => action.Title == "Inline `set16!`");
         Assert.Null(inline.Disabled);
         var edit = Assert.Single(inline.Edit!.Changes[Uri]);
         Assert.Equal(
             "    lda #<SCREEN\n    sta ptr\n    lda #>SCREEN\n    sta ptr+1\n",
             edit.NewText);
-
     }
 
     /// <summary>
@@ -243,7 +230,6 @@ public sealed class ViewRequestsTests
     public async Task ACallInsideABodyIsRefusedWithTheReason()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
         const string Text = """
             .module main
             .macro twice(n) {
@@ -257,15 +243,9 @@ public sealed class ViewRequestsTests
                 pair!(3)
             }
             """;
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(Uri, timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
-        var actions = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
-            new CodeActionParams(
-                new TextDocumentIdentifier(Uri),
-                new Range(Locate.At(Text, "tw|ice!"), Locate.At(Text, "tw|ice!")),
-                new CodeActionContext([])),
-            timeout);
+        var actions = await client.CodeActionsAsync(Uri, Locate.Caret(Text, "tw|ice!"), timeout);
         var refused = Assert.Single(actions, action => action.Title == "Inline `twice!`");
         Assert.NotNull(refused.Disabled);
         Assert.Contains("inside a macro body", refused.Disabled.Reason, StringComparison.Ordinal);

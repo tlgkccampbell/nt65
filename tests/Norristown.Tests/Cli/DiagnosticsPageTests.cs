@@ -12,15 +12,10 @@ public sealed class DiagnosticsPageTests
     [Fact]
     public void ThePageHasEveryAreaAndEveryEntry()
     {
-        var output = new StringWriter { NewLine = "\n" };
-        var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(
-            ["explain", "--markdown"], Directory.GetCurrentDirectory(), output, error,
-            cancellation: TestTimeout.Token());
+        var (code, written, error) = Nt65.Apart(Directory.GetCurrentDirectory(), false, "explain", "--markdown");
 
         Assert.Equal(ExitCode.Success, code);
-        Assert.Empty(error.ToString());
-        var written = output.ToString();
+        Assert.Empty(error);
         foreach (var area in Catalogue.Areas)
             Assert.Contains($"## {area.Name}\n", written, StringComparison.Ordinal);
         foreach (var entry in Catalogue.All)

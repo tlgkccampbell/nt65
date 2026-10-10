@@ -20,10 +20,10 @@ public sealed class InitCommandTests : IDisposable
     [Fact]
     public void WhatItWritesBuilds()
     {
-        var (code, printed) = Run(root.FullName, "init");
+        var (code, printed) = Nt65.Run(root.FullName, "init");
 
         Assert.Equal((ExitCode.Success, "nt65.json\nsrc/main.nt65\n"), (code, printed));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "build"));
         Assert.True(File.Exists(Path.Combine(root.FullName, "build", "main.s")));
     }
 
@@ -34,7 +34,7 @@ public sealed class InitCommandTests : IDisposable
     [Fact]
     public void WhatItWritesIsWhatNt65WouldWrite()
     {
-        Assert.Equal(ExitCode.Success, Run(root.FullName, "init").Code);
+        Assert.Equal(ExitCode.Success, Nt65.Run(root.FullName, "init").Code);
 
         var project = root.Read(ProjectFile.Name);
         foreach (var key in JsonDocument.Parse(project).RootElement.EnumerateObject().Select(each => each.Name))
@@ -42,18 +42,18 @@ public sealed class InitCommandTests : IDisposable
 
         var main = root.Read("src/main.nt65");
         Assert.Equal(main, Formatter.Format(SyntaxTree.Parse("src/main.nt65", main)));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt", "--check"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "fmt", "--check"));
     }
 
     /// <summary>The files are written into the directory named, which is created if it does not exist.</summary>
     [Fact]
     public void ItWritesIntoTheDirectoryItIsGiven()
     {
-        var (code, printed) = Run(root.FullName, "init", "game", "--cpu", "65816");
+        var (code, printed) = Nt65.Run(root.FullName, "init", "game", "--cpu", "65816");
 
         Assert.Equal((ExitCode.Success, "game/nt65.json\ngame/src/main.nt65\n"), (code, printed));
         Assert.Contains("\"cpu\": \"65816\"", root.Read("game/nt65.json"));
-        Assert.Equal(ExitCode.Success, Run(Path.Combine(root.FullName, "game"), "build").Code);
+        Assert.Equal(ExitCode.Success, Nt65.Run(Path.Combine(root.FullName, "game"), "build").Code);
     }
 
     /// <summary>
@@ -65,7 +65,7 @@ public sealed class InitCommandTests : IDisposable
     {
         Repo.WriteText(Path.Combine(root.FullName, "src", "main.nt65"), ".module mine\n");
 
-        var (code, printed) = Run(root.FullName, "init");
+        var (code, printed) = Nt65.Run(root.FullName, "init");
 
         Assert.Equal((ExitCode.InputError, "nt65: src/main.nt65 exists already\n"), (code, printed));
         Assert.Equal(".module mine\n", root.Read("src/main.nt65"));
@@ -73,7 +73,7 @@ public sealed class InitCommandTests : IDisposable
 
         File.Delete(Path.Combine(root.FullName, "src", "main.nt65"));
         Repo.WriteText(Path.Combine(root.FullName, ProjectFile.Name), "{}");
-        Assert.Equal((ExitCode.InputError, "nt65: nt65.json exists already\n"), Run(root.FullName, "init"));
+        Assert.Equal((ExitCode.InputError, "nt65: nt65.json exists already\n"), Nt65.Run(root.FullName, "init"));
         Assert.Equal("{}", root.Read(ProjectFile.Name));
     }
 
@@ -83,9 +83,9 @@ public sealed class InitCommandTests : IDisposable
     {
         Assert.Equal(
             (ExitCode.UsageError, "nt65: `z80` is not a processor nt65 knows; `--cpu` takes 6502, 6502x, 65sc02, r65c02, 65c02 or 65816\nsee `nt65 --help`\n"),
-            Run(root.FullName, "init", "--cpu", "z80"));
-        Assert.Equal((ExitCode.UsageError, "nt65: `init` takes at most one directory\nsee `nt65 --help`\n"), Run(root.FullName, "init", "a", "b"));
-        Assert.Equal((ExitCode.UsageError, "nt65: `--force` is not an option\nsee `nt65 --help`\n"), Run(root.FullName, "init", "--force"));
+            Nt65.Run(root.FullName, "init", "--cpu", "z80"));
+        Assert.Equal((ExitCode.UsageError, "nt65: `init` takes at most one directory\nsee `nt65 --help`\n"), Nt65.Run(root.FullName, "init", "a", "b"));
+        Assert.Equal((ExitCode.UsageError, "nt65: `--force` is not an option\nsee `nt65 --help`\n"), Nt65.Run(root.FullName, "init", "--force"));
         Assert.Empty(Directory.GetFileSystemEntries(root.FullName));
     }
 
@@ -103,11 +103,11 @@ public sealed class InitCommandTests : IDisposable
         root.Write("build/stale.cfg", "MEMORY { M: start = 0, size = 1; } SEGMENTS { OLD: load = M; }");
         root.Write("notes.cfg", "[section]\nkey = value\n");
 
-        var (code, printed) = Run(root.FullName, "init");
+        var (code, printed) = Nt65.Run(root.FullName, "init");
 
         Assert.Equal((ExitCode.Success, "nt65.json\nsrc/main.nt65\nlinks c64.cfg\n"), (code, printed));
         Assert.Contains("\"links\": {\n    \"c64\": { \"config\": \"c64.cfg\" }\n  }", root.Read(ProjectFile.Name));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "build"));
     }
 
     /// <summary>
@@ -122,10 +122,10 @@ public sealed class InitCommandTests : IDisposable
             SEGMENTS { ZP: load = ZP, type = zp; KERNEL: load = ROM, type = ro; }
             """);
 
-        Assert.Equal(ExitCode.Success, Run(root.FullName, "init").Code);
+        Assert.Equal(ExitCode.Success, Nt65.Run(root.FullName, "init").Code);
 
         Assert.Contains(".segment KERNEL\n", root.Read("src/main.nt65"));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "build"));
     }
 
     /// <summary>
@@ -140,7 +140,7 @@ public sealed class InitCommandTests : IDisposable
         root.Write("cfg/apple soft.cfg", Config);
         root.Write("other/osi.cfg", Config);
 
-        var (code, printed) = Run(root.FullName, "init");
+        var (code, printed) = Nt65.Run(root.FullName, "init");
 
         Assert.Equal(
             (ExitCode.Success, "nt65.json\nsrc/main.nt65\n"
@@ -152,20 +152,11 @@ public sealed class InitCommandTests : IDisposable
         Assert.Empty(project.Diagnostics);
         Assert.Empty(project.Links);
         Assert.Equal(["apple-soft", "osi", "osi-2"], project.Configurations.Select(configuration => configuration.Name));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "build"));
         foreach (var configuration in project.Configurations)
         {
-            Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "build", "--config", configuration.Name));
+            Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "build", "--config", configuration.Name));
             Assert.True(File.Exists(Path.Combine(root.FullName, "build", configuration.Name, "main.s")));
         }
-    }
-
-    private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)
-    {
-        var output = new StringWriter { NewLine = "\n" };
-        var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(arguments, directory, output, error,
-            cancellation: TestTimeout.Token());
-        return (code, output.ToString() + error.ToString());
     }
 }

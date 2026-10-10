@@ -227,7 +227,11 @@ public sealed class WorkspaceRequestsTests
         Assert.Contains("```nt65\n.export .signature sys::std = a8\n```", hover.Contents.Value, StringComparison.Ordinal);
     }
 
-    /// <summary>Returns the next diagnostics published for one file, skipping those for other files.</summary>
+    /// <summary>
+    /// Returns the next diagnostics published for one file, skipping those for other files. It
+    /// gives up after eight, so that a test waiting for a publish that never comes fails with a
+    /// message rather than at the timeout.
+    /// </summary>
     private static async Task<PublishDiagnosticsParams> NextForAsync(
         TestClient client, string uri, CancellationToken cancellation)
     {

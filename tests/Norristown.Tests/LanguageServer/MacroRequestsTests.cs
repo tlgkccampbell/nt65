@@ -231,7 +231,7 @@ public sealed class MacroRequestsTests
 
     /// <summary>
     /// A member passed by its bare name is a use of the member, even where the caller has a name
-    /// of its own spelled the same. It is coloured, hovered and found as the member.
+    /// of its own spelled the same. It is colored, hovered and found as the member.
     /// </summary>
     [Fact]
     public async Task AMemberPassedByItsBareNameIsTheMember()
@@ -253,19 +253,11 @@ public sealed class MacroRequestsTests
         var data = await client.DefinitionAsync(Uri, Locate.At(Typed, "6, k|ick"), timeout);
         Assert.Equal(13, data?.Range.Start.Line);
 
-        var legend = client.Initialized.Capabilities.SemanticTokensProvider!.Legend;
-        var tokens = await client.SemanticTokensAsync(Uri, timeout);
-        var (line, character) = (0, 0);
-        var at = new Dictionary<(int, int), string>();
-        for (var i = 0; i < tokens.Data.Count; i += 5)
-        {
-            line += tokens.Data[i];
-            character = tokens.Data[i] == 0 ? character + tokens.Data[i + 1] : tokens.Data[i + 1];
-            at[(line, character)] = legend.TokenTypes[tokens.Data[i + 3]];
-        }
+        var at = DecodedTokens.TypesAt(
+            client.Initialized.Capabilities.SemanticTokensProvider!.Legend, await client.SemanticTokensAsync(Uri, timeout));
         Assert.Equal("enumMember", at[(15, 10)]);
 
-        // A word a condition compares a parameter with is coloured as a member of the set the
+        // A word a condition compares a parameter with is colored as a member of the set the
         // parameter's kind names.
         Assert.Equal("enumMember", at[(6, 22)]);
         Assert.Equal("enumMember", at[(6, 36)]);
@@ -308,8 +300,7 @@ public sealed class MacroRequestsTests
         Assert.NotNull(edit);
         Assert.Equal([2, 6], edit.Changes[Uri].Select(change => change.Range.Start.Line).Order());
 
-        var help = await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(Uri), Locate.At(Continued, "poke!($10, |1")), timeout);
+        var help = await client.SignatureHelpAsync(Uri, Locate.At(Continued, "poke!($10, |1"), timeout);
         Assert.Equal("poke!(address: operand, value: const(0..255) = (1 + 2))", help?.Signatures[0].Label);
     }
 

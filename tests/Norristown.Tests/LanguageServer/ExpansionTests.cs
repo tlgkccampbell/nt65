@@ -13,21 +13,11 @@ public sealed class ExpansionTests
 {
     /// <summary>The fixture that holds one of every kind of macro, read once for every test here.</summary>
     private static readonly Lazy<(ProgramAnalysis Analysis, Norristown.Semantics.SemanticModel Model)> Macros =
-        new(() =>
-        {
-            var text = Repo.ReadText(Repo.Path("tests", "fixtures", "macros", "main.nt65"));
-            var analysis = Analysis.Program(("main.nt65", text));
-            return (analysis, analysis.File("main.nt65"));
-        });
+        Fixture("macros");
 
     /// <summary>The fixture of repetitions inside macro bodies, read once for every test here.</summary>
     private static readonly Lazy<(ProgramAnalysis Analysis, Norristown.Semantics.SemanticModel Model)> Repetitions =
-        new(() =>
-        {
-            var text = Repo.ReadText(Repo.Path("tests", "fixtures", "macro-repetitions", "main.nt65"));
-            var analysis = Analysis.Program(("main.nt65", text));
-            return (analysis, analysis.File("main.nt65"));
-        });
+        Fixture("macro-repetitions");
 
     /// <summary>
     /// An expansion reads as the programmer would have written it, with an operand argument
@@ -235,6 +225,18 @@ public sealed class ExpansionTests
         }
         Assert.True(calls > 10, $"the fixture holds {calls} calls");
     }
+
+    /// <summary>
+    /// Returns the analysis of the fixture named <paramref name="name"/>, read the first time a
+    /// test asks for it.
+    /// </summary>
+    private static Lazy<(ProgramAnalysis Analysis, Norristown.Semantics.SemanticModel Model)> Fixture(string name) =>
+        new(() =>
+        {
+            var text = Repo.ReadText(Repo.Path("tests", "fixtures", name, "main.nt65"));
+            var analysis = Analysis.Program(("main.nt65", text));
+            return (analysis, analysis.File("main.nt65"));
+        });
 
     /// <summary>
     /// Returns a value indicating whether a call appears inside a macro body, where its arguments

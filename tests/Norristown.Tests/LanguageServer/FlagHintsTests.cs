@@ -25,8 +25,6 @@ public sealed class FlagHintsTests
     private const string Dispatch = ".export .proc main {\n    sec\n    lda table+1,x\n    pha\n    lda table,x\n    pha\n"
         + "    rts\n    .next table\nadd:\n    sec\n    sbc #1\n    sta $10\n    rts\nsub:\n    lda $11\n    sta $10\n    rts\n}\n";
 
-    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
-
     /// <summary>
     /// A <c>.next</c> that says a branch is always taken is not needed where the flags prove it,
     /// and the fix removes it.
@@ -551,10 +549,8 @@ public sealed class FlagHintsTests
 
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body, string cpu = "6502")
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Header(cpu) + body));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, document.Tree.Path);
+        var document = AnalyzedDocument.Of((Uri, Header(cpu) + body));
+        return (document.Analysis, document.Path);
     }
 
     private static string Header(string cpu) => $".module main\n.cpu {cpu}\n.segment CODE\n";

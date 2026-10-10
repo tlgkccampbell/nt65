@@ -19,8 +19,6 @@ public sealed class SuggestionsTests
 
     private const string Header = ".module main\n.cpu 65816\n.segment CODE\n";
 
-    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
-
     /// <summary>
     /// A suggestion is shown in the editor as a hint and offered as a fix, and the program's own
     /// diagnostics, which a build reports, do not include it.
@@ -54,7 +52,7 @@ public sealed class SuggestionsTests
             "`jsr helper` then `rts` can be `jmp helper`, which saves 9 cycles",
             Assert.Single(analysis.SuggestionsFor(path)).Message);
         var model = analysis.ModelFor(path)!;
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Jump with `jmp` as a tail call");
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), action => action.Title == "Jump with `jmp` as a tail call");
         Assert.Equal(
             Header + Body.Replace("jsr helper", "jmp helper", StringComparison.Ordinal),
             Editing.Apply(Header + Body, action.Edit!.Changes[Uri]));
@@ -136,7 +134,7 @@ public sealed class SuggestionsTests
         Assert.Equal(4, suggestion.Span.Line);
 
         var model = analysis.ModelFor(path)!;
-        var actions = CodeActions.In(analysis, model, Whole);
+        var actions = CodeActions.In(analysis, model, Locate.Whole);
         var data = Assert.Single(actions, action => action.Title == "Declare it as data with `.data`");
         var mmio = Assert.Single(actions, action => action.Title == "Declare it as a hardware register with `.mmio`");
         Assert.StartsWith(
@@ -181,9 +179,7 @@ public sealed class SuggestionsTests
 
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body)
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Header + body));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, document.Tree.Path);
+        var document = AnalyzedDocument.Of((Uri, Header + body));
+        return (document.Analysis, document.Path);
     }
 }

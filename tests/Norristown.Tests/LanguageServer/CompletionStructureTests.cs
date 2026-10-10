@@ -54,7 +54,7 @@ public sealed class CompletionStructureTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var items = await CompletionAsync(client, new Position(5, 0), timeout);
+        var items = await client.CompletionAsync(Uri, new Position(5, 0), timeout);
         Assert.Equal(".proc ${1:name}: ${2:std} {\n    $0\n}", InsertedText(items, ".proc"));
         Assert.Equal(".scope ${1:name} {\n    $0\n}", InsertedText(items, ".scope"));
         Assert.Equal(".func ${1:name}(${2:parameters}) = $0", InsertedText(items, ".func"));
@@ -64,7 +64,7 @@ public sealed class CompletionStructureTests
         Assert.Null(One(items, ".res").InsertTextFormat);
         Assert.Equal(".res", InsertedText(items, ".res"));
 
-        var inside = await CompletionAsync(client, Locate.At(Source, "rts", 2), timeout);
+        var inside = await client.CompletionAsync(Uri, Locate.At(Source, "rts", 2), timeout);
         Assert.Null(One(inside, "lda").InsertTextFormat);
         Assert.Equal("lda ", InsertedText(inside, "lda"));
     }
@@ -78,7 +78,7 @@ public sealed class CompletionStructureTests
         await client.OpenAsync(Uri, Source);
         await client.NextDiagnosticsAsync(Uri, timeout);
 
-        var items = await CompletionAsync(client, new Position(5, 0), timeout);
+        var items = await client.CompletionAsync(Uri, new Position(5, 0), timeout);
         Assert.Equal(".proc", InsertedText(items, ".proc"));
         Assert.Null(One(items, ".proc").InsertTextFormat);
     }
@@ -97,13 +97,13 @@ public sealed class CompletionStructureTests
 
         // Where a name goes, the labels of the routine the caret is in come first, then the
         // file's names, then the prefixes, such as `$`, that start a number not in decimal.
-        var named = await CompletionAsync(client, Locate.At(Source, "bne |@again"), timeout);
+        var named = await client.CompletionAsync(Uri, Locate.At(Source, "bne |@again"), timeout);
         var reached = (string label) => One(named, label).SortText!;
         Assert.True(string.CompareOrdinal(reached("@again"), reached("SCREEN")) < 0, "this routine's labels first");
         Assert.True(string.CompareOrdinal(reached("SCREEN"), reached("$")) < 0, "the file's names before the marks");
 
         // Where a statement goes, the language's directives come first and the instructions last.
-        var starting = await CompletionAsync(client, Locate.At(Source, "rts", 2), timeout);
+        var starting = await client.CompletionAsync(Uri, Locate.At(Source, "rts", 2), timeout);
         var order = (string label) => One(starting, label).SortText!;
         Assert.True(string.CompareOrdinal(order(".byte"), order("lda")) < 0, "the words before the instructions");
 
@@ -116,11 +116,6 @@ public sealed class CompletionStructureTests
 
     private static string InsertedText(IReadOnlyList<CompletionItem> items, string label) =>
         One(items, label).TextEdit.NewText;
-
-    private static Task<IReadOnlyList<CompletionItem>> CompletionAsync(
-        TestClient client, Position position, CancellationToken cancellation) =>
-        client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new { textDocument = new { uri = Uri }, position }, cancellation);
 
     private static Task<TestClient> OpenAsync(CancellationToken cancellation) =>
         TestClient.OpenedAsync(cancellation, (Uri, Source));

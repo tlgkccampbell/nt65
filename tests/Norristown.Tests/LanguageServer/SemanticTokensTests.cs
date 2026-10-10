@@ -8,7 +8,7 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests semantic tokens, which classify the names in a document by what they refer to. The
-/// client draws them over the TextMate grammar's colours.
+/// client draws them over the TextMate grammar's colors.
 /// </summary>
 public sealed class SemanticTokensTests
 {
@@ -67,17 +67,15 @@ public sealed class SemanticTokensTests
     /// <summary>
     /// Every name is classified by what it refers to, including a member spelled like a register,
     /// with its declarations marked and its constants read-only. Registers, mnemonics and
-    /// directives are not names, and are left to the grammar to colour.
+    /// directives are not names, and are left to the grammar to color.
     /// </summary>
     [Fact]
     public async Task EachNameIsClassifiedByWhatItRefersTo()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Source);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Source));
 
-        var tokens = Decode(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Source,
+        var tokens = DecodedTokens.Describe(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Source,
             await client.SemanticTokensAsync(Uri, timeout));
 
         Assert.Equal(
@@ -142,11 +140,9 @@ public sealed class SemanticTokensTests
             }
             """;
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
-        var tokens = Decode(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Text,
+        var tokens = DecodedTokens.Describe(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Text,
             await client.SemanticTokensAsync(Uri, timeout));
 
         Assert.Equal(
@@ -176,16 +172,14 @@ public sealed class SemanticTokensTests
     public async Task ALongFileIsAskedAboutAScreenfulAndAChangeAtATime()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Source);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Source));
         var legend = client.Initialized.Capabilities.SemanticTokensProvider!.Legend;
 
         // The `.enum` block and nothing above or below it.
         var part = await client.SemanticTokensRangeAsync(Uri, 6, 9, timeout);
         Assert.Equal(
             ["Joy enum declaration", "A enumMember declaration readonly", "X enumMember declaration readonly"],
-            Decode(legend, Source, part));
+            DecodedTokens.Describe(legend, Source, part));
         Assert.Null(part.ResultId);
 
         // A full answer carries a result id, and the delta against it is one edit to the numbers
@@ -208,24 +202,5 @@ public sealed class SemanticTokensTests
         var again = await client.RequestAsync<SemanticTokens>("textDocument/semanticTokens/full/delta",
             new { textDocument = new { uri = Uri }, previousResultId = "gone" }, timeout);
         Assert.NotEmpty(again.Data);
-    }
-
-    /// <summary>Returns each token as its text, its type and its modifiers.</summary>
-    internal static List<string> Decode(SemanticTokensLegend legend, string source, SemanticTokens tokens)
-    {
-        var lines = source.ReplaceLineEndings("\n").Split('\n');
-        var decoded = new List<string>();
-        var (line, character) = (0, 0);
-        for (var i = 0; i < tokens.Data.Count; i += 5)
-        {
-            line += tokens.Data[i];
-            character = tokens.Data[i] == 0 ? character + tokens.Data[i + 1] : tokens.Data[i + 1];
-            var modifiers = Enumerable.Range(0, legend.TokenModifiers.Count)
-                .Where(bit => (tokens.Data[i + 4] & (1 << bit)) != 0)
-                .Select(bit => legend.TokenModifiers[bit]);
-            decoded.Add(string.Join(' ',
-                [lines[line].Substring(character, tokens.Data[i + 2]), legend.TokenTypes[tokens.Data[i + 3]], .. modifiers]));
-        }
-        return decoded;
     }
 }

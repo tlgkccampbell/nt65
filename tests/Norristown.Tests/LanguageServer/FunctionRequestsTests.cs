@@ -1,11 +1,9 @@
-using Norristown.LanguageServer.Protocol;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests what an editor can do with a named argument. A named argument is a reference to the
 /// parameter it names, in a call to a <c>.func</c> and in a macro call alike, so going to the
-/// definition, finding every use, renaming and colouring all treat it as the parameter.
+/// definition, finding every use, renaming and coloring all treat it as the parameter.
 /// </summary>
 public sealed class FunctionRequestsTests
 {
@@ -80,23 +78,15 @@ public sealed class FunctionRequestsTests
         Assert.Equal([2, 3, 11], macro.Changes[MainUri].Select(change => change.Range.Start.Line).Order());
     }
 
-    /// <summary>A named argument is coloured as the parameter it names.</summary>
+    /// <summary>A named argument is colored as the parameter it names.</summary>
     [Fact]
     public async Task ANamedArgumentIsColouredAsAParameter()
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedCleanlyAsync(timeout, (LibUri, Lib), (MainUri, Main));
 
-        var legend = client.Initialized.Capabilities.SemanticTokensProvider!.Legend;
-        var tokens = await client.SemanticTokensAsync(MainUri, timeout);
-        var (line, character) = (0, 0);
-        var at = new Dictionary<(int, int), string>();
-        for (var i = 0; i < tokens.Data.Count; i += 5)
-        {
-            line += tokens.Data[i];
-            character = tokens.Data[i] == 0 ? character + tokens.Data[i + 1] : tokens.Data[i + 1];
-            at[(line, character)] = legend.TokenTypes[tokens.Data[i + 3]];
-        }
+        var at = DecodedTokens.TypesAt(
+            client.Initialized.Capabilities.SemanticTokensProvider!.Legend, await client.SemanticTokensAsync(MainUri, timeout));
         var call = Locate.At(Main, "3, |factor");
         Assert.Equal("parameter", at[(call.Line, call.Character)]);
         var continued = Locate.At(Main, "|factor = 6");
@@ -114,8 +104,7 @@ public sealed class FunctionRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedCleanlyAsync(timeout, (LibUri, Lib), (MainUri, Main));
 
-        var help = await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), Locate.At(Main, "factor = |4")), timeout);
+        var help = await client.SignatureHelpAsync(MainUri, Locate.At(Main, "factor = |4"), timeout);
         Assert.Equal("scaled(value, factor = 2)", help?.Signatures[0].Label);
         Assert.Equal(1, help?.ActiveParameter);
     }

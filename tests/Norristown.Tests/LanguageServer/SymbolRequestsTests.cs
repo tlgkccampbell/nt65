@@ -441,9 +441,7 @@ public sealed class SymbolRequestsTests
         const string Text =
             ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a16, i8, native {\n"
                 + "    php\n    lda #$1234\n    plp\n    rts\n}\n";
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
         var hover = await client.HoverAsync(Uri, Locate.At(Text, "l|da #$1234"), timeout);
         Assert.NotNull(hover);
@@ -485,9 +483,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestTimeout.Token();
         const string Text =
             ".module main\n.segment CODE\n.export .proc main {\n    lda #1\n    adc #2\n    sta $10\n    rts\n}\n";
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
         var load = await client.HoverAsync(Uri, Locate.At(Text, "lda #1"), timeout);
         var add = await client.HoverAsync(Uri, Locate.At(Text, "adc #2"), timeout);
@@ -565,9 +561,7 @@ public sealed class SymbolRequestsTests
         const string Text =
             ".module main\n.cpu 65816\n.segment CODE\n.export .proc p: a8, native -> a16, i8 {\n"
                 + "    .ensure a16, i8\n    rts\n}\n";
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
         var hover = await client.HoverAsync(Uri, Locate.At(Text, ".|ensure"), timeout);
         Assert.NotNull(hover);
@@ -693,9 +687,7 @@ public sealed class SymbolRequestsTests
         var timeout = TestTimeout.Token();
         const string Text =
             ".module main\n.const COUNT = 1\n.segment CODE\n.export .proc main {\n    lda #COUNT\n    rts\n}\n";
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Text);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Text));
 
         // Rename the declaration alone, and the use no longer resolves.
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(

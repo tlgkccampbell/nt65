@@ -77,13 +77,6 @@ public sealed class ExplainCommandTests
         Assert.Contains("nt65 explain [<diagnostic> | --markdown]", output, StringComparison.Ordinal);
     }
 
-    private static (ExitCode Code, string Output, string Problems) Run(params string[] arguments)
-    {
-        var output = new StringWriter { NewLine = "\n" };
-        var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(
-            arguments, Directory.GetCurrentDirectory(), output, error,
-            cancellation: TestTimeout.Token());
-        return (code, output.ToString(), error.ToString());
-    }
+    private static (ExitCode Code, string Output, string Problems) Run(params string[] arguments) =>
+        Nt65.Apart(Directory.GetCurrentDirectory(), false, arguments);
 }

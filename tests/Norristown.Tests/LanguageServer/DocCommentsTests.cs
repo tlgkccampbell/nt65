@@ -120,8 +120,7 @@ public sealed class DocCommentsTests
         var at = Locate.At(Source, "    jsr clear");
         var edited = Source.Replace("    jsr clear", "    lda cl\n    jsr clear", StringComparison.Ordinal);
         await client.ChangeAsync(Uri, 2, new TextDocumentContentChangeEvent(new Range(at, at), "    lda cl\n"));
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new { textDocument = new { uri = Uri }, position = Locate.At(edited, "lda cl|") }, timeout);
+        var items = await client.CompletionAsync(Uri, Locate.At(edited, "lda cl|"), timeout);
 
         // Nothing in the list carries prose; the one the caret lands on is resolved.
         Assert.All(items, item => Assert.Null(item.Documentation));

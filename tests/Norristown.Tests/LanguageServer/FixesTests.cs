@@ -2,9 +2,6 @@ using Norristown.LanguageServer;
 using Norristown.LanguageServer.Protocol;
 using Norristown.Semantics;
 
-// The protocol has a Range of its own, which is the one these tests mean.
-using Range = Norristown.LanguageServer.Protocol.Range;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -20,12 +17,6 @@ public sealed class FixesTests
 
     /// <summary>A body long enough that a branch over it cannot reach.</summary>
     private static readonly string Far = string.Concat(Enumerable.Repeat("    nop\n", 130));
-
-    /// <summary>
-    /// Gets a range covering the whole file, as a client sends when it asks for actions across all
-    /// of it.
-    /// </summary>
-    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     public static TheoryData<string, string, string> Fixes => new()
     {
@@ -292,7 +283,7 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + body);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == title);
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), action => action.Title == title);
 
         Assert.Equal("quickfix", action.Kind);
         Assert.Equal([Uri], action.Edit!.Changes.Keys);
@@ -313,7 +304,7 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + ".const SPARE = 1\n");
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole),
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole),
             action => action.Title == "Export `SPARE` from `main`");
 
         Assert.Equal(
@@ -333,13 +324,13 @@ public sealed class FixesTests
         var (analysis, model) = Analyzed(Header + Body);
 
         var unused = Assert.Single(analysis.Diagnostics, diagnostic => diagnostic.Id == "unused-symbol");
-        var titles = CodeActions.In(analysis, model, Whole).Select(action => action.Title).ToList();
+        var titles = CodeActions.In(analysis, model, Locate.Whole).Select(action => action.Title).ToList();
 
         Assert.Equal("`spare` is never used", unused.Message);
         Assert.Contains("Remove `spare`", titles);
         Assert.DoesNotContain(titles, title => title.StartsWith("Export", StringComparison.Ordinal));
         Assert.Equal(Header + ".segment BSS\n.repeat 2 {\n}\n",
-            Editing.Apply(Header + Body, CodeActions.In(analysis, model, Whole).Single(action => action.Title == "Remove `spare`").Edit!.Changes[Uri]));
+            Editing.Apply(Header + Body, CodeActions.In(analysis, model, Locate.Whole).Single(action => action.Title == "Remove `spare`").Edit!.Changes[Uri]));
     }
 
     /// <summary>
@@ -353,7 +344,7 @@ public sealed class FixesTests
         const string Body = ".proc other: a8, i8 -> ? {\n    rts\n}\n.export .proc main: a8, i8 {\n    jsr other\n    lda #1\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
-        var actions = CodeActions.In(analysis, model, Whole)
+        var actions = CodeActions.In(analysis, model, Locate.Whole)
             .Where(action => action.Title.StartsWith("Add `.ensure", StringComparison.Ordinal))
             .ToList();
 
@@ -378,7 +369,7 @@ public sealed class FixesTests
         const string Body = ".export .proc main: a8, i8, native {\n    lda #<@here\n@here:\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
-        var actions = CodeActions.In(analysis, model, Whole)
+        var actions = CodeActions.In(analysis, model, Locate.Whole)
             .Where(action => action.Title.StartsWith("Declare `@here`", StringComparison.Ordinal))
             .ToList();
 
@@ -406,7 +397,7 @@ public sealed class FixesTests
             + ".export .proc main: a8, i8, native {\n    jsr owner::inner\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + body);
 
-        var actions = CodeActions.In(analysis, model, Whole)
+        var actions = CodeActions.In(analysis, model, Locate.Whole)
             .Where(action => action.Title.StartsWith("Declare `inner`", StringComparison.Ordinal))
             .ToList();
 
@@ -427,7 +418,7 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8, native {\n    rep #$20\n    rts\n}\n");
 
-        var actions = CodeActions.In(analysis, model, Whole).Where(action => action.Kind == "quickfix").ToList();
+        var actions = CodeActions.In(analysis, model, Locate.Whole).Where(action => action.Kind == "quickfix").ToList();
 
         Assert.Equal(
             ["Add `.ensure a8`", "Declare that `main` returns with `a16`"],
@@ -451,7 +442,7 @@ public sealed class FixesTests
             + $".export .proc main: a8, i8 {{\n{store}    .patch @op\n@op:\n    and #1\n    rts\n}}\n");
 
         Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "patch-variants-required");
-        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.StartsWith("List the variant", StringComparison.Ordinal));
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Locate.Whole), action => action.Title.StartsWith("List the variant", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -464,12 +455,12 @@ public sealed class FixesTests
         const string Body = ".export .proc main: a16, i8 {\n    sta @op+1\n    .patch @op\n@op:\n    ldx #0\n@next:\n    inx\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Add `.patch @next`");
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), action => action.Title == "Add `.patch @next`");
 
         Assert.Equal(
             Header + ".export .proc main: a16, i8 {\n    sta @op+1\n    .patch @op\n    .patch @next\n@op:\n    ldx #0\n@next:\n    inx\n    rts\n}\n",
             Editing.Apply(Header + Body, action.Edit!.Changes[Uri]));
-        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.Contains("instead", StringComparison.Ordinal));
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Locate.Whole), action => action.Title.Contains("instead", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -486,7 +477,7 @@ public sealed class FixesTests
         var (analysis, model) = Analyzed(Header + body);
 
         Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "patch-misses-store");
-        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.Contains("`.patch", StringComparison.Ordinal));
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Locate.Whole), action => action.Title.Contains("`.patch", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -501,7 +492,7 @@ public sealed class FixesTests
             + ".proc helper: a16, i8 -> a8 {\n    sep #$20\n    rts\n}\n.export .proc main: a8, i8 {\n    beq helper\n    rts\n}\n");
 
         Assert.Contains(analysis.Diagnostics, diagnostic => diagnostic.Id == "call-state-mismatch");
-        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole), action => action.Title.StartsWith("Add `.ensure", StringComparison.Ordinal));
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Locate.Whole), action => action.Title.StartsWith("Add `.ensure", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -509,21 +500,17 @@ public sealed class FixesTests
     /// the <c>.use</c>.
     /// </summary>
     [Fact]
-    public async Task AUseItemNothingNamesIsOfferedForRemoval()
+    public void AUseItemNothingNamesIsOfferedForRemoval()
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n";
-        var workspace = new Workspace();
-        workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
-        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token());
-        var model = analysis.ModelFor(document.Tree.Path)!;
+        var document = AnalyzedDocument.Of(("file:///c:/work/gfx.nt65", Gfx), (Uri, Main));
 
-        var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
+        var brought = Assert.Single(document.Analysis.DiagnosticsFor(document.Path));
         Assert.Equal("`fill` is brought in by `.use` and never used", brought.Message);
         Assert.True(brought.IsUnnecessary);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
+        var action = Assert.Single(CodeActions.In(document.Analysis, document.Model, Locate.Whole), IsAFix);
         Assert.Equal("Remove the `.use` of `fill`", action.Title);
         Assert.Equal(
             ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n",
@@ -538,21 +525,17 @@ public sealed class FixesTests
     [InlineData(".use gfx::{\n    clear, fill\n}\n", ".use gfx::{\n    clear\n}\n")]
     [InlineData(".use gfx::{\n    clear\n    fill  ; spare\n}\n", ".use gfx::{\n    clear\n}\n")]
     [InlineData(".use gfx::{\n    fill\n}\n.use gfx::clear\n", ".use gfx::clear\n")]
-    public async Task AUseItemInABlockNothingNamesIsOfferedForRemoval(string uses, string kept)
+    public void AUseItemInABlockNothingNamesIsOfferedForRemoval(string uses, string kept)
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Rest = ".segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n";
         var main = ".module main\n" + uses + Rest;
-        var workspace = new Workspace();
-        workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, main));
-        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token());
-        var model = analysis.ModelFor(document.Tree.Path)!;
+        var document = AnalyzedDocument.Of(("file:///c:/work/gfx.nt65", Gfx), (Uri, main));
 
-        var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
+        var brought = Assert.Single(document.Analysis.DiagnosticsFor(document.Path));
         Assert.Equal("`fill` is brought in by `.use` and never used", brought.Message);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
+        var action = Assert.Single(CodeActions.In(document.Analysis, document.Model, Locate.Whole), IsAFix);
         Assert.Equal(".module main\n" + kept + Rest, Editing.Apply(main, action.Edit!.Changes[Uri]));
     }
 
@@ -572,7 +555,7 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + body);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == title);
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), action => action.Title == title);
 
         Assert.Equal("quickfix", action.Kind);
         Assert.Equal(Header + repaired, Editing.Apply(Header + body, action.Edit!.Changes[Uri]));
@@ -588,7 +571,7 @@ public sealed class FixesTests
         const string Body = ".export .proc main: a8, i8\n    rts\n}\n";
         var (analysis, model) = Analyzed(Header + Body);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Title == "Insert the missing `{`");
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), action => action.Title == "Insert the missing `{`");
 
         var repaired = Editing.Apply(Header + Body, action.Edit!.Changes[Uri]);
         var (after, _) = Analyzed(repaired);
@@ -605,7 +588,7 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\nlda:\n    bra lda\n}\n");
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), IsAFix);
 
         Assert.Equal("Rename `lda`…", action.Title);
         Assert.Empty(action.Edit!.Changes);
@@ -620,8 +603,8 @@ public sealed class FixesTests
     {
         var (analysis, model) = Analyzed(Header + ".export .proc main: a8, i8 {\n    jmp ($1234)\n}\n");
 
-        Assert.DoesNotContain(CodeActions.In(analysis, model, Whole, ["refactor"]), action => action.Kind == "quickfix");
-        Assert.NotEmpty(CodeActions.In(analysis, model, Whole, ["quickfix"]));
+        Assert.DoesNotContain(CodeActions.In(analysis, model, Locate.Whole, ["refactor"]), action => action.Kind == "quickfix");
+        Assert.NotEmpty(CodeActions.In(analysis, model, Locate.Whole, ["quickfix"]));
     }
 
     /// <summary>
@@ -633,9 +616,7 @@ public sealed class FixesTests
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string text)
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, analysis.ModelFor(document.Tree.Path)!);
+        var document = AnalyzedDocument.Of((Uri, text));
+        return (document.Analysis, document.Model);
     }
 }

@@ -57,8 +57,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -75,7 +74,7 @@ public sealed class CodeLensTests
                 // `stz` is not a 6502 instruction, so the line is left out of the assembled code,
                 // and a count of the rest would not be the routine's real cost. It gets no lens.
             ],
-            Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+            CostLines(lenses));
     }
 
     /// <summary>
@@ -167,8 +166,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -203,7 +201,7 @@ public sealed class CodeLensTests
                 "3 cycles, then never returns",
                 "9 cycles, 9+ with calls, excluding CHROUT, then never returns",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -230,8 +228,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -240,7 +237,7 @@ public sealed class CodeLensTests
                 // A zero-page `lda` costs 3 and the `jsr` 6, and nothing after the call is counted.
                 (7, "9 cycles, then never returns"),
             ],
-            Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+            CostLines(lenses));
     }
 
     /// <summary>
@@ -289,8 +286,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -307,7 +303,7 @@ public sealed class CodeLensTests
                 "8 cycles",
                 "10 cycles",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -335,8 +331,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
         var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc |copy"), timeout);
 
         Assert.Equal(
@@ -344,7 +339,7 @@ public sealed class CodeLensTests
                 "18 cycles, 18+ with calls, excluding move and CHROUT",
                 "not counted: a block move takes 7 cycles per byte, and moves one byte more than the 16-bit accumulator holds, which nt65 does not know here",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
         Assert.Contains(
             """
             cost       18 cycles, 18+ with calls
@@ -389,8 +384,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         const string Unknown = "not counted: a block move takes 7 cycles per byte, and moves one byte more than the "
             + "16-bit accumulator holds, which nt65 does not know here";
@@ -407,7 +401,7 @@ public sealed class CodeLensTests
                 // bytes is still not known.
                 Unknown,
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -433,15 +427,14 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
                 "not counted: a block move takes 7 cycles per byte, and moves one byte more than the 16-bit "
                     + "accumulator holds, which nt65 does not know here",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -465,10 +458,9 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
-        Assert.Equal(["12 cycles, 12+ with calls, excluding print"], Costs(lenses).Select(lens => lens.Command.Title));
+        Assert.Equal(["12 cycles, 12+ with calls, excluding print"], CostTitles(lenses));
     }
 
     /// <summary>
@@ -499,12 +491,11 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [(2, "13 cycles"), (4, "5 cycles"), (11, "6 cycles")],
-            Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+            CostLines(lenses));
     }
 
     /// <summary>
@@ -531,8 +522,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
         var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc decl|ared"), timeout);
 
         Assert.Equal(
@@ -576,8 +566,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             ["preserves A, X, Y, C, Z, N, V", "preserves Y, C, V", "preserves A, X, Y, C, V", "preserves ?"],
@@ -635,8 +624,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -680,8 +668,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         // Each clickable lens carries the edit, which inserts the item into the signature.
         string Clicked(int line, string title)
@@ -796,8 +783,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -836,7 +822,7 @@ public sealed class CodeLensTests
                 // 2 + 90 + 36 + 2 + 6 = 136 at most.
                 "117-136 cycles",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -882,8 +868,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -902,7 +887,7 @@ public sealed class CodeLensTests
                 // is `ldx $10` at 3, `jmp` at 3, the test at 2 + 2 and `rts` at 6.
                 "16+ cycles, loops",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -934,8 +919,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         Assert.Equal(
             [
@@ -948,7 +932,7 @@ public sealed class CodeLensTests
                 // 8-bit `ldx #0` adds 2 and `rts` 6.
                 "1287 cycles",
             ],
-            Costs(lenses).Select(lens => lens.Command.Title));
+            CostTitles(lenses));
     }
 
     /// <summary>
@@ -977,8 +961,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
 
         // The routine clobbers A and X; the block restores A, so the only register it clobbers is X.
         Assert.Equal(
@@ -1014,8 +997,7 @@ public sealed class CodeLensTests
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+        var lenses = await client.CodeLensesAsync(MainUri, timeout);
         var scope = await client.HoverAsync(MainUri, Locate.At(Source, ".s|cope"), timeout);
 
         Assert.Equal(
@@ -1033,4 +1015,12 @@ public sealed class CodeLensTests
     private static IEnumerable<CodeLens> Costs(IEnumerable<CodeLens> lenses) =>
         lenses.Where(lens => !lens.Command.Title.Contains("preserves", StringComparison.Ordinal)
             && !lens.Command.Title.StartsWith("reads ", StringComparison.Ordinal));
+
+    /// <summary>Returns the title of each lens that gives what a pass costs.</summary>
+    private static IEnumerable<string> CostTitles(IEnumerable<CodeLens> lenses) =>
+        Costs(lenses).Select(lens => lens.Command.Title);
+
+    /// <summary>Returns each lens that gives what a pass costs as the line it is above and its title.</summary>
+    private static IEnumerable<(int Line, string Title)> CostLines(IEnumerable<CodeLens> lenses) =>
+        Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title));
 }

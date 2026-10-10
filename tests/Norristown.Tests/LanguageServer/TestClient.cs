@@ -104,9 +104,7 @@ internal sealed class TestClient : IAsyncDisposable
         CancellationToken cancellation, params (string Uri, string Text)[] files)
     {
         var client = await StartAsync(cancellation);
-        foreach (var (uri, text) in files)
-            await client.OpenAsync(uri, text);
-        await client.NextDiagnosticsAsync(files[^1].Uri, cancellation);
+        await client.OpenAllAsync(files, cancellation);
         return client;
     }
 
@@ -119,9 +117,7 @@ internal sealed class TestClient : IAsyncDisposable
         CancellationToken cancellation, params (string Uri, string Text)[] files)
     {
         var client = await StartAsync(cancellation);
-        foreach (var (uri, text) in files)
-            await client.OpenAsync(uri, text);
-        Assert.Empty((await client.NextDiagnosticsAsync(files[^1].Uri, cancellation)).Diagnostics);
+        Assert.Empty((await client.OpenAllAsync(files, cancellation)).Diagnostics);
         return client;
     }
 
@@ -265,6 +261,26 @@ internal sealed class TestClient : IAsyncDisposable
                 new Range(new Position(first, 0), new Position(last, 0))),
             cancellation);
 
+    /// <summary>Requests the lenses shown above the document's lines.</summary>
+    public Task<IReadOnlyList<CodeLens>> CodeLensesAsync(string uri, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(uri)), cancellation);
+
+    /// <summary>Requests the code actions offered over <paramref name="range"/> of the document.</summary>
+    public Task<IReadOnlyList<CodeAction>> CodeActionsAsync(string uri, Range range, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
+            new CodeActionParams(new TextDocumentIdentifier(uri), range, new CodeActionContext([])), cancellation);
+
+    /// <summary>Requests the completions offered at a position in the document.</summary>
+    public Task<IReadOnlyList<CompletionItem>> CompletionAsync(string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
+
+    /// <summary>Requests the signature help for the call being typed at a position in the document.</summary>
+    public Task<SignatureHelp?> SignatureHelpAsync(string uri, Position position, CancellationToken cancellation) =>
+        rpc.InvokeWithParameterObjectAsync<SignatureHelp?>("textDocument/signatureHelp",
+            new TextDocumentPositionParams(new TextDocumentIdentifier(uri), position), cancellation);
+
     /// <summary>Resolves one completion item, which fills in the documentation of what the item is for.</summary>
     public Task<CompletionItem> ResolveAsync(CompletionItem item, CancellationToken cancellation) =>
         rpc.InvokeWithParameterObjectAsync<CompletionItem>("completionItem/resolve", item, cancellation);
@@ -371,6 +387,18 @@ internal sealed class TestClient : IAsyncDisposable
     /// continues asynchronously instead of on the caller's stack.
     /// </summary>
     private static async Task Yield(TimeSpan quiet) => await Task.Yield();
+
+    /// <summary>
+    /// Opens each of <paramref name="files"/> in order, and returns the diagnostics published for
+    /// the last of them.
+    /// </summary>
+    private async Task<PublishDiagnosticsParams> OpenAllAsync(
+        (string Uri, string Text)[] files, CancellationToken cancellation)
+    {
+        foreach (var (uri, text) in files)
+            await OpenAsync(uri, text);
+        return await NextDiagnosticsAsync(files[^1].Uri, cancellation);
+    }
 
     /// <summary>Collects the notifications and requests the server sends without being asked.</summary>
     private sealed class Notifications

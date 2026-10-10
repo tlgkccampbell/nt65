@@ -211,8 +211,8 @@ public sealed class CodeActionsTests
         Assert.True(client.Initialized.Capabilities.CodeActionProvider!.ResolveProvider);
         var caret = Locate.At(Main, "@lo|op:");
 
-        var whole = Assert.Single(await ActionsAsync(plain, MainUri, new Range(caret, caret), timeout), action => action.Title == Title);
-        var offered = Assert.Single(await ActionsAsync(client, MainUri, new Range(caret, caret), timeout), action => action.Title == Title);
+        var whole = Assert.Single(await plain.CodeActionsAsync(MainUri, new Range(caret, caret), timeout), action => action.Title == Title);
+        var offered = Assert.Single(await client.CodeActionsAsync(MainUri, new Range(caret, caret), timeout), action => action.Title == Title);
         Assert.Null(offered.Edit);
         Assert.NotNull(offered.Data);
 
@@ -235,12 +235,7 @@ public sealed class CodeActionsTests
         return Assert.Single(actions, action => action.Title == title);
     }
 
+    /// <summary>Requests the actions offered across the whole of the document.</summary>
     private static Task<IReadOnlyList<CodeAction>> ActionsAsync(TestClient client, string uri, CancellationToken timeout) =>
-        ActionsAsync(client, uri, new Range(new Position(0, 0), new Position(100, 0)), timeout);
-
-    private static Task<IReadOnlyList<CodeAction>> ActionsAsync(
-        TestClient client, string uri, Range range, CancellationToken timeout) =>
-        client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
-            new CodeActionParams(new TextDocumentIdentifier(uri), range, new CodeActionContext([])),
-            timeout);
+        client.CodeActionsAsync(uri, new Range(new Position(0, 0), new Position(100, 0)), timeout);
 }

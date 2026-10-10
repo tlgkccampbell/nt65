@@ -65,12 +65,7 @@ public sealed class ClientUriTests
 
         // Each fix offered on `rows`, which nothing uses, edits gfx under the name the client
         // gave it.
-        var fixes = await client.RequestAsync<IReadOnlyList<CodeAction>>("textDocument/codeAction",
-            new CodeActionParams(
-                new TextDocumentIdentifier(GfxUri),
-                Locate.Span(Gfx, "rows"),
-                new CodeActionContext([])),
-            timeout);
+        var fixes = await client.CodeActionsAsync(GfxUri, Locate.Span(Gfx, "rows"), timeout);
         Assert.NotEmpty(fixes);
         Assert.All(fixes, action =>
         {

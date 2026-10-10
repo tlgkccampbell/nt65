@@ -17,8 +17,8 @@ internal sealed class HeldAnalysis
     /// <summary>Gets a source that completes when the first analysis starts.</summary>
     public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>Gets a source that completes when any analysis is cancelled while it is held.</summary>
-    public TaskCompletionSource Cancelled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>Gets a source that completes when any analysis is canceled while it is held.</summary>
+    public TaskCompletionSource Canceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>Gets the number of analyses started.</summary>
     public int Calls => previous.Count;
@@ -39,7 +39,7 @@ internal sealed class HeldAnalysis
     {
         this.previous.Enqueue(previous);
         Started.TrySetResult();
-        using (cancellation.Register(() => Cancelled.TrySetResult()))
+        using (cancellation.Register(() => Canceled.TrySetResult()))
             released.Task.Wait(cancellation);
         return Compiler.AnalyzeUnsettled(files, project, binaryLength: null, previous, cancellation);
     }

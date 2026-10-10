@@ -17,7 +17,7 @@ public sealed class InlayHintsTests
     /// A 65816 file with a case of every kind in it. It has widths that change and widths that do
     /// not, an <c>.ensure</c> and a <c>.state</c> that already state the widths themselves,
     /// values a declaration leaves implied, a branch that cannot reach its target, and calls
-    /// whose arguments are and are not worth labelling with the parameter's name.
+    /// whose arguments are and are not worth labeling with the parameter's name.
     /// </summary>
     private const string Source = """
         .module main

@@ -160,12 +160,9 @@ public sealed class CompletionTests
         var (text, position) = WithLine(where, line);
         await using var client = await OpenAsync(text, timeout);
 
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+        var items = await client.CompletionAsync(MainUri, position, timeout);
 
-        var labels = items.Select(item => item.Label).ToHashSet();
-        Assert.All(offered, label => Assert.Contains(label, labels));
-        Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));
+        AssertOffers(items, offered, notOffered);
     }
 
     /// <summary>
@@ -181,8 +178,7 @@ public sealed class CompletionTests
         var (text, position) = WithLine(where, "    lda #|");
         await using var client = await OpenAsync(text, timeout);
 
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+        var items = await client.CompletionAsync(MainUri, position, timeout);
 
         Assert.Equal(
             SyntaxFacts.Builtins.Where(builtin => inMacro || !builtin.MacroOnly).Select(builtin => builtin.Name).Order(),
@@ -200,8 +196,7 @@ public sealed class CompletionTests
         var (text, position) = WithLine("body", "    poke!(val|");
         await using var client = await OpenAsync(text, timeout);
 
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+        var items = await client.CompletionAsync(MainUri, position, timeout);
 
         var value = Assert.Single(items, item => item.Label == "value");
         Assert.Equal(CompletionItemKind.Property, value.Kind);
@@ -221,8 +216,7 @@ public sealed class CompletionTests
         var (text, position) = WithLine("body", "|");
         await using var client = await OpenAsync(text, timeout);
 
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+        var items = await client.CompletionAsync(MainUri, position, timeout);
 
         var lda = Assert.Single(items, item => item.Label == "lda");
         Assert.Equal("lda ", lda.TextEdit.NewText);
@@ -255,9 +249,17 @@ public sealed class CompletionTests
             """.Replace("@line", line, StringComparison.Ordinal));
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, text));
 
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+        var items = await client.CompletionAsync(MainUri, position, timeout);
 
+        AssertOffers(items, offered, notOffered);
+    }
+
+    /// <summary>
+    /// Checks that <paramref name="items"/> offer every label in <paramref name="offered"/> and
+    /// none in <paramref name="notOffered"/>.
+    /// </summary>
+    private static void AssertOffers(IReadOnlyList<CompletionItem> items, string[] offered, string[] notOffered)
+    {
         var labels = items.Select(item => item.Label).ToHashSet();
         Assert.All(offered, label => Assert.Contains(label, labels));
         Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));
