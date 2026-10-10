@@ -81,7 +81,10 @@ public static class RegisterKeeps
         {
             keeping = entry;
             if (!entry.IsLabel)
-                return Narrow(found, entry.Key, Declared(regions[entry.Key].Routine, KeepsAnalysis.Of(walks[entry.Key], regions[entry.Key], Of, null)));
+            {
+                var region = regions[entry.Key];
+                return Narrow(found, entry.Key, Declared(region.Routine, KeepsAnalysis.Of(walks[entry.Key], region, Of, null)));
+            }
             var (owner, start) = labels[entry.Key];
             return Narrow(foundAt, entry.Key, KeepsAnalysis.Of(walks[owner], regions[owner], Of, null, start));
         });
