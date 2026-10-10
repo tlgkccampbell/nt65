@@ -66,6 +66,10 @@ internal readonly record struct MemoryAccess(
     public static MemoryAccess? Of(FileAnalysis file, Step step)
     {
         var (model, layout) = (file.Model, file.Layout);
+
+        // The instructions the bytes of a hidden path decode as have only numbers for operands,
+        // and a location is found from the symbols an operand names, so they reach none here. The
+        // memory views built on this are best effort, and they do not show a decoded store.
         if (step.Statement is not InstructionStatementSyntax statement)
             return null;
         var mnemonic = statement.MnemonicKind;
