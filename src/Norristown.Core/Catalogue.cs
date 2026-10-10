@@ -3084,11 +3084,12 @@ public static class Catalogue
         Area.ControlFlow,
         "code-label-as-data",
         Severity.Error,
-        "taking the address of `{0}` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `{1}`",
+        "taking the address of `{0}` lets code jump to it unseen: {1}",
         "Taking the address of an instruction, in a table, a `pea` or an immediate, means something may later jump "
             + "to it indirectly, where the analysis cannot follow. Declare the label an entry point with a "
             + "`.state` after it, or name it in a `.next` on the indirect jump in its own routine, so the analysis "
-            + "follows flow to it.");
+            + "follows flow to it. A `.label` inside an instruction can only be named in a `.next`, because the "
+            + "path from it starts inside the instruction's bytes, where no `.state` can stand.");
 
     internal static DiagnosticDescriptor SelfModifyingUnchecked { get; } = Entry(
         Area.ControlFlow,

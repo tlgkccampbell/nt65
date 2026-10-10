@@ -87,6 +87,9 @@ internal sealed class Requirements
     /// <summary>
     /// Returns whether a label stands on code. It does when the first thing after it, past any
     /// <c>.state</c> and through any labels that run straight into the next, is an instruction.
+    /// A <c>.label</c> inside an instruction stands on code too. Its block holds only the
+    /// <c>.label</c> itself, whose <see cref="HiddenPath"/> runs as the instructions its bytes
+    /// decode as.
     /// </summary>
     private static bool IsCode(IReadOnlyList<BasicBlock> blocks, int index)
     {
@@ -100,7 +103,7 @@ internal sealed class Requirements
                     .Select(step => step.Statement)
                     .FirstOrDefault(statement => statement is not StateDirectiveSyntax) is { } first)
             {
-                return first is InstructionStatementSyntax;
+                return first is InstructionStatementSyntax or LabelDirectiveSyntax;
             }
         }
         return false;
@@ -581,7 +584,18 @@ internal sealed class Requirements
                     continue;
                 if (labelled.Block.IsDeclared || named.Contains((labelled.Region.Routine, symbol)))
                     continue;
-                Report(name, step.On, Catalogue.CodeLabelAsData.Message(symbol.DisplayName, labelled.Region.Routine.DisplayName),
+
+                // The path from a `.label` inside an instruction starts inside the instruction's
+                // bytes, where no `.state` can stand, so only a `.next` is offered for it.
+                var routine = labelled.Region.Routine.DisplayName;
+                if (labelled.Block.Steps is [var first, ..] && layout.HiddenPathAt(first) is not null)
+                {
+                    Report(name, step.On, Catalogue.CodeLabelAsData.Message(
+                        symbol.DisplayName, $"name it in a `.next` in `{routine}`"));
+                    continue;
+                }
+                Report(name, step.On, Catalogue.CodeLabelAsData.Message(
+                        symbol.DisplayName, $"add a `.state` after the label, or name it in a `.next` in `{routine}`"),
                     new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
             }
         }
