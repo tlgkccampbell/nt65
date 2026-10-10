@@ -119,7 +119,7 @@ public sealed class RegisterKeepsTests
 
     /// <summary>
     /// A routine whose body is not in the program keeps exactly what its signature declares:
-    /// with no body to analyse, the declaration is the only source of that fact.
+    /// with no body to analyze, the declaration is the only source of that fact.
     /// </summary>
     [Fact]
     public void ARoutineWithNoBodyKeepsWhatItDeclares()
@@ -161,7 +161,7 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
-    /// A restore through memory is not recognised, because ruling out every other store that
+    /// A restore through memory is not recognized, because ruling out every other store that
     /// could have reached the saved byte would need addresses, which only the linker assigns.
     /// A `.state keeps` asserts the restore instead.
     /// </summary>

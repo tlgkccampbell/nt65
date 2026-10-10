@@ -10,6 +10,7 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 internal static class Analysis
 {
+    /// <summary>The path of the one file most tests analyze, whose module is <c>main</c>.</summary>
     public const string Path = "main.nt65";
 
     /// <summary>

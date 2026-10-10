@@ -15,7 +15,7 @@ namespace Norristown.Tests;
 /// The seed and the count are fixed. A suite that runs a different program on every build
 /// reports failures nobody can reproduce, and a long randomized run is for a person to start
 /// deliberately, not for the edit loop. The diagnostics are not checked, because a generated
-/// program has no single right diagnostic. The test asks only that analysing and emitting it do
+/// program has no single right diagnostic. The test asks only that analyzing and emitting it do
 /// not throw.
 /// </para>
 /// </summary>

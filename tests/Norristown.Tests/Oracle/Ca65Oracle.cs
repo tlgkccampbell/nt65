@@ -37,6 +37,11 @@ internal sealed partial class Ca65Oracle
     private readonly string linker;
     private readonly string? cacheDirectory;
 
+    /// <summary>
+    /// Wraps the ca65 at <paramref name="ca65Path"/>, which must report
+    /// <paramref name="pinnedCommit"/>, and caches clean results under
+    /// <paramref name="cacheDirectory"/>, or nowhere when that is null.
+    /// </summary>
     public Ca65Oracle(string ca65Path, string pinnedCommit, string? cacheDirectory)
     {
         if (!File.Exists(ca65Path))
@@ -288,6 +293,7 @@ internal sealed partial class Ca65Oracle
             seed.Append('\0').Append(name).Append('\0').Append(Hash(content));
     }
 
+    /// <summary>Writes <paramref name="text"/> to <paramref name="name"/> under <paramref name="root"/>, creating its folder.</summary>
     private static void WriteText(string root, string name, string text)
     {
         var path = Path.Combine(root, name);
@@ -295,6 +301,7 @@ internal sealed partial class Ca65Oracle
         File.WriteAllText(path, text);
     }
 
+    /// <summary>Writes <paramref name="content"/> to <paramref name="name"/> under <paramref name="root"/>, creating its folder.</summary>
     private static void WriteBytes(string root, string name, byte[] content)
     {
         var path = Path.Combine(root, name);
@@ -348,6 +355,10 @@ internal sealed partial class Ca65Oracle
         }
     }
 
+    /// <summary>
+    /// Runs <paramref name="exe"/> with <paramref name="arguments"/> in
+    /// <paramref name="workingDirectory"/>, and returns its exit code with everything it printed.
+    /// </summary>
     private static (int ExitCode, string Output) Execute(string exe, string[] arguments, string? workingDirectory)
     {
         var start = new ProcessStartInfo(exe)

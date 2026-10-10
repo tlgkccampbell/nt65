@@ -24,7 +24,7 @@ internal static class FixtureRunner
     public static IEnumerable<string> Run(FixtureCase fixture, bool update = false, bool thorough = false)
     {
         // The analysis from the first run is kept. The output preview of each source can then be
-        // checked against what the build wrote, and the macro calls inlined, without analysing
+        // checked against what the build wrote, and the macro calls inlined, without analyzing
         // the program again.
         ProgramAnalysis? analyzed = null;
         var failures = Run(
@@ -110,7 +110,7 @@ internal static class FixtureRunner
     /// <param name="project">The project settings the program is built with.</param>
     /// <param name="sources">The program's sources, as the analysis read them.</param>
     /// <param name="binaryLength">The length of a file an <c>.incbin</c> names.</param>
-    /// <param name="analysis">The program, already analysed.</param>
+    /// <param name="analysis">The program, already analyzed.</param>
     public static IEnumerable<string> Inlined(
         string name, ProjectSettings project, IReadOnlyList<SourceFile> sources,
         Func<string, long?> binaryLength, ProgramAnalysis analysis)

@@ -70,7 +70,7 @@ public sealed class AllowTests
     public void AnAllowIsRefused(string text, string problem) =>
         Assert.Contains(problem, Problems(text));
 
-    /// <summary>A misspelt name offers the nearest name, in quotes.</summary>
+    /// <summary>A misspelled name offers the nearest name, in quotes.</summary>
     [Fact]
     public void AMisspeltNameOffersTheNearest()
     {

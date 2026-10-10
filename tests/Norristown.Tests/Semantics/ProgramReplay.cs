@@ -245,6 +245,7 @@ internal sealed class ProgramReplay
     private readonly Dictionary<string, SyntaxTree> trees;
     private ProgramAnalysis analysis;
 
+    /// <summary>Parses and analyzes <see cref="Sources"/> as the program stands before any edit.</summary>
     public ProgramReplay()
     {
         trees = Sources.ToDictionary(

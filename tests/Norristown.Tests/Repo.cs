@@ -5,6 +5,7 @@ namespace Norristown.Tests;
 /// <summary>Provides paths inside the repository, found from the test binary's location.</summary>
 internal static class Repo
 {
+    /// <summary>The repository's root directory, which holds the solution file.</summary>
     public static readonly string Root = FindRoot();
 
     /// <summary>
@@ -41,6 +42,7 @@ internal static class Repo
         Assert.NotEmpty(items);
     }
 
+    /// <summary>Returns the full path of the file or folder at <paramref name="parts"/> under the root.</summary>
     public static string Path(params string[] parts) => System.IO.Path.Combine([Root, .. parts]);
 
     /// <summary>Reads a file as the compiler sees it, as UTF-8 with <c>\r\n</c> left in place.</summary>
