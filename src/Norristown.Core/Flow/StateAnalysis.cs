@@ -67,7 +67,7 @@ public sealed class StateAnalysis : IProcessorStates
         this.effects = effects;
         this.signatures = signatures;
         checks = new StateChecks(model, layout, ranges, SignatureOf, signatures);
-        outside = new OutsideEntries(model, layout);
+        outside = new OutsideEntries(model, layout, flow);
     }
 
     /// <summary>Gets what is wrong with the widths, the mode and the calls in this file.</summary>
@@ -1005,7 +1005,7 @@ public sealed class StateAnalysis : IProcessorStates
             report.CheckCallTarget(step, mnemonic, target);
         }
         if (report is not null && next is not null)
-            CheckNamed(step, next, state, routine, report);
+            CheckNamed(step, next, state, routine, report, target);
 
         // A `.next .return` goes back to the caller, so the state there is checked as a return's.
         if (report is not null && next?.ReturnToken is not null && end == BlockEnd.Return
@@ -1098,15 +1098,32 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>
     /// Checks each place a <c>.next</c> names as a jump from here. A jump to a routine's start is
     /// checked as a tail call, and a jump to a label inside another routine as a jump into it.
+    /// Such a label is an entry point whether the <c>.next</c> names it directly or through a
+    /// table, so it needs a <c>.state</c>, and the jump is checked against what it declares, as a
+    /// <c>jmp</c> to the label is. <paramref name="operand"/> is the label the statement's own
+    /// operand names, which has been checked already.
     /// </summary>
-    private void CheckNamed(Step step, NextDirectiveSyntax next, FlowState state, Symbol routine, StateChecks report)
+    private void CheckNamed(
+        Step step, NextDirectiveSyntax next, FlowState state, Symbol routine, StateChecks report, Symbol? operand = null)
     {
         foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
         {
             if (named.Signature is not null && SignatureOf(named) is { } signature)
                 TailCalled(step, ".next", MnemonicKind.None, named, signature, state, routine, report);
             else if (Interior(named, routine) is { } inside)
+            {
+                if (named != operand)
+                {
+                    if (named.StateDeclaration is null)
+                    {
+                        report.Report(step, Catalogue.EntryNotDeclared.Message(named.DisplayName, inside.DisplayName),
+                            new DiagnosticFix(FixKind.State, At: named.DeclarationSpan));
+                    }
+                    if (DeclaredElsewhere(named) is { } declared)
+                        report.CheckEntry(step, $"`.next {named.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
+                }
                 JumpedInto(step, ".next", named, inside, state, routine, report);
+            }
         }
     }
 

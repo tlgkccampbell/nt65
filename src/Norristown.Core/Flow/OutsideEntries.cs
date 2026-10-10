@@ -9,8 +9,10 @@ namespace Norristown.Flow;
 /// Finds which of a file's labels control may reach from outside the routine's own paths.
 /// Another module may jump to an exported label, this file may name a label from another
 /// routine, and a call to a label enters it from wherever the call is made, even inside the same
-/// routine. The analysis treats an instance of the same <see cref="Family"/> as part of the same
-/// routine, so a jump from one is not from outside.
+/// routine. A label that a list or a table names is reached from outside unless only the jumps
+/// of its own routine dispatch through that table, as <see cref="DispatchTables"/> decides for
+/// the flag analysis too. The analysis treats an instance of the same <see cref="Family"/> as
+/// part of the same routine, so a jump from one is not from outside.
 /// <para>
 /// The labels this file names from other routines are worked out the first time any label is
 /// asked about, and kept, because the set is the same for every routine in the file.
@@ -20,6 +22,7 @@ public sealed class OutsideEntries
 {
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
+    private readonly ControlFlow flow;
 
     // The labels this file names from a routine other than the one they are in, worked out the
     // first time any label is asked about and kept for later questions.
@@ -27,12 +30,14 @@ public sealed class OutsideEntries
 
     /// <summary>
     /// Initializes a new instance for the file that <paramref name="layout"/> laid out, as
-    /// <paramref name="model"/> bound it.
+    /// <paramref name="model"/> bound it, with the annotations that <paramref name="flow"/> found
+    /// under its statements.
     /// </summary>
-    public OutsideEntries(SemanticModel model, CodeLayout layout)
+    public OutsideEntries(SemanticModel model, CodeLayout layout, ControlFlow flow)
     {
         this.model = model;
         this.layout = layout;
+        this.flow = flow;
     }
 
     /// <summary>
@@ -67,7 +72,9 @@ public sealed class OutsideEntries
     /// Returns every label this file names from a routine other than the one the label is in,
     /// whether as the target of a jump into that routine or anywhere else in an operand, and every
     /// label this file calls. A call enters the label with whatever state the caller has, so the
-    /// label is an entry point even when its own routine makes the call.
+    /// label is an entry point even when its own routine makes the call. It also returns every
+    /// label that a <c>.next</c> reaches through a list or a table, unless only the label's own
+    /// routine dispatches through it.
     /// </summary>
     private HashSet<Symbol> Named()
     {
@@ -87,6 +94,85 @@ public sealed class OutsideEntries
                 }
             }
         }
+        AddDispatched(found);
         return found;
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="found"/> each label that a <c>.next</c> under a call names, and
+    /// each label that a <c>.next</c> reaches through a list or a table that
+    /// <see cref="DispatchTables.IsDispatchedOnlyBy"/> does not find only the label's own routine
+    /// dispatching through. A call enters the labels with the caller's state, and another
+    /// routine's jump with that routine's, so either reaches them from outside.
+    /// </summary>
+    private void AddDispatched(HashSet<Symbol> found)
+    {
+        var targets = new NextTargets(model, layout.Steps);
+        var tables = new DispatchTables(model, targets);
+        var own = OwnSpans();
+        var judged = new Dictionary<(Symbol Table, Symbol Routine), bool>();
+        foreach (var step in layout.Steps)
+        {
+            if (step.Routine is null)
+                continue;
+            var calls = ControlFlow.IsCall(step.Statement) || flow.RelativeCallAt(step) is not null;
+            foreach (var next in flow.AnnotationsOf(step).OfType<NextDirectiveSyntax>())
+            {
+                foreach (var name in next.Targets)
+                {
+                    if (calls)
+                    {
+                        found.UnionWith(targets.NamedBy(name, step.On).Select(each => each.Symbol)
+                            .Where(symbol => symbol is { Kind: SymbolKind.Label, Routine: not null }));
+                        continue;
+                    }
+                    if (Targets.Of(model, name, step.On)?.Symbol is not { } table)
+                        continue;
+                    foreach (var (symbol, _) in targets.Spread(table, step.On))
+                    {
+                        if (symbol is not { Kind: SymbolKind.Label, Routine: { } owner })
+                            continue;
+                        if (!judged.TryGetValue((table, owner), out var only))
+                        {
+                            only = tables.IsDispatchedOnlyBy(table, step.On, span => own.Any(each =>
+                                (each.Key == owner || each.Key.IsSiblingOf(owner)) && each.Value.Contains(span)));
+                            judged[(table, owner)] = only;
+                        }
+                        if (!only)
+                            found.Add(symbol);
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the spans of the tokens in each routine's jumps, and in the <c>.next</c>
+    /// annotations under its statements other than calls, keyed by the routine. A name there is
+    /// how the routine itself dispatches through a table.
+    /// </summary>
+    private Dictionary<Symbol, HashSet<TextSpan>> OwnSpans()
+    {
+        var spans = new Dictionary<Symbol, HashSet<TextSpan>>();
+        foreach (var step in layout.Steps)
+        {
+            if (step.Routine is not { } routine)
+                continue;
+            var nodes = new List<SyntaxNode>();
+            if (step.Statement is InstructionStatementSyntax instruction
+                && Instructions.IsControlTransfer(instruction.MnemonicKind) && !Instructions.IsCall(instruction.MnemonicKind))
+            {
+                nodes.Add(instruction);
+            }
+            if (!ControlFlow.IsCall(step.Statement) && flow.RelativeCallAt(step) is null)
+                nodes.AddRange(flow.AnnotationsOf(step).OfType<NextDirectiveSyntax>());
+            foreach (var node in nodes.Where(node => node.Tree == model.Tree))
+            {
+                if (!spans.TryGetValue(routine, out var own))
+                    spans[routine] = own = [];
+                own.UnionWith(node.DescendantTokens().Select(token => token.Span));
+            }
+        }
+        return spans;
     }
 }

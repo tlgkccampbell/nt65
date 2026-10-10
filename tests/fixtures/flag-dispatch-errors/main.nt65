@@ -5,7 +5,7 @@
 
 .cpu 6502
 
-.export cleared, shared, needs_carry, shared_table
+.export cleared, shared, needs_carry, shared_table, taken, takes_too
 
 .segment CODE
 
@@ -36,6 +36,30 @@
     jmp needs_carry     ;! error[call-flag-mismatch]: `needs_carry` needs `c = 1`, but C is not known here
 }
 
+; Another routine's `.next` spreads the same table, so the entry is entered with C unknown even
+; though this routine's dispatch sets it.
+.proc taken {
+    sec
+    lda taken_table+1,x
+    pha
+    lda taken_table,x
+    pha
+    rts
+    .next taken_table
+    first:
+    jmp needs_carry     ;! error[call-flag-mismatch]: `needs_carry` needs `c = 1`, but C is not known here
+}
+
+.proc takes_too {
+    clc
+    lda taken_table+1,x
+    pha
+    lda taken_table,x
+    pha
+    rts
+    .next taken_table
+}
+
 .proc needs_carry: c = 1 {
     rts
 }
@@ -43,3 +67,4 @@
 .segment RODATA
 .data cleared_table: .addr cleared::first - 1
 .data shared_table:  .addr shared::first - 1
+.data taken_table:   .addr taken::first - 1

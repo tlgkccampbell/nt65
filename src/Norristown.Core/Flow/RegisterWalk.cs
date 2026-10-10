@@ -32,7 +32,7 @@ internal sealed class RegisterWalk
         this.layout = layout;
         this.flow = flow;
         this.states = states;
-        outside = new OutsideEntries(model, layout);
+        outside = new OutsideEntries(model, layout, flow);
         Held = new RegisterStates(model.Tree);
         Effects = flow.Effects;
     }
