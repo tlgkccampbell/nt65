@@ -214,8 +214,9 @@ public sealed class BasicBlock
 
     internal void Reach(int to, EdgeKind kind)
     {
-        if (!successors.Contains(new FlowEdge(to, kind)))
-            successors.Add(new FlowEdge(to, kind));
+        var edge = new FlowEdge(to, kind);
+        if (!successors.Contains(edge))
+            successors.Add(edge);
     }
 
     /// <summary>

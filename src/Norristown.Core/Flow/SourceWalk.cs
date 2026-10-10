@@ -75,8 +75,9 @@ internal sealed class SourceWalk
     /// <summary>
     /// Returns what reaches each block of <paramref name="region"/> from the routine's own entry, or
     /// null for a block nothing reaches. A label that a <c>.state</c> declares, or that can be
-    /// entered from outside the routine, is treated as the <see cref="RegisterWalk"/> treats it. Where no path from the entry reaches it, everything is
-    /// unknown there, with the label as the blocker.
+    /// entered from outside the routine, is treated as the <see cref="RegisterWalk"/> treats it.
+    /// Where no path from the entry reaches it, everything is unknown there, with the label as the
+    /// blocker.
     /// </summary>
     public SourceState?[] Solve(FlowRegion region)
     {
@@ -88,21 +89,10 @@ internal sealed class SourceWalk
         var signature = region.Routine.Signature ?? Signature.Default;
         var called = SourceStack.Entered(signature.ReturnSize, signature.Pulls);
         solver.Enter(0, SourceState.Entered.WithStack(called));
-        foreach (var block in blocks)
-        {
-            if (!block.IsDeclared && !outside.Reaches(block))
-                continue;
-            var here = solver.Reached[block.Index];
-            SourceState state;
-            if (here is null)
-                state = SourceState.Unknown(block.Steps[0].Key, called);
-            else if (outside.Reaches(block))
-                state = here.WithStack(SourceStack.Merge(here.Stack, called));
-            else
-                continue;
-            if (!state.Equals(here))
-                solver.Enter(block.Index, state);
-        }
+        solver.EnterEntries(
+            outside, declaredOnly: false,
+            block => SourceState.Unknown(block.Steps[0].Key, called),
+            (_, here) => here.WithStack(SourceStack.Merge(here.Stack, called)));
         return solver.Reached;
     }
 

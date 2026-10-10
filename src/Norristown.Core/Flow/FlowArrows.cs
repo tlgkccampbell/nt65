@@ -54,7 +54,7 @@ public sealed record FlowArrows(TextSpan Routine, IReadOnlyList<FlowArrow> Arrow
             var proved = flags.ProvedAt(end) is not null;
             foreach (var edge in block.Successors)
             {
-                if (edge.Kind is EdgeKind.Taken or EdgeKind.Declared && LineOf(tree, found.Blocks[edge.To]) is { } to)
+                if (edge.Kind is (EdgeKind.Taken or EdgeKind.Declared) && LineOf(tree, found.Blocks[edge.To]) is { } to)
                     Add(from, to, edge.Kind == EdgeKind.Declared);
             }
 

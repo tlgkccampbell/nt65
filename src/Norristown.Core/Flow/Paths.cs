@@ -87,14 +87,11 @@ internal static class Paths
     }
 
     /// <summary>
-    /// Returns the blocks a path may run after this one, ignoring call edges, edges out of the
-    /// region, and the back edge of a counted loop.
+    /// Returns the blocks a path may run after this one, which are the blocks that
+    /// <see cref="Edges"/> reaches.
     /// </summary>
     private static IEnumerable<int> Onward(BasicBlock block, Func<int, bool> inside) =>
-        block.Successors
-            .Where(edge => edge.Kind != EdgeKind.Call && inside(edge.To) && edge.To != block.Repeats)
-            .Select(edge => edge.To)
-            .Distinct();
+        Edges(block, inside).Select(edge => edge.To).Distinct();
 
     /// <summary>
     /// Returns whether a path that reaches a block may end there, because nothing follows it, what
@@ -126,8 +123,8 @@ internal static class Paths
 
     /// <summary>
     /// Returns the edges a path may follow from a block, as the block reached and whether the
-    /// block's branch is taken to reach it. The edges left out are those <see cref="Onward"/>
-    /// leaves out.
+    /// block's branch is taken to reach it. Call edges, edges out of the region and the back edge
+    /// of a counted loop are left out.
     /// </summary>
     private static IEnumerable<(int To, bool Taken)> Edges(BasicBlock block, Func<int, bool> inside) =>
         block.Successors
