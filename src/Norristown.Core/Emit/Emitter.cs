@@ -947,12 +947,12 @@ public sealed class Emitter
             statements.Walk(line, rest);
             return;
         }
-        var bytes = rest is null ? 0 : layout.Of(rest, context.Expansion)?.Length ?? 0;
-        if (rest is not null)
-            WriteWidthDirective(rest);
+        var bytes = 0;
         var rewriter = new TokenRewriter();
         if (rest is not null)
         {
+            bytes = layout.Of(rest, context.Expansion)?.Length ?? 0;
+            WriteWidthDirective(rest);
             expressions.Substitute(rest, rewriter);
             expressions.ReplaceFrameSlot(rest, rewriter);
             expressions.Direct(rest, rewriter);
