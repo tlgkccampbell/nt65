@@ -310,19 +310,23 @@ public sealed class StackEffects
                 return height;
 
             // The bytes from a position inside an instruction move nothing on the stack, but where
-            // they end in a return, it is checked as one written there would be.
-            if (walk.Layout.HiddenPathAt(step)?.Return is { } hidden)
+            // they end in a return, it is checked as one written there would be. A copy of the
+            // stack pointer is not followed through them.
+            if (walk.Layout.HiddenPathAt(step) is { } path)
             {
-                if (report is not null)
+                height = height with { Pointing = Registers.None, Pointed = null };
+                if (path.Return is { } hidden && report is not null)
                     CheckReturn(walk.Model.Tree, step, hidden.Mnemonic, height, entry, report);
                 continue;
             }
             if (step.Statement is not InstructionStatementSyntax statement)
                 continue;
+            var mnemonic = statement.MnemonicKind;
+            var before = height;
+            height = Copied(walk, step, mnemonic, height);
 
             // A call pushes the return address its routine's return pulls, which the routine's
             // effect accounts for, and a return or an interrupt is where the path leaves.
-            var mnemonic = statement.MnemonicKind;
             if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is null && report is not null)
                 CheckReturn(walk.Model.Tree, step, mnemonic, height, entry, report);
 
@@ -339,7 +343,18 @@ public sealed class StackEffects
                 continue;
             }
             if (RegisterEffects.SetsStackPointer(mnemonic))
-                return Height.Unknown;
+            {
+                // Moving the stack pointer back to a copy taken with only pushes since drops those
+                // pushes, and any other move leaves the height unknown.
+                if (StackPointerCopies.MovedBack(
+                    mnemonic, walk.Cpu, walk.Wide(step, index: true), before.Pointing, before.Pointed, before,
+                    (now, copy) => now.IsKnown && copy.IsKnown) is not { } back)
+                {
+                    return Height.Unknown;
+                }
+                height = back with { Pointing = height.Pointing, Pointed = height.Pointed };
+                continue;
+            }
             var facts = Instructions.Facts(mnemonic);
             if (facts.Pushes is { } push)
                 height = height.Moved(push, walk.Width(step, push), 1);
@@ -361,6 +376,28 @@ public sealed class StackEffects
             : effect.Kind == StackEffectKind.Unknown ? Height.Unknown
             : effect.Bytes > 0 ? height with { Whole = height.Whole + effect.Bytes }
             : (height with { Whole = height.Whole + effect.Bytes }).Lowered();
+    }
+
+    /// <summary>
+    /// Returns <paramref name="height"/> with the registers that hold the stack pointer after
+    /// <paramref name="step"/>'s instruction, which runs as <paramref name="mnemonic"/>, and the
+    /// height their copy was taken at. <see cref="StackWrites.Pointing"/> and
+    /// <see cref="StackPointerCopies"/> work them out. An instruction a store may turn into another
+    /// drops the copy.
+    /// </summary>
+    private static Height Copied(RegisterWalk walk, Layout.Step step, MnemonicKind mnemonic, Height height)
+    {
+        var mode = walk.Layout.Of(step.Statement, step.On)?.Mode;
+        var immediate = StepOperands.Immediate(walk.Model, walk.Layout, step);
+        var pointing = StackWrites.Pointing(mnemonic, mode, immediate, height.Pointing);
+        var variants = walk.VariantsOf(step);
+        foreach (var variant in variants)
+            pointing &= StackWrites.Pointing(variant, mode, immediate, height.Pointing);
+        var pointed = variants.Count > 0 ? null
+            : StackPointerCopies.Copied(
+                mnemonic, walk.Cpu, walk.Wide(step, index: true), pointing, height.Pointed,
+                height with { Pointing = Registers.None, Pointed = null });
+        return height with { Pointing = pointing, Pointed = pointed };
     }
 
     /// <summary>
@@ -506,9 +543,17 @@ public sealed class StackEffects
     /// The highest the lowest point of any one path here may be, or null where that is not known.
     /// Where it is above the return address, a path may still hold bytes it was handed.
     /// </param>
+    /// <param name="Pointing">
+    /// The registers among A, X and Y that hold the stack pointer, as X does after <c>tsx</c>.
+    /// </param>
+    /// <param name="Pointed">
+    /// The height where the registers in <paramref name="Pointing"/> copied the stack pointer, or
+    /// null where that cannot be relied on. <see cref="StackPointerCopies"/> says when a
+    /// <c>txs</c> or <c>tcs</c> moves the stack back to it.
+    /// </param>
     private sealed record Height(
         int Whole, int Accumulator, int Index, bool IsKnown, int? Lowest, int Return, bool AtLeast = false, int Handed = 0,
-        int? Spread = 0, int? Highest = null)
+        int? Spread = 0, int? Highest = null, Registers Pointing = Registers.None, Height? Pointed = null)
     {
         // The most bytes one path may hold above another before the difference is taken to be
         // unknown. A loop that pushes on every pass would otherwise widen it without end, and no
@@ -558,14 +603,28 @@ public sealed class StackEffects
                 return arriving;
             var lowest = Lower(known.Lowest, arriving.Lowest);
             var highest = known.Highest is { } x && arriving.Highest is { } y ? Math.Max(x, y) : (int?)null;
-            if (known with { Lowest = arriving.Lowest, Highest = arriving.Highest } == arriving)
-                return arriving with { Lowest = lowest, Highest = highest };
+            var pointing = known.Pointing & arriving.Pointing;
+            var pointed = Equals(known.Pointed, arriving.Pointed) ? known.Pointed : null;
+            if (known with { Lowest = arriving.Lowest, Highest = arriving.Highest, Pointing = pointing, Pointed = pointed }
+                == arriving with { Pointing = pointing, Pointed = pointed })
+            {
+                return arriving with { Lowest = lowest, Highest = highest, Pointing = pointing, Pointed = pointed };
+            }
             if (known is { Least: { } before, KeepsTheReturn: true } && arriving is { Least: { } now, KeepsTheReturn: true })
             {
                 var whole = Math.Min(before, now);
                 var most = known.Most is { } a && arriving.Most is { } b ? Math.Max(a, b) : (int?)null;
                 var spread = most - whole <= MostSpread ? most - whole : null;
-                return arriving with { Whole = whole, Lowest = lowest, AtLeast = true, Spread = spread, Highest = highest };
+                return arriving with
+                {
+                    Whole = whole,
+                    Lowest = lowest,
+                    AtLeast = true,
+                    Spread = spread,
+                    Highest = highest,
+                    Pointing = pointing,
+                    Pointed = pointed,
+                };
             }
             return Unknown;
         }

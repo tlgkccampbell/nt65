@@ -13,10 +13,13 @@ internal sealed class SourceState : IEquatable<SourceState>
 
     private readonly ImmutableArray<SourceValue> values;
 
-    private SourceState(ImmutableArray<SourceValue> values, SourceStack? stack)
+    private SourceState(
+        ImmutableArray<SourceValue> values, SourceStack? stack, Registers pointing = Registers.None, SourceStack? pointed = null)
     {
         this.values = values;
         Stack = stack;
+        Pointing = pointing;
+        Pointed = pointed;
     }
 
     /// <summary>
@@ -36,6 +39,19 @@ internal sealed class SourceState : IEquatable<SourceState>
 
     /// <summary>Gets what the routine has pushed, or null where that is not known.</summary>
     public SourceStack? Stack { get; }
+
+    /// <summary>
+    /// Gets the registers among A, X and Y that hold the stack pointer, as X does after
+    /// <c>tsx</c>.
+    /// </summary>
+    public Registers Pointing { get; }
+
+    /// <summary>
+    /// Gets the stack as it was where the registers in <see cref="Pointing"/> copied the stack
+    /// pointer, or null where that cannot be relied on. <see cref="StackPointerCopies"/> says when
+    /// a <c>txs</c> or <c>tcs</c> moves the stack back to it.
+    /// </summary>
+    public SourceStack? Pointed { get; }
 
     /// <summary>
     /// Returns the state at a point the analysis lost track of every value at, such as a label that
@@ -58,7 +74,9 @@ internal sealed class SourceState : IEquatable<SourceState>
         var merged = ImmutableArray.CreateBuilder<SourceValue>(Count);
         for (var i = 0; i < Count; i++)
             merged.Add(SourceValue.Merge(known.values[i], arriving.values[i]));
-        return new SourceState(merged.MoveToImmutable(), SourceStack.Merge(known.Stack, arriving.Stack));
+        return new SourceState(
+            merged.MoveToImmutable(), SourceStack.Merge(known.Stack, arriving.Stack), known.Pointing & arriving.Pointing,
+            Equals(known.Pointed, arriving.Pointed) ? known.Pointed : null);
     }
 
     /// <summary>
@@ -104,7 +122,7 @@ internal sealed class SourceState : IEquatable<SourceState>
     /// Returns this state with <paramref name="tracked"/> set where <paramref name="value"/> says.
     /// </summary>
     public SourceState With(Tracked tracked, SourceValue value) =>
-        ReferenceEquals(values[(int)tracked], value) ? this : new(values.SetItem((int)tracked, value), Stack);
+        ReferenceEquals(values[(int)tracked], value) ? this : new(values.SetItem((int)tracked, value), Stack, Pointing, Pointed);
 
     /// <summary>
     /// Returns this state with <paramref name="register"/> set where <paramref name="value"/> says.
@@ -116,13 +134,21 @@ internal sealed class SourceState : IEquatable<SourceState>
             : With(Track(register), value);
 
     /// <summary>Returns this state with <paramref name="stack"/> as what the routine has pushed.</summary>
-    public SourceState WithStack(SourceStack? stack) => ReferenceEquals(Stack, stack) ? this : new(values, stack);
+    public SourceState WithStack(SourceStack? stack) => ReferenceEquals(Stack, stack) ? this : new(values, stack, Pointing, Pointed);
+
+    /// <summary>
+    /// Returns this state with <paramref name="pointing"/> as the registers that hold the stack
+    /// pointer, and <paramref name="pointed"/> as the stack their copy was taken from.
+    /// </summary>
+    public SourceState WithCopy(Registers pointing, SourceStack? pointed) =>
+        Pointing == pointing && ReferenceEquals(Pointed, pointed) ? this : new(values, Stack, pointing, pointed);
 
     /// <inheritdoc/>
     public bool Equals(SourceState? other) =>
         other is not null
         && (ReferenceEquals(this, other)
-            || (values.AsSpan().SequenceEqual(other.values.AsSpan()) && Equals(Stack, other.Stack)));
+            || (values.AsSpan().SequenceEqual(other.values.AsSpan()) && Equals(Stack, other.Stack)
+                && Pointing == other.Pointing && Equals(Pointed, other.Pointed)));
 
     /// <inheritdoc/>
     public override bool Equals(object? obj) => Equals(obj as SourceState);
@@ -134,6 +160,8 @@ internal sealed class SourceState : IEquatable<SourceState>
         foreach (var value in values)
             hash.Add(value);
         hash.Add(Stack);
+        hash.Add(Pointing);
+        hash.Add(Pointed);
         return hash.ToHashCode();
     }
 }

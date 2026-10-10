@@ -126,6 +126,14 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     public static AnalysisStack OnlyFrame(Symbol frame, int size) =>
         Unanchored.Framed(frame, size)!;
 
+    /// <summary>
+    /// Returns whether this stack is <paramref name="earlier"/> with nothing taken off it, and
+    /// perhaps more pushed on top, over the same kind of base.
+    /// </summary>
+    public bool Extends(AnalysisStack earlier) =>
+        IsAnchored == earlier.IsAnchored && offset == earlier.offset && entries.Length >= earlier.entries.Length
+        && entries.AsSpan(0, earlier.entries.Length).SequenceEqual(earlier.entries.AsSpan());
+
     /// <summary>Returns this stack with <paramref name="entry"/> pushed <paramref name="count"/> times.</summary>
     public AnalysisStack Push(StackEntry entry, int count = 1)
     {

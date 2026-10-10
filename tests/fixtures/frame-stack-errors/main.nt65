@@ -42,6 +42,8 @@
 ; A stack the program moved itself may hold a frame over bytes nt65 knows nothing about.
 .proc moved: a16, i16 {
     tsc
+    sec
+    sbc #2
     tcs
     .frame h: Word
     lda h::v,s

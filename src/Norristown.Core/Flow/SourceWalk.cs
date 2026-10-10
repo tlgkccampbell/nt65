@@ -215,15 +215,42 @@ internal sealed class SourceWalk
                 if (written.HasFlag(Registers.A))
                     state = Accumulator(step, state, wrote);
             }
+
+            // A copy of the stack pointer is not followed through them.
+            state = state.WithCopy(Registers.None, null);
             return states is null ? state : Widened(step, state);
         }
         var after = Flagged(step, Registered(step, state, next, null), null);
 
         // A store may turn the instruction into another, and then values may have been set by
         // either.
-        foreach (var variant in registers.VariantsOf(step))
+        var variants = registers.VariantsOf(step);
+        foreach (var variant in variants)
             after = SourceState.Merge(after, Flagged(step, Registered(step, state, next, variant), variant));
+        after = Copied(step, state, after, variants);
         return states is null ? after : Widened(step, after);
+    }
+
+    /// <summary>
+    /// Returns <paramref name="after"/> with the registers that hold the stack pointer after
+    /// <paramref name="step"/>, and the stack their copy was taken from, as
+    /// <see cref="StackWrites.Pointing"/> and <see cref="StackPointerCopies"/> work them out from
+    /// <paramref name="before"/>. An instruction a store may turn into one of
+    /// <paramref name="variants"/> drops the copy.
+    /// </summary>
+    private SourceState Copied(Step step, SourceState before, SourceState after, IReadOnlyList<MnemonicKind> variants)
+    {
+        if (step.Statement is not InstructionStatementSyntax statement)
+            return after.WithCopy(before.Pointing, before.Pointed);
+        var mode = ModeOf(step);
+        var immediate = StepOperands.Immediate(model, layout, step);
+        var pointing = StackWrites.Pointing(statement.MnemonicKind, mode, immediate, before.Pointing);
+        foreach (var variant in variants)
+            pointing &= StackWrites.Pointing(variant, mode, immediate, before.Pointing);
+        var pointed = variants.Count > 0 ? null
+            : StackPointerCopies.Copied(
+                statement.MnemonicKind, layout.Cpu, registers.Wide(step, index: true), pointing, before.Pointed, before.Stack);
+        return after.WithCopy(pointing, pointed);
     }
 
     /// <summary>
@@ -371,9 +398,14 @@ internal sealed class SourceWalk
         if (facts.Pulls is { } pull)
             return Restored(step, state, facts, pull);
 
-        // Moving the stack pointer leaves nothing known about the saves on the stack.
+        // Moving the stack pointer leaves nothing known about the saves on the stack, unless it
+        // moves back to a copy taken with only pushes since.
         if (RegisterEffects.SetsStackPointer(mnemonic))
-            state = state.WithStack(null);
+        {
+            state = state.WithStack(StackPointerCopies.MovedBack(
+                mnemonic, layout.Cpu, registers.Wide(step, index: true), state.Pointing, state.Pointed, state.Stack,
+                (stack, pointed) => stack.Extends(pointed)));
+        }
 
         // A transfer is where the register it fills was set, so it is the source. What it puts
         // there is what the register it copies held, which is what a test compares with the

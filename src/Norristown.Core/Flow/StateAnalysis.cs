@@ -868,14 +868,27 @@ public sealed class StateAnalysis : IProcessorStates
         // A store into the bytes on the stack may change a P, D or B saved there, and nt65 does
         // not follow which byte it changes, so nothing saved on the stack is known afterwards.
         // The register walk forgets the flags and registers such a store may change the same way.
+        // A copy of the stack pointer is followed as the register walk follows it, except through
+        // the bytes of a hidden path, as there too.
         var pointing = StackWrites.Pointing(mnemonic, mode, executing.Immediate, state.Pointing);
+        var wideIndex = processor.Index switch
+        {
+            Width.Sixteen => true,
+            Width.Eight => false,
+            _ => (bool?)null,
+        };
+        var pointed = executing.Decoded is not null ? null
+            : StackPointerCopies.Copied(mnemonic, layout.Cpu, wideIndex, pointing, state.Pointed, state.Stack);
+        var movedBack = StackPointerCopies.MovedBack(
+            mnemonic, layout.Cpu, wideIndex, state.Pointing, executing.Decoded is null ? state.Pointed : null, state.Stack,
+            (now, copy) => now.Extends(copy));
         var intoStack = Instructions.Facts(mnemonic).Stores
             && (executing.Decoded is { } stored
                 ? StackWrites.Into(stored, state.Pointing)
                 : StackWrites.Into(model, step, mode, state.Pointing));
         state = intoStack
-            ? state with { Stack = null, WhyStack = Cause.StackWritten(Quoted(step, executing)), Pointing = pointing }
-            : state with { Pointing = pointing };
+            ? state with { Stack = null, WhyStack = Cause.StackWritten(Quoted(step, executing)), Pointing = pointing, Pointed = pointed }
+            : state with { Pointing = pointing, Pointed = pointed };
         var stack = state.Stack;
 
         switch (mnemonic)
@@ -990,10 +1003,16 @@ public sealed class StateAnalysis : IProcessorStates
             // or B, a constant, or the program bank. Any other pull leaves the register unknown.
             case MnemonicKind.Plb:
                 var savedBank = stack?.PulledPush(1);
-                return new FlowState(processor with { B = Pulled(savedBank, savedBank?.Held, StateParts.DataBank, step.On).B }, Pull(stack, 1));
+                return new FlowState(processor with { B = Pulled(savedBank, savedBank?.Held, StateParts.DataBank, step.On).B }, Pull(stack, 1))
+                {
+                    Pointing = state.Pointing,
+                };
             case MnemonicKind.Pld:
                 var savedPage = stack?.PulledPush(2);
-                return new FlowState(processor with { D = Pulled(savedPage, savedPage?.Held, StateParts.DirectPage, step.On).D }, Pull(stack, 2));
+                return new FlowState(processor with { D = Pulled(savedPage, savedPage?.Held, StateParts.DirectPage, step.On).D }, Pull(stack, 2))
+                {
+                    Pointing = state.Pointing,
+                };
 
             // A pull that finds the status register a `php` saved restores the widths saved
             // with it. Any other pull leaves them unknown. The emulation flag is not in it, and in
@@ -1004,13 +1023,14 @@ public sealed class StateAnalysis : IProcessorStates
                     : stack?.Top is { IsStatus: true } saved
                         ? Restored(processor, Pulled(saved, null, StateParts.A | StateParts.Index, step.On))
                         : processor with { A = Width.Unknown, Index = Width.Unknown };
-                return new FlowState(restored, Pull(stack, 1));
+                return new FlowState(restored, Pull(stack, 1)) { Pointing = state.Pointing };
 
-            // The stack pointer now points somewhere unknown, and what is pushed from here on
-            // is tracked on top of that unknown base.
+            // Moving the stack pointer back to a copy taken with only pushes since drops those
+            // pushes. Any other move leaves it pointing somewhere unknown, and what is pushed from
+            // here on is tracked on top of that unknown base.
             case MnemonicKind.Txs:
             case MnemonicKind.Tcs:
-                return state with { Stack = AnalysisStack.Unanchored };
+                return state with { Stack = movedBack ?? AnalysisStack.Unanchored };
 
             // A return with a `.next` is a jump to the address the routine pushed, and pulls
             // it. Where the `.next` names routines it is a tail call to each of them, checked
