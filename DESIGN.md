@@ -1315,10 +1315,12 @@ Each file's processor-state analysis records the state at each call and each ret
 signatures are learned from them, running the analysis again on the files' existing layouts
 until no file took a signature that has since changed. Every answer starts at nothing known and
 only moves one way. An entry's part goes from no caller seen, to the value the callers agree
-on, to disagreeing or unknown. An exit goes from no return seen, to a value, to unknown. A call
+on, to disagreeing or unknown. An exit goes from no return seen, to a value, to unknown, under
+the entry it was learned with; where that entry moves, the exit is learned again from no return
+seen, since a part that was unchanged under an entry of `a8` is 8 bits under `a*`. A call
 to a routine none of whose returns has been seen yet ends its path for that round, as a call
-to a routine that never returns does. Each part of each routine changes at most twice, so the
-solving ends without a bound on the rounds. A file whose signatures changed is then laid out
+to a routine that never returns does. Each part of each entry changes at most twice, and each
+exit at most twice between moves of its entry, so the solving ends without a bound on the rounds. A file whose signatures changed is then laid out
 again, once. A macro's items still default to `*` (§11.5), since a macro is not called.
 
 `?` means unknown, for entry points reached from outside nt65. Written on its own, as an item,
