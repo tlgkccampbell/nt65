@@ -98,13 +98,14 @@ public sealed class RegisterReadsTests
     /// <summary>
     /// Code nt65 cannot follow sees only the registers, the flags and the stack. Where every one
     /// of them holds something the routine wrote, and nothing it pushed holds an entry value, such
-    /// code cannot read any of the routine's entry values, so the answer stays complete. A flag
-    /// left as the caller set it, as V is without the <c>clv</c>, may be read.
+    /// code cannot read any of the routine's entry values, so the answer stays complete, though
+    /// only for the registers nt65 tracks. A flag left as the caller set it, as V is without the
+    /// <c>clv</c>, may be read.
     /// </summary>
     [Fact]
     public void ACallThatCannotBeFollowedSeesOnlyWhatIsStillHeld()
     {
-        Assert.Equal(new RoutineReads(Registers.None, true), Found("6502",
+        Assert.Equal(new RoutineReads(Registers.None, true, Bounded: true), Found("6502",
             ".import print: proc\n.proc p {\n    lda #0\n    ldx #0\n    ldy #0\n    clc\n    clv\n    jsr print\n    rts\n}\n", "p"));
         Assert.Equal(new RoutineReads(Registers.None, false), Found("6502",
             ".import print: proc\n.proc p {\n    lda #0\n    ldx #0\n    ldy #0\n    clc\n    jsr print\n    rts\n}\n", "p"));

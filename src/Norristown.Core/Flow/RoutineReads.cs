@@ -22,7 +22,14 @@ namespace Norristown.Flow;
 /// Where this is false the routine may read more than <paramref name="Read"/> says, and a caller
 /// has to take it that every register is read.
 /// </param>
-public readonly record struct RoutineReads(Registers Read, bool Complete)
+/// <param name="Bounded">
+/// Whether the routine passes control to code nt65 cannot follow at a point where none of the
+/// registers holds an entry value, so that <paramref name="Read"/> is complete only for the
+/// registers the analysis tracks. Such code may still use what the caller left elsewhere, such as
+/// the bytes beneath the return address, the decimal and interrupt flags, and on the 65816 the
+/// direct page and the data bank.
+/// </param>
+public readonly record struct RoutineReads(Registers Read, bool Complete, bool Bounded = false)
 {
     /// <summary>Gets the value assumed for a routine not yet worked out, which reads nothing.</summary>
     public static RoutineReads Nothing => new(Registers.None, true);

@@ -527,7 +527,9 @@ public sealed class CodeLensTests
     /// <summary>
     /// Which registers a routine uses as its caller left them, in a lens between its cost and what
     /// it preserves. A routine that reads nothing says so, and one whose calls nt65 cannot follow
-    /// ends the list with <c>?</c>.
+    /// ends the list with <c>?</c>. One that calls such code with none of the registers holding
+    /// what its caller left names the registers it does not read, since that code may use what the
+    /// caller left elsewhere. The hover says the same.
     /// </summary>
     [Fact]
     public async Task ALensShowsWhichRegistersARoutineReads()
@@ -550,6 +552,25 @@ public sealed class CodeLensTests
                 jsr rom
                 rts
             }
+            .proc cleared {
+                lda #0
+                ldx #0
+                ldy #0
+                clc
+                clv
+                jsr rom
+                rts
+            }
+            .proc stored {
+                sta $10
+                lda #0
+                ldx #0
+                ldy #0
+                clc
+                clv
+                jsr rom
+                rts
+            }
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
@@ -557,9 +578,14 @@ public sealed class CodeLensTests
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
-            [(2, "reads none"), (5, "reads A, C"), (11, "reads X, ?")],
+            [
+                (2, "reads none"), (5, "reads A, C"), (11, "reads X, ?"), (16, "reads none of A, X, Y, C, Z, N, V"),
+                (25, "reads A · none of X, Y, C, Z, N, V"),
+            ],
             lenses.Where(lens => lens.Command.Title.StartsWith("reads ", StringComparison.Ordinal))
                 .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc |cleared"), timeout);
+        Assert.Contains("reads      none of A, X, Y, C, Z, N, V\n", hover!.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>

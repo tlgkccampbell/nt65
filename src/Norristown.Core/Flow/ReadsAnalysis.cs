@@ -36,6 +36,7 @@ internal static class ReadsAnalysis
 
         var read = Registers.None;
         var complete = true;
+        var bounded = false;
         var left = new RegisterState?[blocks.Count];
         foreach (var block in blocks)
         {
@@ -67,7 +68,7 @@ internal static class ReadsAnalysis
             if (ControlFlow.Onward(blocks, block).Any(to => reached[to] is { Stack: null }))
                 Use(stack.Entries, block.Steps[^1], null);
         }
-        return new RoutineReads(read, complete);
+        return new RoutineReads(read, complete, bounded);
 
         void Use(Registers entries, Step at, Symbol? through)
         {
@@ -85,6 +86,7 @@ internal static class ReadsAnalysis
         {
             if (!callee.Complete)
                 Unfollowed(state, block, through);
+            bounded |= callee.Bounded;
             foreach (var register in RegisterEffects.Each(callee.Read))
                 Use(state.Whole(register).Entry, block.Steps[^1], through);
         }
@@ -112,11 +114,15 @@ internal static class ReadsAnalysis
 
         // Notes that control passes to code nt65 cannot follow at the end of a block. That leaves
         // the answer incomplete only where the code may see one of this routine's entry values.
+        // Otherwise the answer is complete for the registers the analysis tracks, and only those.
         void Unfollowed(RegisterState state, BasicBlock block, Symbol? through)
         {
             var seen = Visible(state);
             if (seen == Registers.None)
+            {
+                bounded = true;
                 return;
+            }
             complete = false;
             if (unfollowed is null)
                 return;

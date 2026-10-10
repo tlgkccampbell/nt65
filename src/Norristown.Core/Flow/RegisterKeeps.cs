@@ -386,7 +386,8 @@ public static class RegisterKeeps
     /// </summary>
     private static bool Widen(Dictionary<RoutineKey, RoutineReads> found, RoutineKey name, RoutineReads computed)
     {
-        var widened = new RoutineReads(found[name].Read | computed.Read, found[name].Complete && computed.Complete);
+        var widened = new RoutineReads(
+            found[name].Read | computed.Read, found[name].Complete && computed.Complete, found[name].Bounded || computed.Bounded);
         if (widened == found[name])
             return false;
         found[name] = widened;

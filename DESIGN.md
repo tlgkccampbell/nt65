@@ -2460,7 +2460,12 @@ editor can be told not to show.
   upper bound on what nt65 follows, and a call it cannot follow ends it with `?`, which means
   any register may be read. It does so only where a register or the stack there still holds
   something the caller left: code nt65 cannot follow sees only those, which the model covers,
-  and a stack whose contents are not known may hold anything. A block gets no such lens.
+  and a stack whose contents are not known may hold anything. Where nothing there holds what the
+  caller left, the list is complete only for the seven registers the model covers, and says so
+  by naming those it does not read, as `reads none of A, X, Y, C, Z, N, V` or
+  `reads A · none of X, Y, C, Z, N, V`. Such code may still use what the caller left elsewhere:
+  the bytes beneath the return address, the decimal and interrupt flags, and on the 65816 D and
+  B. A block gets no such lens.
 - **On hover over the line that declares a routine or opens a block**, the same lists, because
   the lenses above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,

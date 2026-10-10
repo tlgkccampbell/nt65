@@ -46,7 +46,7 @@ internal static class CodeLenses
                 continue;
             if (Format(region.Cost, region.Total, "never returns", true) is { } cost)
                 Add(region.Routine.NameSpan, 0, cost);
-            Add(region.Routine.NameSpan, 1, $"reads {Hovers.Format(region.Reads.Read, region.Reads.Complete)}",
+            Add(region.Routine.NameSpan, 1, $"reads {Hovers.Format(region.Reads)}",
                 RegisterDeclarations.Reads(tree, region));
             if (Kept(region) is { } kept)
                 Add(region.Routine.NameSpan, 2, kept, RegisterDeclarations.Keeps(tree, region));
