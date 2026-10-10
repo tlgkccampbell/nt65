@@ -827,10 +827,18 @@ public sealed class StateAnalysis : IProcessorStates
                 return state with { Processor = processor with { B = MovedTo(step) } };
 
             // What a push saves is kept in the routine's terms, so a pull outside the macro body
-            // that pushed it reads the same state.
+            // that pushed it reads the same state. A part that was a `*` item is also marked with
+            // the expansion whose item it was, so a pull in any body can tell what it means there.
             case MnemonicKind.Php:
                 var status = InRoutine(processor, step.On);
-                return state with { Stack = stack?.Push(new StackEntry(true, status.A, status.Index)) };
+                return state with
+                {
+                    Stack = stack?.Push(new StackEntry(
+                        true, status.A, status.Index,
+                        Starred: (processor.A == Width.Unchanged ? StateParts.A : StateParts.None)
+                            | (processor.Index == Width.Unchanged ? StateParts.Index : StateParts.None),
+                        Terms: TermsOf(step.On))),
+                };
             // A constant loaded into A just before it is pushed is a value a pull can get back,
             // so `lda #c`, `pha`, `plb` loads the data bank.
             case MnemonicKind.Pha:
@@ -844,11 +852,19 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Phy:
                 return state with { Stack = Push(stack, Bytes(processor.Index)) };
             case MnemonicKind.Phb:
-                return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).B, 1) };
+                return state with
+                {
+                    Stack = stack?.PushValue(
+                        InRoutine(processor, step.On).B, 1, processor.B.IsEntered ? StateParts.DataBank : StateParts.None, TermsOf(step.On)),
+                };
             case MnemonicKind.Phk:
                 return state with { Stack = stack?.PushValue(ProgramBankAt(step, routine), 1) };
             case MnemonicKind.Phd:
-                return state with { Stack = stack?.PushValue(InRoutine(processor, step.On).D, 2) };
+                return state with
+                {
+                    Stack = stack?.PushValue(
+                        InRoutine(processor, step.On).D, 2, processor.D.IsEntered ? StateParts.DirectPage : StateParts.None, TermsOf(step.On)),
+                };
             case MnemonicKind.Pea:
                 return state with
                 {
@@ -865,11 +881,11 @@ public sealed class StateAnalysis : IProcessorStates
             // A pull that finds a value the routine pushed gets it back. That value may be a saved D
             // or B, a constant, or the program bank. Any other pull leaves the register unknown.
             case MnemonicKind.Plb:
-                var dataBank = Pulled(ProcessorState.Unknown with { B = stack?.PulledValue(1) ?? StateValue.Unknown }, step.On);
-                return new FlowState(processor with { B = dataBank.B }, Pull(stack, 1));
+                var savedBank = stack?.PulledPush(1);
+                return new FlowState(processor with { B = Pulled(savedBank, savedBank?.Held, StateParts.DataBank, step.On).B }, Pull(stack, 1));
             case MnemonicKind.Pld:
-                var directPage = Pulled(ProcessorState.Unknown with { D = stack?.PulledValue(2) ?? StateValue.Unknown }, step.On);
-                return new FlowState(processor with { D = directPage.D }, Pull(stack, 2));
+                var savedPage = stack?.PulledPush(2);
+                return new FlowState(processor with { D = Pulled(savedPage, savedPage?.Held, StateParts.DirectPage, step.On).D }, Pull(stack, 2));
 
             // A pull that finds the status register a `php` saved restores the widths saved
             // with it. Any other pull leaves them unknown. The emulation flag is not in it, and in
@@ -878,7 +894,7 @@ public sealed class StateAnalysis : IProcessorStates
                 var restored = processor.E == ProcessorMode.Emulation
                     ? processor with { A = Width.Eight, Index = Width.Eight }
                     : stack?.Top is { IsStatus: true } saved
-                        ? Restored(processor, Pulled(ProcessorState.Unknown with { A = saved.A, Index = saved.Index }, step.On))
+                        ? Restored(processor, Pulled(saved, null, StateParts.A | StateParts.Index, step.On))
                         : processor with { A = Width.Unknown, Index = Width.Unknown };
                 return new FlowState(restored, Pull(stack, 1));
 
@@ -1623,33 +1639,96 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns what a pull at a statement in the expansion <paramref name="on"/> gets back from
-    /// <paramref name="saved"/>, which the stack holds in the routine's terms. Inside the body of
-    /// a macro with a signature, a value that is what the body's <c>*</c> item means comes back
-    /// as that item. Any other value comes back where it is known, and is unknown otherwise.
+    /// the push whose top byte is <paramref name="saved"/>, for the parts in
+    /// <paramref name="parts"/>. A part the push saved as a <c>*</c> item is that item, translated
+    /// into the terms in force at the pull. Any other part comes back in the routine's terms,
+    /// translated the same way. Every other part is unknown.
     /// </summary>
-    private ProcessorState Pulled(ProcessorState saved, Expansion? on)
+    /// <param name="saved">The top byte of the push, or null where the pull finds no push it can read.</param>
+    /// <param name="held">The value a <c>phd</c> or <c>phb</c> saved, or null for a <c>php</c>.</param>
+    /// <param name="parts">The parts the pull restores.</param>
+    /// <param name="on">The expansion the pull is in.</param>
+    /// <returns>The restored parts, with every other part unknown.</returns>
+    private ProcessorState Pulled(StackEntry? saved, StateValue? held, StateParts parts, Expansion? on)
     {
-        var signature = Expansion.Enclosing(on)
-            .Select(level => level.Call is { } call ? model.MacroAt(call)?.MacroSignature : null)
-            .FirstOrDefault(found => found is not null);
-        if (signature is null)
-            return saved;
-        var entry = signature.Entry;
-        var meant = InRoutine(entry, on);
+        if (saved is not { } entry)
+            return ProcessorState.Unknown;
+        var routine = Translated(
+            new ProcessorState(entry.A, entry.Index, ProcessorMode.Unknown, held ?? StateValue.Unknown, held ?? StateValue.Unknown),
+            null,
+            on);
+        var starred = Translated(
+            new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unknown, StateValue.Unchanged, StateValue.Unchanged),
+            entry.Terms,
+            on);
         return new ProcessorState(
-            Back(saved.A, entry.A, meant.A),
-            Back(saved.Index, entry.Index, meant.Index),
+            Starred(StateParts.A) ? starred.A : routine.A,
+            Starred(StateParts.Index) ? starred.Index : routine.Index,
             ProcessorMode.Unknown,
-            Value(saved.D, entry.D, meant.D),
-            Value(saved.B, entry.B, meant.B));
+            Starred(StateParts.DirectPage) ? starred.D : routine.D,
+            Starred(StateParts.DataBank) ? starred.B : routine.B);
+
+        bool Starred(StateParts part) => (parts & entry.Starred & part) != 0;
+    }
+
+    /// <summary>
+    /// Returns the expansion whose <c>*</c> items are in force at a statement in the expansion
+    /// <paramref name="on"/>. That is the innermost expansion of a macro with a signature, passing
+    /// over a macro whose spliced block the statement is in. It returns null where the items in
+    /// force are the routine's.
+    /// </summary>
+    private Expansion? TermsOf(Expansion? on) => Signed(on).FirstOrDefault();
+
+    /// <summary>
+    /// Returns each expansion of a macro with a signature that a statement in the expansion
+    /// <paramref name="on"/> is part of, from the innermost out, passing over a macro whose spliced
+    /// block the statement is in.
+    /// </summary>
+    private IEnumerable<Expansion> Signed(Expansion? on) =>
+        Expansion.Enclosing(on).Where(level => level.Call is { } call && model.MacroAt(call) is { MacroSignature: not null });
+
+    /// <summary>
+    /// Returns <paramref name="state"/>, which is in the terms of the expansion
+    /// <paramref name="from"/>, in the terms in force at a statement in the expansion
+    /// <paramref name="on"/>. The state is first taken out to the innermost expansion the two
+    /// share, each <c>*</c> item becoming the state at its call. It is then taken in to the
+    /// statement's terms. A part that is what an inner body's <c>*</c> item means becomes that
+    /// item, a part otherwise known stays as it is, and the rest becomes unknown.
+    /// </summary>
+    /// <param name="state">The state to translate.</param>
+    /// <param name="from">The expansion whose terms the state is in, or null for the routine's.</param>
+    /// <param name="on">The expansion of the statement whose terms are wanted.</param>
+    /// <returns>The state in the statement's terms.</returns>
+    private ProcessorState Translated(ProcessorState state, Expansion? from, Expansion? on)
+    {
+        var inward = Signed(on).ToList();
+        var outward = from is null ? [] : Signed(from).ToList();
+        var shared = outward.FirstOrDefault(inward.Contains);
+        foreach (var level in outward.TakeWhile(level => level != shared))
+            state = AtCall(state, level);
+        foreach (var level in Enumerable.Reverse(inward.TakeWhile(level => level != shared).ToList()))
+        {
+            var at = started.TryGetValue(StepKey.Of(level.Call!, level.Outer), out var found) ? found : ProcessorState.Unknown;
+            var entry = model.MacroAt(level.Call!)!.MacroSignature!.Entry;
+            state = new ProcessorState(
+                Back(state.A, entry.A, at.A),
+                Back(state.Index, entry.Index, at.Index),
+                ProcessorMode.Unknown,
+                Value(state.D, entry.D, at.D),
+                Value(state.B, entry.B, at.B));
+        }
+        return state;
 
         static Width Back(Width saved, Width entry, Width meant) =>
             entry == Width.Unchanged && saved == meant && saved != Width.Unknown ? Width.Unchanged
             : saved is Width.Eight or Width.Sixteen ? saved
             : Width.Unknown;
 
+        // A bank known only to be the one an outer body was entered with is still one of the same
+        // set inside this body, but it is no longer this body's own.
         static StateValue Value(StateValue saved, StateValue entry, StateValue meant) =>
             entry.IsEntered && saved == meant && saved.Kind != StateValueKind.Unknown ? entry
+            : saved.Kind == StateValueKind.Within ? StateValue.Among(saved.Banks)
             : saved.IsBounded ? saved
             : StateValue.Unknown;
     }

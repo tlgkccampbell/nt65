@@ -3693,7 +3693,9 @@ reaches the block, each `*` item is the state at the call, which the caller know
 it did before the call, and a part the body set is what the body set it to. The block must
 leave the state as it found it. What a `php`, `phd` or `phb` in either saves is kept in the
 routine's terms, the state at the call standing in for each `*`, so a pull after the body
-reads back the width or value that was pushed. A pull in the body gets back a `*` item only
+reads back the width or value that was pushed. A push also remembers which body's `*` item it
+saved, so a pull in that body, or in a body called from it, gets the item back even where the
+routine does not know the state at the call. A pull in the body gets back a `*` item only
 where what it pulls is what that item means; anything else known comes back as it is, and the
 rest is unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
 6502 and its CMOS variants, signatures on macros are accepted and have no effect.
