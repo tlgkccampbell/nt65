@@ -420,7 +420,7 @@ function locationTip(result, page, location, hazards) {
   if (roles.length > ROUTINE_ROWS) tip.row('…', COLOR.dim, `${roles.length - ROUTINE_ROWS} more`, '');
   if (hazards) {
     for (const node of nodes) {
-      for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+      hazardRows(tip, node.hazards);
     }
   }
   for (const bytes of location.shared) {
@@ -447,13 +447,12 @@ function routineTip(location, node, hazards) {
     const tip = new Tip(node.name, `${location.name} · D unknown`);
     tip.row('?', COLOR.dim, 'names it while D is not known · see `D = ?`', lineLinks(node.accesses.map(access => access.place)));
     if (hazards) {
-      for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+      hazardRows(tip, node.hazards);
     }
     return tip.build();
   }
   const tip = new Tip(node.name, `${location.name}${role ? ` · ${role.word}` : ''}`);
-  if (node.handler) tip.row('⚡', COLOR.irq, 'interrupt handler', '');
-  else if (node.interrupt) tip.row('⚡', COLOR.irq, node.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
+  interruptRows(tip, node);
   if (role) {
     const writes = node.accesses.filter(access => access.writes).map(access => access.place);
     const reads = node.accesses.filter(access => !access.writes).map(access => access.place);
@@ -470,7 +469,7 @@ function routineTip(location, node, hazards) {
     if (child.via.length > 0) tip.row('↳', COLOR.dim, `\`${child.name}\``, lineLinks(child.via));
   }
   if (hazards) {
-    for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+    hazardRows(tip, node.hazards);
   }
   return tip.build();
 }
@@ -486,8 +485,7 @@ function referrerTip(location, referrer) {
 // Builds the tooltip of a routine's row on the page whose D is not known.
 function unknownRoutineTip(group, routine, hazards) {
   const tip = new Tip(routine.name, group.reason === 'interrupted' ? 'D left as the interrupted code had it' : 'D not known');
-  if (routine.handler) tip.row('⚡', COLOR.irq, 'interrupt handler', '');
-  else if (routine.interrupt) tip.row('⚡', COLOR.irq, routine.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
+  interruptRows(tip, routine);
   for (const use of routine.uses) {
     const role = ROLES[use.role];
     tip.row(role ? role.glyph : '?', role ? role.color : COLOR.dim, `\`${use.name}\``,
@@ -506,6 +504,17 @@ function useTip(result, routine, use, hazards) {
   if (use.home) tip.row('●', COLOR.dim, `declared on the ${markdown(pageName(result, use.home))} page`, colored(COLOR.dim, use.home));
   if (hazards) noteRows(tip, use.hazards || []);
   return tip.build();
+}
+
+// Adds a row for each hazard among a routine's notes, each a glyph, the note and its line.
+function hazardRows(tip, notes) {
+  for (const note of notes) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+}
+
+// Adds the row that says a routine is an interrupt handler or runs in an interrupt, if either.
+function interruptRows(tip, routine) {
+  if (routine.handler) tip.row('⚡', COLOR.irq, 'interrupt handler', '');
+  else if (routine.interrupt) tip.row('⚡', COLOR.irq, routine.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
 }
 
 // Adds a row for each of a use's notes on the page whose D is not known: that D is the
