@@ -544,7 +544,7 @@ internal sealed class StateChecks
                 what, target.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
         }
         CheckExit(step, $"{what} is a tail call:", $"when `{target.DisplayName}` returns",
-            own.Exit, Exited(callee, state), routine.DisplayName, held: own.Declared);
+            own.Exit, Exited(callee, state), routine.DisplayName, held: own.Declared, whyMode: whyMode);
     }
 
     /// <summary>
@@ -552,9 +552,11 @@ internal sealed class StateChecks
     /// routine. That routine returns to this routine's caller, so it has to return the way this one
     /// does and hand back what this one declares, exactly as a tail call to it does. The label's
     /// own declaration gives what the state has to be at the label, and is checked separately.
+    /// Where <paramref name="whyMode"/> says why the mode is not known here, the exit check gives it
+    /// as the reason.
     /// </summary>
     public void CheckJumpInto(
-        Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine)
+        Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine, Cause? whyMode = null)
     {
         var callee = signatureOf(owner) ?? Signature.Default;
         var own = signatureOf(routine) ?? Signature.Default;
@@ -572,7 +574,7 @@ internal sealed class StateChecks
                 what, owner.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
         }
         CheckExit(step, $"{what} leaves `{routine.DisplayName}`:", $"when `{owner.DisplayName}` returns",
-            own.Exit, Exited(callee, state), routine.DisplayName, held: own.Declared);
+            own.Exit, Exited(callee, state), routine.DisplayName, held: own.Declared, whyMode: whyMode);
     }
 
     /// <summary>

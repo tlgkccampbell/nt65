@@ -954,7 +954,7 @@ public sealed class StateAnalysis : IProcessorStates
             if (DeclaredElsewhere(target) is { } declared)
                 report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
             if (report is not null)
-                JumpedInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state.Processor, routine, report);
+                JumpedInto(step, SyntaxFacts.TextOf(mnemonic), target, owner, state, routine, report);
         }
         else if (transfer == Transfer.Jump && next is null && report is not null
             && Transfers.TargetOf(statement, mode) is { } operand && Targets.IsConstantAddress(model, operand, step.On))
@@ -1065,7 +1065,7 @@ public sealed class StateAnalysis : IProcessorStates
             if (named.Signature is not null && SignatureOf(named) is { } signature)
                 TailCalled(step, ".next", MnemonicKind.None, named, signature, state, routine, report);
             else if (Interior(named, routine) is { } inside)
-                JumpedInto(step, ".next", named, inside, state.Processor, routine, report);
+                JumpedInto(step, ".next", named, inside, state, routine, report);
         }
     }
 
@@ -1234,9 +1234,10 @@ public sealed class StateAnalysis : IProcessorStates
     /// <c>noreturn</c> on <paramref name="owner"/> says the path from the label never returns.
     /// </summary>
     private void JumpedInto(
-        Step step, string via, Symbol label, Symbol owner, ProcessorState state, Symbol routine, StateChecks report)
+        Step step, string via, Symbol label, Symbol owner, FlowState flowing, Symbol routine, StateChecks report)
     {
-        report.CheckJumpInto(step, via, label, owner, state, routine);
+        var state = flowing.Processor;
+        report.CheckJumpInto(step, via, label, owner, state, routine, flowing.WhyE);
         var callee = SignatureOf(owner) ?? Signature.Default;
         if (SignatureOf(routine) is not { HasNoCaller: true } && owner.Signature?.NeverReturns != true && !callee.IsInterrupt
             && signatures.IsExitKnown(owner))

@@ -198,6 +198,35 @@
     rts
 }
 
+; A tail call or a jump into a label below such a label hands over the unknown mode, and the
+; exit check of each gives the label's `.state` as the reason.
+.proc tails_from_widths: a8, i8, native {
+    rts
+    resumed:
+    .state a8, i8
+    jmp keeps_mode          ;! error[call-state-mismatch]: `jmp keeps_mode` needs `native`, which `keeps_mode` takes by default, but the mode is not known here, because `resumed` can be entered from outside `tails_from_widths`, and its `.state` does not declare the mode: the `.state` after `resumed` can declare `native`;! error[return-state-mismatch]: `jmp keeps_mode` is a tail call: `tails_from_widths` declares it returns in native mode, but the mode is not known when `keeps_mode` returns, because `resumed` can be entered from outside `tails_from_widths`, and its `.state` does not declare the mode: the `.state` after `resumed` can declare `native`
+}
+
+.proc jumps_from_widths: a8, i8, native {
+    rts
+    resumed:
+    .state a8, i8
+    jmp keeps_mode::inner   ;! error[return-state-mismatch]: `jmp inner` leaves `jumps_from_widths`: `jumps_from_widths` declares it returns in native mode, but the mode is not known when `keeps_mode` returns, because `resumed` can be entered from outside `jumps_from_widths`, and its `.state` does not declare the mode: the `.state` after `resumed` can declare `native`
+}
+
+.proc keeps_mode: a8, i8 {
+    nop
+    inner:
+    .state a8, i8
+    rts
+}
+
+.proc calls_from_widths: a8, i8, native {
+    jsr tails_from_widths::resumed
+    jsr jumps_from_widths::resumed
+    rts
+}
+
 ; The stack is the part a declaration cannot give. What the path above such a label pushed is
 ; not on the stack a jump in arrives with, so a `plp` below it finds no saved status.
 .proc saved_across: a8, i8 {
