@@ -43,9 +43,12 @@ namespace Norristown.Flow;
 /// as they stand, and learning from the calls and returns it records, until no file took a
 /// signature that has since changed. Every answer starts at nothing known and only moves one
 /// way. An entry's part goes from no caller seen, to the value the callers agree on, to
-/// disagreeing or unknown. An exit goes from no return seen, to a value, to unknown. A call to a
+/// disagreeing or unknown. An exit goes from no return seen, to a value, to unknown, under the
+/// entry it was learned with. Where the entry moves, the exit starts again from no return seen,
+/// because an exit learned under one entry says nothing reliable under another. A call to a
 /// routine none of whose returns has been seen yet ends its path for now, as a call to one that
-/// never returns does. Each part of each routine can change at most twice, so the rounds end.
+/// never returns does. Each part of each entry can change at most twice, and each exit at most
+/// twice between changes of its entry, so the rounds end.
 /// </para>
 /// </summary>
 public sealed class InferredSignatures
@@ -332,9 +335,10 @@ public sealed class InferredSignatures
         // What the callers of each routine agree on for each part so far.
         private readonly Dictionary<(RoutineKey, StateParts), Seen> answers = [];
 
-        // What each routine's returns agree on so far. A routine with a part to infer and no
-        // entry here has had no return seen.
-        private readonly Dictionary<RoutineKey, ProcessorState> exits = [];
+        // What each routine's returns agree on so far, with the entry the routine was analyzed
+        // with when they were seen. A routine with a part to infer and no entry here has had no
+        // return seen under the entry it has now.
+        private readonly Dictionary<RoutineKey, (ProcessorState Entry, ProcessorState Exit)> exits = [];
 
         private Dictionary<(RoutineKey, StateParts), IReadOnlyList<(string State, Span At)>> disagreements = [];
 
@@ -370,13 +374,13 @@ public sealed class InferredSignatures
             foreach (var (key, region) in regions)
             {
                 var declared = region.Routine.Signature!;
-                var inferred = exits.TryGetValue(key, out var exit);
+                var inferred = exits.TryGetValue(key, out var learned);
                 if (!inferred && declared.Declared != StateParts.All)
                     unreturned.Add(key);
                 found[key] = declared with
                 {
                     Entry = entries[key],
-                    Exit = inferred ? exit : declared.Exit,
+                    Exit = inferred ? learned.Exit : declared.Exit,
                     ProgramBank = banks.TryGetValue(key, out var bank) ? bank : declared.ProgramBank,
                     NeverReturns = declared.NeverReturns || never.Contains(key),
                 };
@@ -413,8 +417,14 @@ public sealed class InferredSignatures
                     if (pending.GetValueOrDefault(key) != StateParts.None || !regions.TryGetValue(key, out var region))
                         continue;
                     var declared = region.Routine.Signature!;
-                    var exit = Exit(declared.Exit, entries[key], left, StateParts.All & ~declared.Declared);
-                    exits[key] = exits.TryGetValue(key, out var earlier) ? Joined(earlier, exit) : exit;
+                    // Returns seen under another entry are not joined with these. An exit part
+                    // that is unchanged under an entry of 8 bits is 8 bits under an entry of `*`,
+                    // and the two would join to unknown.
+                    var entry = entries[key];
+                    var exit = Exit(declared.Exit, entry, left, StateParts.All & ~declared.Declared);
+                    exits[key] = exits.TryGetValue(key, out var earlier) && earlier.Entry == entry
+                        ? (entry, Joined(earlier.Exit, exit))
+                        : (entry, exit);
                 }
             }
 
@@ -446,6 +456,13 @@ public sealed class InferredSignatures
                             .Select(each => (Format(part, each.Seen), each.At))];
                     }
                 }
+
+                // An entry that moved makes what was learned of the exit under the old one stale,
+                // so the exit is learned again from no return seen. A call back into the routine
+                // is followed only once a return without one is seen, which keeps the answer the
+                // least one the body allows.
+                if (exits.TryGetValue(key, out var learned) && learned.Entry != entries[key])
+                    exits.Remove(key);
             }
         }
 
@@ -472,7 +489,7 @@ public sealed class InferredSignatures
                 var declared = region.Routine.Signature!;
                 if (exits.ContainsKey(key) || never.Contains(key) || declared.NeverReturns || declared.Declared == StateParts.All)
                     continue;
-                exits[key] = Defaulted(declared.Exit, StateParts.All & ~declared.Declared, ProcessorState.Unknown);
+                exits[key] = (entries[key], Defaulted(declared.Exit, StateParts.All & ~declared.Declared, ProcessorState.Unknown));
                 any = true;
             }
             return any;

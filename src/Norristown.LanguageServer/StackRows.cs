@@ -51,12 +51,14 @@ internal static class StackRows
 
     /// <summary>
     /// Returns one row per push, top first, each with how many bytes it took where that is known.
+    /// Each row says whether its bytes were already on the stack when the routine was entered,
+    /// as its return address is, rather than pushed by the routine itself.
     /// It returns null where the analysis lost track of the stack, and an empty list where the
     /// routine has pushed nothing. Neither analysis reaching the line counts as losing track.
     /// Where <paramref name="aboveReturn"/> is true, the rows stop at the routine's return address,
     /// for a caller that shows the return address and what is beneath it from the call itself.
     /// </summary>
-    public static IReadOnlyList<(string Text, int? Bytes)>? Of(
+    public static IReadOnlyList<(string Text, int? Bytes, bool Entered)>? Of(
         ProgramAnalysis analysis, RegisterState? registers, FlowState? state, bool aboveReturn = false) =>
         registers?.Stack is null && state?.Stack is null ? null : Pushes(analysis, registers?.Stack, state?.Stack, aboveReturn);
 
@@ -74,12 +76,12 @@ internal static class StackRows
     /// was entered with, and leave out that address and the bytes the caller pushed beneath it.
     /// </para>
     /// </summary>
-    private static IReadOnlyList<(string Text, int? Bytes)> Pushes(
+    private static IReadOnlyList<(string Text, int? Bytes, bool Entered)> Pushes(
         ProgramAnalysis analysis, SavedStack? saved, AnalysisStack? bytes, bool aboveReturn = false)
     {
         List<SavedPush> pushes = saved is null ? [] : [.. saved.Pushes.Reverse()];
         IReadOnlyList<StackEntry> entries = bytes?.Entries ?? [];
-        var rows = new List<(string Text, int? Bytes)>();
+        var rows = new List<(string Text, int? Bytes, bool Entered)>();
 
         // The next saved push, counting from the top, and the next byte of the processor-state
         // stack, which is kept bottom first.
@@ -95,11 +97,12 @@ internal static class StackRows
             if (top < 0 && pushes[next].IsHanded)
             {
                 var run = pushes.Skip(next).TakeWhile(each => each.IsHanded).Count();
-                rows.Add((NameOf(EnteredByte.Handed), run));
+                rows.Add((NameOf(EnteredByte.Handed), run, true));
                 next += run;
                 continue;
             }
             var wide = next < pushes.Count ? Bytes(pushes[next]) : null;
+            var entered = top >= 0 && entries[top].Entered != EnteredByte.None;
             var group = top >= 0 ? Group(analysis, entries, top, wide) : (Bytes: 0, Name: (string?)null);
             top -= group.Bytes;
             var covered = Covered(pushes, next, group.Bytes);
@@ -121,7 +124,7 @@ internal static class StackRows
             {
                 text += width == Width.Sixteen ? ", 16-bit" : ", 8-bit";
             }
-            rows.Add((text, taken));
+            rows.Add((text, taken, entered));
         }
         return rows;
     }

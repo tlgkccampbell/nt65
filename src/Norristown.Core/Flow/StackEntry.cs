@@ -23,8 +23,19 @@ namespace Norristown.Flow;
 /// value.
 /// </param>
 /// <param name="Byte">Which byte of that push this is, where 0 is the low byte, which is pushed last.</param>
+/// <param name="Starred">
+/// The parts of the state that the push saved while they were a <c>*</c> item of
+/// <paramref name="Terms"/>. <paramref name="A"/>, <paramref name="Index"/> and
+/// <paramref name="Held"/> hold such a part in the routine's terms, where it can be unknown, so a
+/// pull uses this to get back what was saved.
+/// </param>
+/// <param name="Terms">
+/// The <see cref="Expansion"/> of the macro with a signature whose <c>*</c> items the parts in
+/// <paramref name="Starred"/> mean, or null where they are the routine's own.
+/// </param>
 public readonly record struct StackEntry(
-    bool IsStatus, Width A, Width Index, Symbol? Frame = null, StateValue Held = default, int Size = 0, int Byte = 0)
+    bool IsStatus, Width A, Width Index, Symbol? Frame = null, StateValue Held = default, int Size = 0, int Byte = 0,
+    StateParts Starred = StateParts.None, Expansion? Terms = null)
 {
     /// <summary>Gets a byte the analysis knows nothing about.</summary>
     public static StackEntry Opaque => new(false, Width.Unknown, Width.Unknown, Held: StateValue.Unknown);

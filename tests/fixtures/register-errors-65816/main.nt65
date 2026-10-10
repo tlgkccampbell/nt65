@@ -177,3 +177,37 @@
     beq waits
     rts
 }
+
+; A 16-bit X holds the whole stack pointer, so a `txs` from the X a `tsx` copied drops what was
+; pushed since. An 8-bit X holds only its low byte, and a `txs` from it moves the stack to page
+; zero, so nothing is known about the stack after it.
+.export .proc drops_pushes: a8, i16, native, keeps a {
+    pha
+    tsx
+    pha
+    pha
+    txs
+    pla
+    rts
+}
+
+.export .proc drops_narrow: a8, i8, native, keeps a {
+    pha
+    tsx
+    pha
+    txs
+    pla
+    rts                     ;! error[keeps-broken]: `drops_narrow` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
+}
+
+; Narrowing X between the two clears its high byte, which the `txs` then puts in the stack
+; pointer.
+.export .proc narrows_between: a8, i16, native, keeps a {
+    pha
+    tsx
+    sep #$10
+    rep #$10
+    txs
+    pla
+    rts                     ;! error[keeps-broken]: `narrows_between` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
+}

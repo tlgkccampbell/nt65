@@ -1325,10 +1325,12 @@ Each file's processor-state analysis records the state at each call and each ret
 signatures are learned from them, running the analysis again on the files' existing layouts
 until no file took a signature that has since changed. Every answer starts at nothing known and
 only moves one way. An entry's part goes from no caller seen, to the value the callers agree
-on, to disagreeing or unknown. An exit goes from no return seen, to a value, to unknown. A call
+on, to disagreeing or unknown. An exit goes from no return seen, to a value, to unknown, under
+the entry it was learned with; where that entry moves, the exit is learned again from no return
+seen, since a part that was unchanged under an entry of `a8` is 8 bits under `a*`. A call
 to a routine none of whose returns has been seen yet ends its path for that round, as a call
-to a routine that never returns does. Each part of each routine changes at most twice, so the
-solving ends without a bound on the rounds. A file whose signatures changed is then laid out
+to a routine that never returns does. Each part of each entry changes at most twice, and each
+exit at most twice between moves of its entry, so the solving ends without a bound on the rounds. A file whose signatures changed is then laid out
 again, once. A macro's items still default to `*` (§11.5), since a macro is not called.
 
 `?` means unknown, for entry points reached from outside nt65. Written on its own, as an item,
@@ -2356,7 +2358,12 @@ entering the routine leaves (§7.3), so a pull below such a label finds no push 
 and a save and its restore belong on one side of it. A pull of more than the routine has pushed
 takes bytes its caller put there, as a routine that returns past data after its call pulls its
 return address to read the data. What that pull gets is unknown, but the stack is not: what the
-routine pushes and pulls after it cancels as it would anywhere else.
+routine pushes and pulls after it cancels as it would anywhere else. A `txs` or `tcs` from the
+register a `tsx` or `tsc` filled, with nothing but pushes between them, moves the stack back to
+where the copy was taken and drops exactly those pushes, so `pha`, `tsx`, `pha`, `pha`, `txs`,
+`pla` keeps A. A pull between them, a change to the register, or a store into the stack leaves
+the stack unknown, as any other `txs` does. So does an X on the 65816 that is not 16 bits
+throughout, since an 8-bit X holds only the low byte of S.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
@@ -2468,7 +2475,12 @@ editor can be told not to show.
   upper bound on what nt65 follows, and a call it cannot follow ends it with `?`, which means
   any register may be read. It does so only where a register or the stack there still holds
   something the caller left: code nt65 cannot follow sees only those, which the model covers,
-  and a stack whose contents are not known may hold anything. A block gets no such lens.
+  and a stack whose contents are not known may hold anything. Where nothing there holds what the
+  caller left, the list is complete only for the seven registers the model covers, and says so
+  by naming those it does not read, as `reads none of A, X, Y, C, Z, N, V` or
+  `reads A · none of X, Y, C, Z, N, V`. Such code may still use what the caller left elsewhere:
+  the bytes beneath the return address, the decimal and interrupt flags, and on the 65816 D and
+  B. A block gets no such lens.
 - **On hover over the line that declares a routine or opens a block**, the same lists, because
   the lenses above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,
@@ -3742,7 +3754,9 @@ reaches the block, each `*` item is the state at the call, which the caller know
 it did before the call, and a part the body set is what the body set it to. The block must
 leave the state as it found it. What a `php`, `phd` or `phb` in either saves is kept in the
 routine's terms, the state at the call standing in for each `*`, so a pull after the body
-reads back the width or value that was pushed. A pull in the body gets back a `*` item only
+reads back the width or value that was pushed. A push also remembers which body's `*` item it
+saved, so a pull in that body, or in a body called from it, gets the item back even where the
+routine does not know the state at the call. A pull in the body gets back a `*` item only
 where what it pulls is what that item means; anything else known comes back as it is, and the
 rest is unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
 6502 and its CMOS variants, signatures on macros are accepted and have no effect.

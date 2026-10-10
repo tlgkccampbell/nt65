@@ -233,6 +233,46 @@ public sealed class ProcessorRequestsTests
     }
 
     /// <summary>
+    /// With no call chosen, a routine that declares <c>pushed n</c> or <c>pulls n</c> lists the
+    /// bytes it was entered with under its own pushes, but the summary counts only what the
+    /// routine itself pushed. The return address and the caller's bytes were there before it ran.
+    /// </summary>
+    /// <param name="item">The signature item that gives the routine bytes at entry.</param>
+    /// <param name="call">How the caller reaches the routine with those bytes.</param>
+    [Theory]
+    [InlineData("pushed 2", "pea $1234\n    jsr takes\n    pla\n    pla")]
+    [InlineData("pulls 2", "jsr takes")]
+    public async Task TheCountOfPushedBytesLeavesOutTheBytesTheRoutineWasEnteredWith(string item, string call)
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In($$"""
+            .module main
+            .cpu 65816
+            .segment CODE
+            .export .proc main: a8, i8, native {
+                {{call.Replace("\n", "\n    ", StringComparison.Ordinal)}}
+                rts
+            }
+
+            .proc takes: a8, i8, native, {{item}} {
+                pha
+                n|op
+                pla
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedAsync(timeout, (Uri, text));
+
+        var any = await ProcessorAsync(client, position, [], timeout);
+        Assert.NotNull(any);
+        var stack = any.Rows[^1];
+        Assert.Equal("1 byte pushed", stack.Value);
+        Assert.Equal("A as entered, 8-bit", stack.Rows![0].Value);
+        Assert.Equal("the stack the routine was entered with", stack.Rows![^1].Value);
+        Assert.True(stack.Rows!.Count > 2);
+    }
+
+    /// <summary>
     /// A line in a repetition or a macro body runs once per expansion. Where the expansions reach
     /// it in different states, the state row shows what they agree on, and the rows under it list
     /// each state with how many expansions it reaches, as the hover does. The first pass through

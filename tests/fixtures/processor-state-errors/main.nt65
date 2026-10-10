@@ -187,7 +187,9 @@
 }
 
 ; A recursive call is one of a routine's callers, so a call to itself in another width
-; disagrees with the others where the body depends on the width.
+; disagrees with the others where the body depends on the width. The routine returns with A
+; 8 bits on every path, which is what its exit is inferred to be once its callers disagree, so
+; its caller needs no `sep` after the call.
 .proc recurse {             ;! error[callers-disagree]: `recurse` is called with `a16` by some callers and `a8` by others, and `lda #` depends on the width of A
     lda #1
     cmp value
@@ -201,7 +203,6 @@
 
 .export .proc recurse_caller: a8, native {
     jsr recurse
-    sep #$20
     rts
 }
 

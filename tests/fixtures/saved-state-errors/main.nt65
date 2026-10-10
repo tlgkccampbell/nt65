@@ -27,6 +27,46 @@
     plp
 }
 
+.macro restored(): a16 {
+    pld
+}
+
+.macro restoreb(): a8 {
+    plb
+}
+
+.macro widened(): a8 {
+    php
+    rep #$10
+    plp
+}
+
+.macro kept_page(): a16 {
+    phd
+    lda #$2100
+    tcd
+    pld
+}
+
+.macro kept_bank(): a8 {
+    phb
+    lda #$7e
+    pha
+    plb
+    plb
+}
+
+.macro outer(): a8, native {
+    php
+    phd
+    phb
+    restoreb!()
+    rep #$20
+    restored!()
+    sep #$20
+    restorep!()
+}
+
 ; A status pushed in the body holds 16-bit X and Y, so the `plp` after it does not restore
 ; the width the routine was entered with.
 .segment CODE
@@ -94,5 +134,71 @@
     xce
     plp
     lda #$12
+    rts
+}
+
+; A push before the call holds what the routine was entered with. A pull in the body gets it
+; back as the body's `*` item where the state at the call is still the routine's `*`, and not
+; where the routine changed it first.
+.proc kept_across: a8, dp*, dbr*, native {
+    phd
+    phb
+    restoreb!()
+    rep #$20
+    restored!()
+    sep #$20
+    rts
+}
+
+.proc moved_across: a16, dp* {
+    phd
+    lda #$2100
+    tcd
+    restored!()             ;! error[asserted-item-not-restored]: `restored!` declares `dp*`, so D must be what it was on entry, but at the end of its body it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_across` declares `dp*`, so D must be what it was on entry, but here it may not be
+}
+
+.proc banked_across: a8, dbr* {
+    phb
+    lda #$7e
+    pha
+    plb
+    restoreb!()             ;! error[asserted-item-not-restored]: `restoreb!` declares `dbr*`, so B must be what it was on entry, but at the end of its body it may not be
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `banked_across` declares `dbr*`, so B must be what it was on entry, but here it may not be
+}
+
+; A body's `*` item is the state at its call even where the routine does not know that state,
+; so a push and a pull in the body still save and restore it.
+.proc unknown_at_call: a8, i?, dp?, dbr?, native {
+    widened!()
+    rep #$20
+    kept_page!()
+    sep #$20
+    kept_bank!()
+    rts
+}
+
+; A push in one body and a pull in a body called from it agree on what the outer body's `*`
+; items mean.
+.proc nested_bodies: a8, i?, dp?, dbr?, native {
+    outer!()
+    rts
+}
+
+; A data bank entered as one of a set of banks comes back as that same bank, at the routine's
+; level and in a body whose signature declares the set.
+.macro banked(): a8, dbr = [$00..$3f, $80..$bf] {
+    phb
+    phk
+    plb
+    plb
+}
+
+.proc kept_set: a8, dbr = [$00..$3f, $80..$bf] {
+    banked!()
+    phb
+    phk
+    plb
+    plb
     rts
 }

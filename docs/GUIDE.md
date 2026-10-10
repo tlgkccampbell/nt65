@@ -1414,7 +1414,9 @@ back is followed, so `txa` … `sta` reads X, and a save and its restore read no
 nt65 cannot follow counts as read. A pushed value reached by `tsx` is read, and a call to a
 routine whose body is not in the program ends the list with `?`, since that routine may read
 anything. It does so only where a register or the stack still holds something the caller left,
-because that is all such a routine can see. A register stored to memory counts as read, even
+because that is all such a routine can see of what the lens covers. Where nothing there does,
+the lens names the registers the routine does not read, as `reads none of A, X, Y, C, Z, N, V`,
+since such a routine may still use what the caller left elsewhere, such as the decimal flag. A register stored to memory counts as read, even
 where it is only being saved, because nt65 does not follow values through memory.
 
 A call or a jump to a label inside another routine is answered from that label. It reads and

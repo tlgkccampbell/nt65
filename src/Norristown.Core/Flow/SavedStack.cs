@@ -110,6 +110,14 @@ public sealed class SavedStack : IEquatable<SavedStack>
         return new SavedStack(builder.ToImmutable(), offset);
     }
 
+    /// <summary>
+    /// Returns whether this stack is <paramref name="earlier"/> with nothing taken off it, and
+    /// perhaps more pushed on top. A stack that only pushes have changed since is such a stack.
+    /// </summary>
+    public bool Extends(SavedStack earlier) =>
+        offset == earlier.offset && pushes.Length >= earlier.pushes.Length
+        && pushes.AsSpan(0, earlier.pushes.Length).SequenceEqual(earlier.pushes.AsSpan());
+
     /// <summary>Returns this stack with <paramref name="push"/> on top of it.</summary>
     public SavedStack Push(SavedPush push) => new(pushes.Add(push), offset);
 
