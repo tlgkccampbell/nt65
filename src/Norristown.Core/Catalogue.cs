@@ -2634,14 +2634,15 @@ public static class Catalogue
         "The `.assert` condition is false. nt65 checks an assertion as soon as it can evaluate the condition; one "
             + "that depends on final addresses is passed on for the linker to check.");
 
-    internal static DiagnosticDescriptor AssertMessageNotText { get; } = Entry(
+    internal static DiagnosticDescriptor MessageNotText { get; } = Entry(
         Area.Instructions,
-        "assert-message-not-text",
+        "message-not-text",
         Severity.Error,
-        "an `.assert` message is text: a string in quotes, a text constant, or a call that returns text",
-        "The message is what nt65 reports when the condition does not hold, and what ld65 reports when the "
-            + "linker checks it, so it has to be text nt65 can work out before writing the output. A long "
-            + "message can be declared once as a text constant, `.const MSG = \"...\"`, and named on the line.");
+        "{0} message is text: a string in quotes, a text constant, or a call that returns text",
+        "The message of an `.assert`, an `.error` or a `.warning` is what nt65 reports, and for an `.assert` "
+            + "what ld65 reports when the linker checks it, so it has to be text nt65 can work out before "
+            + "writing the output. The three directives take a message by the same rule. A long message can "
+            + "be declared once as a text constant, `.const MSG = \"...\"`, and named on the line.");
 
     internal static DiagnosticDescriptor ConfigRefused { get; } = Entry(
         Area.Instructions,
@@ -3084,11 +3085,12 @@ public static class Catalogue
         Area.ControlFlow,
         "code-label-as-data",
         Severity.Error,
-        "taking the address of `{0}` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `{1}`",
+        "taking the address of `{0}` lets code jump to it unseen: {1}",
         "Taking the address of an instruction, in a table, a `pea` or an immediate, means something may later jump "
             + "to it indirectly, where the analysis cannot follow. Declare the label an entry point with a "
             + "`.state` after it, or name it in a `.next` on the indirect jump in its own routine, so the analysis "
-            + "follows flow to it.");
+            + "follows flow to it. A `.label` inside an instruction can only be named in a `.next`, because the "
+            + "path from it starts inside the instruction's bytes, where no `.state` can stand.");
 
     internal static DiagnosticDescriptor SelfModifyingUnchecked { get; } = Entry(
         Area.ControlFlow,

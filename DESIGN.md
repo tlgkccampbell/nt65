@@ -3149,10 +3149,11 @@ nt65 has said why it has none.
 `.assert cond, "message"` takes no level. ca65's `error`, `warning`, `lderror` and
 `ldwarning` choose when a check runs, which nt65 decides itself: at edit time when it can,
 and otherwise at link time, which the output writes as ca65's `lderror`. A failed assertion
-is always an error, and the message may be left out. The message is text: a string in quotes,
-a text constant or a call that returns text, and nt65 writes what it stands for into the
-output. An `.assert` line that ends with its comma continues onto the next (§4), so a long
-message has a line of its own:
+is always an error, and the message may be left out. An `.assert`, an `.error` and a
+`.warning` take their message by one rule: it is text, which is a string in quotes, a text
+constant or a call that returns text, and anything else is reported as `message-not-text`.
+nt65 writes what an `.assert` message stands for into the output. An `.assert` line that
+ends with its comma continues onto the next (§4), so a long message has a line of its own:
 
 ```nt65
 .const PAST_ZERO_PAGE = "main must be past the zero page, where the direct-page variables live"
@@ -3163,9 +3164,10 @@ message has a line of its own:
 .assert main >= $0200, PAST_ZERO_PAGE
 ```
 
-`.error "text"` is a configuration the
-file refuses to be built in, and `.warning "text"` one it builds in and has something to say
-about.
+`.error message` is a configuration the
+file refuses to be built in, and `.warning message` one it builds in and has something to say
+about. Each message is text by the same rule as an `.assert` message, so `.error UNSUPPORTED`
+reports the text constant `UNSUPPORTED` stands for.
 
 `.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
 their lines are values (§8). `.if` is allowed in an `.enum` body too, where its lines are
@@ -5815,8 +5817,8 @@ place       := '.place' module-path                    ; at file level, in no bl
 allow       := '.allow' string (',' string)?           ; a warning's name, then a reason; applies
                                                       ; to the next statement, or block, below
 assert      := '.assert' expr (',' expr)?                ; the message is text; a line break may follow the ','
-warning     := '.warning' string
-error       := '.error' string
+warning     := '.warning' expr                           ; the message is text, as an assert's is
+error       := '.error' expr                             ; the message is text, as an assert's is
 cpu         := '.cpu' ('6502' | '6502x' | '65sc02' | 'r65c02' | '65c02' | '65816')
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'

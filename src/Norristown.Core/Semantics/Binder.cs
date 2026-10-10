@@ -2114,6 +2114,10 @@ internal sealed partial class Binder
         /// <inheritdoc/>
         public override void VisitAssertDirective(AssertDirectiveSyntax node) => binder.CollectUses(node);
 
+        /// <summary>Collects the names an <c>.error</c> or a <c>.warning</c> message uses.</summary>
+        /// <param name="node">The <c>.error</c> or <c>.warning</c> line.</param>
+        public override void VisitErrorDirective(ErrorDirectiveSyntax node) => binder.CollectUses(node);
+
         /// <summary>
         /// Collects the names an annotation uses. An annotation names labels and nothing else, so
         /// its names resolve as any other use does. The flow analysis checks that they name labels
