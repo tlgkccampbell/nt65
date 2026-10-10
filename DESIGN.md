@@ -1806,7 +1806,14 @@ label:
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
   control goes, move the stack or change the widths; a run whose last instruction starts 32 bytes
   or more from the position, or one that runs into data or past the routine's bytes, is an error
-  too (hidden-path-unfollowed). Each
+  too (hidden-path-unfollowed). The one
+  exception is a return: bytes that decode as `rts`, or `rtl` on the 65816, end the path there,
+  and nothing after them is decoded. Branching into an operand whose byte is `$60` is a classic
+  way to save a byte, and the hidden return is treated exactly as an `rts` written at that point:
+  the flags, registers, stack, keeps and processor-state analyses check it as they check any
+  return, and so do the rules on which return a near or a far routine uses, a `noreturn`
+  routine and an interrupt handler. A decoded `rti`, `jmp`, `jsr`, `brk` or branch is still
+  refused, because its target or its state is not one the path can show. Each
   decoded instruction is counted as a written one is, in the processor state and with the
   decimal flag that reach the position, and a decoded `cld`, `sed` or `tcd` is followed. The
   output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there,
@@ -1897,7 +1904,7 @@ The third directive is about the end of a routine rather than a statement:
 | indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines, or labels inside routines, that it may call; the call returns with the merge of their exits, a label's being that of its routine |
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
 | a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
-| jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name, and is not a constant address | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range. A jump to a constant address, one whose value is a number and that names no label, routine or data, as `jmp $FFD2` or `jmp KERNAL + 3` does, is not computed: it is a tail call to the code there, as `jsr $FFD2` is a call to it, so the path ends there and nothing is kept across it. On the 6502 and its CMOS variants it needs nothing. On the 65816 that code has to be a routine with a signature, as the target of a call has to be, since what it hands back is what the jumping routine returns with: an extern proc, `.proc CHROUT = $FFD2: ...`, says what it expects and returns with, and a bare address is `call-target-unknown` and a constant that is no routine `call-target-not-a-routine`, as for a call |
+| jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name, and is not a constant address | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range. That holds for ca65's `beq *+4` too: nt65's labels exist so that no one counts bytes from a branch. Such an offset is placed against the routine's layout, and where it lands on the start of an instruction of the same routine the editor's fix labels that instruction with a cheap local, `@skip:`, or names the label already there, and writes the label as the operand; where it lands inside an instruction or outside the routine, the message says so and no fix is offered. A jump to a constant address, one whose value is a number and that names no label, routine or data, as `jmp $FFD2` or `jmp KERNAL + 3` does, is not computed: it is a tail call to the code there, as `jsr $FFD2` is a call to it, so the path ends there and nothing is kept across it. On the 6502 and its CMOS variants it needs nothing. On the 65816 that code has to be a routine with a signature, as the target of a call has to be, since what it hands back is what the jumping routine returns with: an extern proc, `.proc CHROUT = $FFD2: ...`, says what it expects and returns with, and a bare address is `call-target-unknown` and a constant that is no routine `call-target-not-a-routine`, as for a call |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | code nothing reaches: an instruction with no label after an `rts`, a `jmp`, a call that never returns, or a branch the flags show is always taken | no fall-through and no label, so nothing can name it; in a macro body, no call of the macro reaches it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
@@ -2259,8 +2266,10 @@ or `mvp`, moves one byte more than the 16-bit accumulator C holds, at 7 cycles a
 a count only where the flag analysis knows C: where A is 16 bits wide and an immediate load gave
 it its constant, as `lda #$00ff` before `mvn` does, which is 7 × 256 = 1792 cycles. An 8-bit load
 leaves the high byte as it was, so it gives no count, and a routine with a move nt65 cannot count
-says why on its lens. Cycles are processor
-cycles; memory speed is the board's. Tooling shows the interval per
+says why on its lens. The instructions a position inside an instruction runs as (§7.4) are
+counted as written ones are, a return that ends such a path included, so a branch into the `$60`
+of an operand costs the `rts` it runs. Cycles are processor cycles; memory speed is the board's.
+Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`
@@ -3419,6 +3428,13 @@ The rules:
   these forms: the `.each` itself declares nothing, only the declarations in its body do.
 - A condition in the body may name the enum's members, `.if ch == Channel::noise`: the
   binding's own value is one of them, so they are known where a turn's conditions are answered.
+- The binding alone is the member's value, a number, so an instruction that reaches memory
+  through it, `lda ch` or `sta ch+1`, reads or writes the address that number names. That is
+  almost never meant where the member's data is one path away, `level::ch`, so in the body of an
+  `.each` over a named enum, and so of every family form, it is the warning
+  `constant-used-as-address`. Outside such a body that name is an editor suggestion about a
+  declared constant, since a constant used as an address there is usually meant. An
+  immediate, `#ch`, and a path, `level::ch`, are what the body should write.
 - What the body declares is the turn's, as a repetition's always is, and is named after the
   instance in the output (§13). An instance's name, kind and signature come from the headers,
   so a file's interface is still derived from headers alone (§14).
@@ -3796,11 +3812,19 @@ A diagnostic lands on the side of the call that can fix it. A definition is chec
 what holds under any arguments: parsing, names, the forbidden items above, and how its
 parameters are used. A call is checked for each argument against its parameter's kind: a
 `const` that is not constant, a word not in its `one` list, an unbraced `(ptr)` for an
-`operand`. What depends on a particular binding, such as `stx dest` with `dest` bound to
-`buf,x`, is reported at the call with a note naming the line in the body. So is what the flow
-and state analyses find in an expansion, since they analyze each call's code where it is called:
-data the code runs into, a construct without the annotation §7.4 requires, a return the routine
-may not make, or the wrong state. A fix is offered only where it edits the caller's own lines.
+`operand`. Everything else is found in an expansion, and one rule places it: a problem with a
+line a macro body emits is reported at the call written in the file's own text, outside every
+body, with a note naming the line in the body. That covers what depends on a particular
+binding, such as `stx dest` with `dest` bound to `buf,x`, and what layout and the flow and
+state analyses find, since they analyze each call's code where it is called: data the code runs
+into, a construct without the annotation §7.4 requires, an annotation that is not needed or
+names the wrong place, code or a label nothing reaches, a return the routine may not make, or
+the wrong state. It holds for a body in the same file as the call and for one in another file
+alike. Code a body line emits counts as unreached only where no call reaches it, and is then
+reported at each call. A `.func` body is treated the same way: a problem evaluating it with
+what a call gave, such as a division by zero, is reported at the call, with a note naming the
+body. An `.allow` in a body covers what is reported at a call through that line. A fix is
+offered only where it edits the caller's own lines.
 
 A word a condition compares with what a parameter stands for is never looked up, so a
 misspelt one would quietly never match. A comparison of `.mode(p)` with a word that is not a

@@ -6,6 +6,7 @@
 .cpu 6502
 
 .export wrong_target, two_targets, unreached, end_path, computed, computed_unknown, elsewhere
+.export offset_to_start, offset_to_label, offset_inside, offset_outside
 
 .segment CODE
 .proc wrong_target {
@@ -58,6 +59,34 @@
     .allow "code-unreachable", "the `.next ?` above is the error under test"
     rts
 }
+; A branch to an offset from itself, `*+n`, is placed against the routine's bytes. Landing on an
+; instruction, it can name a label there instead; inside an instruction or outside the routine,
+; there is no instruction start to name, and the message says why.
+.proc offset_to_start {
+    lda #1
+    beq *+4                 ;! error[computed-branch-unchecked]: `beq *+4` branches to `*+4`, an offset from the branch rather than a label, which nt65 cannot follow: label the instruction it lands on, `rts`, and branch to the label
+    lda #2
+    rts
+}
+.proc offset_to_label {
+    lda #1
+    beq *+4                 ;! error[computed-branch-unchecked]: `beq *+4` branches to `*+4`, an offset from the branch rather than a label, which nt65 cannot follow: write `@done`, the label of the instruction it lands on, `rts`, as its operand
+    lda #2
+@done:
+    rts
+}
+.proc offset_inside {
+    lda #1
+    beq *+3                 ;! error[computed-branch-unchecked]: `beq *+3` branches to `*+3`, an offset from the branch rather than a label, which nt65 cannot follow: it lands 1 byte into `lda #2`, where no instruction starts, so name that position with a `.label` and branch to it
+    lda #2
+    rts
+}
+.proc offset_outside {
+    lda #1
+    beq *-4                 ;! error[computed-branch-unchecked]: `beq *-4` branches to `*-4`, an offset from the branch rather than a label, which nt65 cannot follow: it lands outside `offset_outside`, so write the label of the code there as its operand
+    rts
+}
+
 .proc computed_end {
     rts
 }

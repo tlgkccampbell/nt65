@@ -1,0 +1,64 @@
+; A hidden return is checked as a return written there would be, so what a routine promises has
+; to hold on the path through it too. Anything else hidden that changes where control goes is
+; still refused.
+.module main
+
+.cpu 6502
+
+.export loses_x, carry_set, pushed, never_back, through_rti
+
+.segment CODE
+
+; `lda $60E8` is $AD $E8 $60: from its second byte it runs `inx`, then `rts`, and X is lost.
+.proc loses_x: keeps x {
+@top:
+    lda $60E8
+    .label tail = @top + 1  ;! error[keeps-broken]: `loses_x` promises `keeps x`, but X is not the same as on entry here: restore it before returning, or add `.state keeps x` at the point where the entry value is restored
+    lsr a
+    bcc tail
+    rts
+}
+
+; The branch into the operand is taken with the carry clear, which the signature rules out.
+.proc carry_set: -> c = 1 {
+@top:
+    lda $60
+    .label leave = @top + 1 ;! error[return-flag-mismatch]: `carry_set` declares it returns with `c = 1`, but C is 0 here
+    lsr a
+    bcc leave
+    sec
+    rts
+}
+
+; A return with a byte still pushed above the return address pulls that byte instead.
+.proc pushed {
+    pha
+@top:
+    lda $60
+    .label leave = @top + 1 ;! error[return-past-pushes]: `rts` returns through 1 byte this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+    lsr a
+    bcc leave
+    pla
+    rts
+}
+
+; A routine that never returns may not return through hidden bytes either.
+.proc never_back: noreturn {
+@top:
+    lda $60
+    .label leave = @top + 1 ;! error[noreturn-returns]: `never_back` is declared `noreturn`, but `rts` returns from it
+    lsr a
+    bcc leave
+@forever:
+    jmp @forever
+}
+
+; `lda $40` runs `rti` from its second byte, which is not a return from a call.
+.proc through_rti {
+@top:
+    lda $40
+    .label leave = @top + 1 ;! error[hidden-path-unfollowed]: nt65 cannot follow the bytes from `leave`: they run as `rti`, which changes where control goes
+    lsr a
+    bcc leave
+    rts
+}

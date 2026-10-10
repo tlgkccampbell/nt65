@@ -383,10 +383,9 @@ public sealed partial class CodeLayout
         /// </summary>
         private void ReportPaired(SyntaxNode inTheBody, DiagnosticMessage message)
         {
-            if (expansion?.NearestCall is not { } call)
+            if (expansion?.NearestCall is null)
                 return;
-            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
-                [new RelatedSpan(inTheBody.Tree.GetSpan(inTheBody.Span), "in the macro body")]));
+            diagnostics.Add(Expansion.Problem(model.Tree, inTheBody, expansion, Severity.Error, message));
         }
     }
 }

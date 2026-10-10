@@ -249,6 +249,122 @@ internal sealed class Requirements
     }
 
     /// <summary>
+    /// Reports a conditional branch whose target is computed rather than named. A target written
+    /// as an offset from the branch, such as <c>*+4</c>, is placed against the routine's layout.
+    /// Where it lands on the start of an instruction of the same routine, the fix labels that
+    /// instruction and branches to the label. Where it lands inside an instruction or outside the
+    /// routine, the message says so and no fix is offered.
+    /// </summary>
+    private void ReportComputedBranch(Step step, InstructionStatementSyntax statement, SyntaxNode target)
+    {
+        if (OffsetFromBranch(target, step.On) is not { } offset)
+        {
+            Report(statement, step.On, Catalogue.ComputedBranchUnchecked.Message(
+                Quoted(statement), "a computed address", "write the label it goes to as its operand"));
+            return;
+        }
+        var written = $"`{target.GetText().Trim()}`, an offset from the branch rather than a label";
+        var landing = Landing(step, offset);
+        var why = landing switch
+        {
+            { Inside: { } inside, Into: var into } => $"it lands {(into == 1 ? "1 byte" : $"{into} bytes")} into "
+                + $"`{inside.Statement.GetText().Trim()}`, where no instruction starts, so name that position with a "
+                + "`.label` and branch to it",
+            { Start: { } start, Label: { } label } => $"write `{label.DisplayName}`, the label of the instruction it "
+                + $"lands on, `{start.Statement.GetText().Trim()}`, as its operand",
+            { Start: { } start } => $"label the instruction it lands on, `{start.Statement.GetText().Trim()}`, and branch "
+                + "to the label",
+            _ when step.Routine is { } routine => $"it lands outside `{routine.DisplayName}`, so write the label of the "
+                + "code there as its operand",
+            _ => "write the label it goes to as its operand",
+        };
+        DiagnosticFix? fix = null;
+        if (landing.Start is { } instruction && step.On is null && statement.Tree == model.Tree
+            && instruction.On is null && instruction.Statement.Tree == model.Tree)
+        {
+            fix = landing.Label is { } label
+                ? new DiagnosticFix(FixKind.LandingLabel, label.DisplayName)
+                : new DiagnosticFix(FixKind.LandingLabel, FreeLabel(step.Routine),
+                    instruction.Statement.Tree.GetSpan(instruction.Statement.Span));
+        }
+        Report(statement, step.On, Catalogue.ComputedBranchUnchecked.Message(Quoted(statement), written, why), fix);
+    }
+
+    /// <summary>
+    /// Returns the number of bytes from a branch's first byte to its target, for a target written
+    /// as <c>*</c> plus or minus a constant, or null for any other target.
+    /// </summary>
+    private long? OffsetFromBranch(SyntaxNode target, Expansion? on)
+    {
+        switch (target)
+        {
+            case CurrentAddressExpressionSyntax:
+                return 0;
+            case ParenthesizedExpressionSyntax parenthesized:
+                return OffsetFromBranch(parenthesized.Expression, on);
+            case BinaryExpressionSyntax { Left: CurrentAddressExpressionSyntax } binary
+                when binary.OperatorToken.Kind is SyntaxKind.Plus or SyntaxKind.Minus
+                && model.ValueOf(binary.Right, on).AsNumber() is { } distance:
+                return binary.OperatorToken.Kind == SyntaxKind.Plus ? distance : -distance;
+            case BinaryExpressionSyntax { Right: CurrentAddressExpressionSyntax } binary
+                when binary.OperatorToken.Kind == SyntaxKind.Plus && model.ValueOf(binary.Left, on).AsNumber() is { } distance:
+                return distance;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Returns where a branch's target lands among the steps of its own routine, given as the
+    /// number of bytes from the branch's first byte.
+    /// </summary>
+    private BranchLanding Landing(Step branch, long offset)
+    {
+        if (branch.Routine is not { } routine || layout.PositionOf(branch.Statement, branch.On) is not { } from)
+            return default;
+        var at = from.Offset + offset;
+        var landing = default(BranchLanding);
+        foreach (var step in layout.Steps)
+        {
+            if (step.Routine != routine)
+                continue;
+            if (step.Label is { Kind: SymbolKind.Label } label)
+            {
+                if (step.On is null && layout.PositionOf(label) is { } labelled
+                    && labelled.Stream == from.Stream && labelled.Offset == at)
+                {
+                    landing = landing with { Label = label };
+                }
+                continue;
+            }
+            if (layout.PositionOf(step.Statement, step.On) is not { } position || position.Stream != from.Stream)
+                continue;
+            if (step.Statement is InstructionStatementSyntax && position.Length > 0)
+            {
+                if (position.Offset == at)
+                    return landing with { Start = step };
+                if (position.Offset < at && at < position.End)
+                    return new BranchLanding(Inside: step, Into: (int)(at - position.Offset));
+            }
+        }
+        return default;
+    }
+
+    /// <summary>
+    /// Returns a cheap local label that <paramref name="routine"/> does not declare yet, for a fix
+    /// that labels an instruction in it.
+    /// </summary>
+    private string FreeLabel(Symbol? routine)
+    {
+        var taken = model.Symbols.Where(symbol => symbol.IsCheapLocal && symbol.Routine == routine)
+            .Select(symbol => symbol.Name).ToHashSet(StringComparer.Ordinal);
+        var name = "skip";
+        for (var n = 2; taken.Contains(name); n++)
+            name = $"skip{n}";
+        return "@" + name;
+    }
+
+    /// <summary>
     /// Reports a diagnostic where a direct transfer's target is computed, is not a label, or is
     /// data the transfer is not declared to reach.
     /// </summary>
@@ -275,7 +391,7 @@ internal sealed class Requirements
             if (!calls && targetExpression is not NameExpressionSyntax)
             {
                 if (branch)
-                    Report(statement, step.On, Catalogue.ComputedBranchUnchecked.Message(Quoted(statement)));
+                    ReportComputedBranch(step, statement, targetExpression);
                 else
                     Report(statement, step.On, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
             }
@@ -394,7 +510,7 @@ internal sealed class Requirements
         // what runs off, and the `.fallthrough` the fix adds still goes at the routine's end.
         var found = Expansion.BodyLine(step.Statement, step.On, model.Tree) is var (call, _, _)
             ? new Diagnostic(call.Tree.GetSpan(call.Span), RunsOff(routine, own, branch),
-                [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), "in the macro body")])
+                [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), Expansion.InTheMacroBody)])
             : new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), RunsOff(routine, own, branch));
         diagnostics.Add(found with
         {
@@ -496,16 +612,8 @@ internal sealed class Requirements
     /// chose to expand it there, with the body line as a note. Such a report has no fix, since a
     /// fix would change a line that every call expands.
     /// </summary>
-    private void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null)
-    {
-        if (Expansion.BodyLine(node, on, model.Tree) is var (call, _, _))
-        {
-            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
-                [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
-            return;
-        }
-        diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
-    }
+    private void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+        diagnostics.Add(Expansion.Problem(model.Tree, node, on, Severity.Error, message, fix));
 
     /// <summary>
     /// Returns a fix that adds a <c>.next ?</c> after the step's statement, or null where the
@@ -514,6 +622,16 @@ internal sealed class Requirements
     /// </summary>
     private DiagnosticFix? EndPath(Step step) =>
         step.On is null && step.Statement.Tree == model.Tree ? new DiagnosticFix(FixKind.EndPath) : null;
+
+    /// <summary>
+    /// Represents where a branch's target lands among the steps of its routine. Every part is
+    /// unset where the target lands nowhere in the routine.
+    /// </summary>
+    /// <param name="Start">The instruction whose first byte the target is, or null.</param>
+    /// <param name="Label">A label written in the file at the target, which a fix can name, or null.</param>
+    /// <param name="Inside">The instruction the target lands inside, past its first byte, or null.</param>
+    /// <param name="Into">How many bytes into that instruction the target lands.</param>
+    private readonly record struct BranchLanding(Step? Start = null, Symbol? Label = null, Step? Inside = null, int Into = 0);
 
     /// <summary>
     /// Represents a label that starts a block, with the region and block it starts and whether it

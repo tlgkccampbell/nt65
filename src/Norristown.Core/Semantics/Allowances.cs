@@ -6,10 +6,6 @@ namespace Norristown.Semantics;
 /// </summary>
 internal sealed class Allowances
 {
-    // A diagnostic about another file's macro body is reported at the call, with the body's line
-    // as a related span under this message. An `.allow` in the body covers it there.
-    private const string InTheMacroBody = "in the macro body";
-
     private readonly Dictionary<string, List<Allowance>> byFile = new(StringComparer.Ordinal);
 
     private Allowances(IEnumerable<Allowance> allowances)
@@ -72,7 +68,7 @@ internal sealed class Allowances
         var hidden = false;
         foreach (var allowance in Covering(diagnostic.Span, diagnostic.Id)
             .Concat(diagnostic.Related
-                .Where(related => related.Message == InTheMacroBody)
+                .Where(related => related.Message == Expansion.InTheMacroBody)
                 .SelectMany(related => Covering(related.Span, diagnostic.Id))))
         {
             used.Add(allowance);

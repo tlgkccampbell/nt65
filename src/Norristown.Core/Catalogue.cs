@@ -2756,7 +2756,8 @@ public static class Catalogue
         "From a position inside an instruction, nt65 decodes the bytes as the processor runs them, until they "
             + "reach the start of an instruction as written, and the analyses follow those instructions. Every "
             + "byte has to be known before linking, each instruction has to be one the processor has, and none may "
-            + "change where control goes or move the stack, or nt65 could not tell where they lead.");
+            + "change where control goes or move the stack, or nt65 could not tell where they lead. The one "
+            + "exception is an `rts` or an `rtl`, which ends the path and is checked as a return written there.");
 
     internal static DiagnosticDescriptor PatchVariantRejected { get; } = Entry(
         Area.ControlFlow,
@@ -2984,10 +2985,14 @@ public static class Catalogue
         Area.ControlFlow,
         "computed-branch-unchecked",
         Severity.Error,
-        "{0} branches to a computed address, which nt65 cannot follow: write the label it goes to as its operand",
+        "{0} branches to {1}, which nt65 cannot follow: {2}",
         "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
             + "branch can only reach a place within its range, which is code the program holds, so the label at "
-            + "that address can be named. Where nothing there has a label, add one.");
+            + "that address can be named. Where nothing there has a label, add one. A target written as an offset "
+            + "from the branch, such as `*+4`, is placed against the routine's bytes: where it lands on an "
+            + "instruction of the same routine, the fix labels that instruction and branches to the label. Where "
+            + "it lands inside an instruction, a `.label` names that position, and the bytes there are checked as "
+            + "the instructions they run as.");
 
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
         Area.ControlFlow,
@@ -4282,13 +4287,17 @@ public static class Catalogue
         Area.Suggestions,
         "constant-used-as-address",
         Severity.Info,
-        "`{0}` is used as an address: declare it as data, or with `.mmio` if it is a hardware register",
+        "`{0}` is used as an address: {1}",
         "A constant is a number to nt65, even where an instruction reaches memory through it, so what is at that "
             + "address has no element type, size or fields, and the editor cannot follow values stored there. Declared "
             + "as data found elsewhere, `.data name: .byte = address`, the same name has all of those, and with "
             + "`.mmio` in place of `.data` it is a hardware register, whose value the hardware sets. The output is the "
             + "same. A constant that a branch, a jump or a call names directly is the address of code, and is not "
-            + "suggested.");
+            + "suggested. In the body of a family, a `.multiproc` or an `.each` over a named enum, the binding is a "
+            + "member's value, and an instruction that reaches memory through it bare is a warning rather than a "
+            + "suggestion. There a reader expects the name to mean the member's data, such as `level::ch`, and "
+            + "`lda ch` reads the address that the value names instead. Write the path to the data, or `#ch` for "
+            + "the value itself.");
 
     internal static DiagnosticDescriptor WidthAlreadySet { get; } = Entry(
         Area.Suggestions,

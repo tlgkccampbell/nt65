@@ -349,11 +349,13 @@ internal sealed class FlagAnalysis : IKnownFlags
     /// routine's caller, or null where it goes back somewhere else, as <c>rti</c> does.
     /// <paramref name="last"/> holds the flags before its last statement and
     /// <paramref name="through"/> those after it. A <c>.next .return</c> returns with what its
-    /// statement leaves, as an <c>rts</c> returns with what it finds.
+    /// statement leaves, as an <c>rts</c> returns with what it finds. So do the bytes from a
+    /// position inside an instruction that end in a return, which is not among the instructions
+    /// they run as before it.
     /// </summary>
-    private static FlagState? ReturnedWith(BasicBlock block, FlagState last, FlagState through)
+    private FlagState? ReturnedWith(BasicBlock block, FlagState last, FlagState through)
     {
-        if (block.Next is { ReturnToken: not null })
+        if (block.Next is { ReturnToken: not null } || layout.HiddenPathAt(block.Steps[^1])?.Return is not null)
             return through;
         return block.Next is null && block.Steps[^1].Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl }
             ? last

@@ -6,7 +6,7 @@
 .cpu 6502
 
 .macro pair(first, second) {
-    .byte first, second             ;! error[value-too-wide]: $012c does not fit in `.byte`
+    .byte first, second
 }
 
 .macro load(source: operand) {
@@ -29,7 +29,7 @@ loop:                               ;! error[label-outside-a-routine]: `loop` is
     ),y})
     rts
     .next ?
-    pair!(1,                        ; a value too wide, reported in the body
+    pair!(1,                        ;! error[value-too-wide]: $012c does not fit in `.byte`
         300)
     pair!(5,                        ;! error[expected-expression]: expected an expression
     .byte 6

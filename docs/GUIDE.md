@@ -904,6 +904,11 @@ lands on the `.multiproc` line. Nothing is built by pasting names together, so t
 knows every instance: renaming `play::noise` renames the enum member `Channel::noise`, and with
 it every instance named after it.
 
+Inside the body, `ch` alone is the member's value, a number, so `lda ch` would read the byte
+at address 0, 1 or 2 rather than `level::ch`. A build warns about a bare binding used as an
+address in a family's body (`constant-used-as-address`): write the path to the data, or `#ch`
+for the value itself.
+
 ## Macros
 
 Most of what ca65 code uses macros for is a language feature in nt65: constants and `.func`
@@ -967,7 +972,10 @@ an `.if` to test, and `.exprof(p)` is the expression inside it.
 | an enum's name | one of that enum's members |
 
 A mistake in an argument is reported at the call, naming the parameter, rather than as an
-error somewhere inside the expansion.
+error somewhere inside the expansion. So is any other problem with a line the body emits, such
+as a `.next` that is not needed or code no path reaches: it is reported at your call, with a
+note pointing at the line in the body, because the call is what you can change. A problem
+evaluating a `.func` body with the arguments a call gave is reported at the call the same way.
 
 **Defaults and named arguments.** `.macro note(pitch: const, frames: const = 1)` gives
 `frames` a default, and a call can name its arguments after the positional ones:
@@ -1107,6 +1115,12 @@ address members.
 assumes the code it reaches may do anything: no register survives it, nothing is known about
 the state after it, and its cost is unknown. A routine that promises `keeps` cannot keep that
 promise across a `.next ?`, so where a promise matters, name the places control goes.
+
+A branch is different: it always goes to its operand or on, so its target is code the program
+holds, and nt65 asks for the label there rather than a `.next`. That includes ca65's
+`beq *+4`, an offset from the branch. Where the offset lands on an instruction of the same
+routine, the editor's fix labels that instruction `@skip` and branches to it; where it lands
+inside an instruction, the message says so, and a `.label` names that position.
 
 Most targets can be named. A jump to a ROM entry point names an extern proc declared at its
 address, and a jump through a vector that the program itself, or the system at startup, fills
@@ -1285,7 +1299,23 @@ From that position nt65 decodes the bytes as the CPU runs them, until they reach
 instruction as written, here the `lsr`, and follows those instructions like any others. Hover
 shows them. A branch, a `.next` and an `.assert` may name the position. Every byte has to be one
 nt65 knows, so an operand only the linker knows is an error, and so is a byte the CPU has no
-instruction for, or an instruction that jumps, returns or touches the stack.
+instruction for, or an instruction that jumps or touches the stack.
+
+The one exception is a return. Branching into an operand whose byte is `$60` runs `rts`, which
+saves a byte, and nt65 treats it exactly as an `rts` written there: the routine's `keeps`, its
+exit flags and state, and what it leaves on the stack are all checked where it returns.
+
+```nt65
+.proc halve: keeps y {
+@top:
+    lda $60                         ; $A5 $60, and $60 runs as `rts`
+    .label done = @top + 1
+    lsr a
+    bcc done
+    ldx #1
+    rts
+}
+```
 
 An instruction with several forms names one with the words `.mode` uses, such as
 `.opcode(lda, absx)`, with `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an
@@ -2267,7 +2297,8 @@ everything below works across modules.
   reported by a build: a `jsr` followed by `rts` that can be a `jmp` (and `jsl` with `rtl` a
   `jml`), a `rep` or `sep` that sets a width the register already has, and a `.const` that an
   instruction uses as an address, with fixes that declare it as data with `.data`, or as a
-  hardware register with `.mmio`. The flags bring more: a `.next` the flags prove, a branch
+  hardware register with `.mmio` (in a family's body, a binding used that way is a build
+  warning instead, under the same name). The flags bring more: a `.next` the flags prove, a branch
   that is never taken, a `jmp` that can be a branch a byte shorter (`bra` on the 65C02 and
   the 65816), a branch over a `jmp` that can be the opposite branch, a `clc` or `sec` that
   sets C to what it already is, and a `clc` before `adc #n` where C is 1, which can be

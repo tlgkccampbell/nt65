@@ -199,10 +199,12 @@ public sealed partial class CodeLayout
     /// <summary>
     /// Returns the instructions the bytes from the position <paramref name="label"/> names inside
     /// an instruction run as, or null where it names no such position, or nt65 could not follow
-    /// the bytes.
+    /// the bytes. A return that ends the path is the last of them.
     /// </summary>
     public IReadOnlyList<HiddenInstruction>? HiddenInstructionsOf(Symbol label) =>
-        hidden.Values.FirstOrDefault(path => path.Label == label)?.Instructions;
+        hidden.Values.FirstOrDefault(path => path.Label == label) is { } path
+            ? path.Return is { } leaving ? [.. path.Instructions, leaving] : path.Instructions
+            : null;
 
     /// <summary>
     /// Returns a value indicating whether a <c>.label</c> names a position inside the bytes of

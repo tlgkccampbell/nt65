@@ -310,6 +310,15 @@ public sealed class StackEffects
         {
             if (!height.IsKnown)
                 return height;
+
+            // The bytes from a position inside an instruction move nothing on the stack, but where
+            // they end in a return, it is checked as one written there would be.
+            if (walk.Layout.HiddenPathAt(step)?.Return is { } hidden)
+            {
+                if (report is not null)
+                    CheckReturn(step.Statement, hidden.Mnemonic, height, entry, report);
+                continue;
+            }
             if (step.Statement is not InstructionStatementSyntax statement)
                 continue;
 
@@ -317,7 +326,7 @@ public sealed class StackEffects
             // effect accounts for, and a return or an interrupt is where the path leaves.
             var mnemonic = statement.MnemonicKind;
             if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is null && report is not null)
-                CheckReturn(statement, height, entry, report);
+                CheckReturn(statement, mnemonic, height, entry, report);
 
             // A return used as a jump pulls the address it jumps to before control arrives there,
             // whether that is a label of this routine or another routine.
@@ -379,12 +388,15 @@ public sealed class StackEffects
     /// paths that hold different amounts meet, a return is reported if any of them returns through
     /// bytes, and the count says "up to" or "at least".
     /// <paramref name="entry"/> is the label the routine was entered at, or null for its own name.
+    /// <paramref name="statement"/> is where the return is reported, and <paramref name="mnemonic"/>
+    /// is the return, which a <c>.label</c> may name inside another instruction's bytes.
     /// </summary>
-    private static void CheckReturn(InstructionStatementSyntax statement, Height height, Symbol? entry, List<Diagnostic> report)
+    private static void CheckReturn(
+        SyntaxNode statement, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
     {
         if (height.Least is not { } least)
             return;
-        var returned = SyntaxFacts.TextOf(statement.MnemonicKind);
+        var returned = SyntaxFacts.TextOf(mnemonic);
         DiagnosticMessage message;
         if (least == height.Floor)
         {

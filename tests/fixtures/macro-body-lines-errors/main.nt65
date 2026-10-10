@@ -1,0 +1,134 @@
+; A problem with a line a macro body emits is reported at the call in this file's own text, with
+; the body line as a note. That holds for a body in another file and for one in this file alike,
+; and for the annotation checks, unreachable code and labels, and a `.func` body's evaluation.
+.module main
+
+.cpu 6502
+
+.use lib::{known_next, unknown_after_branch, next_elsewhere, dead_code, dead_label, return_after_call}
+.use lib::{patch_unlisted, patch_rejected, patch_missed, never_taken, next_to_bytes, tenth}
+
+.export known, unknown, elsewhere, label, after_call, unlisted, divided, dead, known_here, not_code
+.export divided_here, dead_here, allowed, rejected, missed, taken, bytes_table, printed
+
+.import print: proc(inline .strz)
+
+.const LIMIT = 5
+.func half(n) = 100 / n
+
+; The same checks on a body declared in this file.
+.macro local_known_next() {
+    jmp @out
+    .next @out
+@out:
+}
+
+.macro local_next_to(target) {
+    jmp (vector)
+    .next target
+}
+
+.macro local_print() {
+    jsr print
+}
+
+.macro local_dead_code() {
+    rts
+    nop
+}
+
+; An `.allow` in the body covers what is reported at each call through the body line.
+.macro allowed_dead_code() {
+    rts
+    .allow "code-unreachable", "the call under test returns first"
+    nop
+}
+
+.segment BSS
+.data vector: .addr
+.data bytes:  .byte[2]
+
+.segment CODE
+.proc known {
+    known_next!()           ;! error[next-successors-known]: `.next` is not needed: `jmp @out` already goes to `@out`
+    rts
+}
+
+.proc unknown {
+    unknown_after_branch!() ;! error[next-unknown-after-branch]: `.next ?` cannot follow `bne @done`, because it would also give up the path where the branch is not taken: if the branch is always taken, write `.next @done`, and otherwise remove the `.next`;! warning[label-unreachable]: `@done` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
+    rts
+}
+
+.proc elsewhere {
+    next_elsewhere!(known)  ;! error[next-not-the-branch-target]: `.next` after `bne @done` can name only the branch's own target, `@done`, to state that the branch is always taken;! warning[label-unreachable]: `@done` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
+    rts
+}
+
+.proc label {
+    dead_label!()           ;! warning[label-unreachable]: `@never` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
+    rts
+}
+
+.proc after_call {
+    return_after_call!(known) ;! error[return-after-call]: `.next .return` cannot follow `jsr routine`, because a call comes back to the statement after it
+}
+
+.proc unlisted {
+    patch_unlisted!()       ;! error[patch-variants-required]: `sta @op` may write the opcode of `@op`, so the `.patch` must list what the instruction can become with `as`
+    rts
+}
+
+.proc divided {
+    lda #tenth(0)           ;! error[division-by-zero]: division by zero
+    rts
+}
+
+.proc dead {
+    dead_code!()            ;! warning[code-unreachable]: this code is never reached: the statement above does not fall through, and nothing branches or jumps here
+}
+
+.proc known_here {
+    local_known_next!()     ;! error[next-successors-known]: `.next` is not needed: `jmp @out` already goes to `@out`
+    rts
+}
+
+.proc not_code {
+    local_next_to!(LIMIT)   ;! error[next-target-not-code]: `LIMIT` is a constant, and `.next` must name a code label, a routine, or a table of them
+}
+
+.proc divided_here {
+    lda #half(0)            ;! error[division-by-zero]: division by zero
+    rts
+}
+
+.proc dead_here {
+    local_dead_code!()      ;! warning[code-unreachable]: this code is never reached: the statement above does not fall through, and nothing branches or jumps here
+}
+
+.proc allowed {
+    allowed_dead_code!()
+}
+
+.proc rejected {
+    patch_rejected!()       ;! error[patch-variant-rejected]: `.patch` cannot list `and` for `lda`: the store writes only the operand, so there is no variant to list
+    rts
+}
+
+.proc missed {
+    patch_missed!()         ;! error[patch-misses-store]: `sta @op+2` writes past `@op`, which is 2 bytes, into `inx` after it: label that instruction and name it with a `.patch`
+    rts
+}
+
+.proc taken {
+    never_taken!()          ;! error[next-never-taken]: `.next @done` says `bne @done` is always taken, but Z is 1 here, so it is never taken
+    rts
+}
+
+.proc bytes_table {
+    next_to_bytes!(bytes)   ;! error[next-target-not-a-table]: `bytes` is not a table of addresses: `.next` can name data only when it holds `.addr` or `.faraddr` values
+}
+
+.proc printed {
+    local_print!()          ;! error[inline-data-missing]: `print` expects one `.strz` directly after each call, and none follows this one
+    rts
+}

@@ -796,22 +796,13 @@ public sealed partial class CodeLayout
             diagnostics.Add(Expansion.Problem(model.Tree, tree, span, expansion, severity, message));
 
         /// <summary>
-        /// Reports a problem with a line that may come from another file's macro body. A body's line
-        /// is reported at the call, which is in this file and is the side that chose the arguments,
-        /// and the body line is named beside it.
+        /// Reports a problem with a line that may come from a macro body, found in the expansion
+        /// <paramref name="on"/> rather than the one the walk is in. A body's line is reported at
+        /// the call, as <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+        /// describes.
         /// </summary>
-        private void ReportOnLine(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null)
-        {
-            if (node.Tree == model.Tree)
-            {
-                diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), message) { Fix = fix });
-            }
-            else if (on?.NearestCall is { } call)
-            {
-                diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), message,
-                    [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
-            }
-        }
+        private void ReportOnLine(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+            diagnostics.Add(Expansion.Problem(model.Tree, node, on, null, message, fix));
 
         /// <summary>
         /// Dispatches the layout of one statement by kind, with one method per kind. The work itself

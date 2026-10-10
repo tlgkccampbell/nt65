@@ -1,0 +1,81 @@
+; Macros whose bodies another module expands. A problem with a body line is reported at the call
+; that expanded it, in the calling file, with the body line as a note. Only what holds for every
+; call, such as a label nothing names, is reported here.
+.module lib
+
+.export known_next, unknown_after_branch, next_elsewhere, dead_code, dead_label, return_after_call
+.export patch_unlisted, patch_rejected, patch_missed, never_taken, next_to_bytes, tenth
+
+.func tenth(n) = 10 / n
+
+.macro known_next() {
+    jmp @out
+    .next @out
+@out:
+}
+
+.macro unknown_after_branch() {
+    lda #1
+    bne @done
+    .next ?
+@done:
+}
+
+.macro next_elsewhere(target) {
+    lda #1
+    bne @done
+    .next target
+@done:
+}
+
+.macro dead_code() {
+    rts
+    nop
+}
+
+.macro dead_label() {
+    jmp @over
+@never:                     ;! warning[unused-symbol]: `@never` is never used
+    nop
+@over:
+}
+
+.macro return_after_call(routine) {
+    jsr routine
+    .next .return
+}
+
+.macro patch_unlisted() {
+    lda #.opcode(ora, imm)
+    sta @op
+    .patch @op
+@op:
+    lda #5
+}
+
+.macro patch_rejected() {
+    sta @op+1
+    .patch @op as and
+@op:
+    lda #0
+}
+
+.macro patch_missed() {
+    sta @op+2
+    .patch @op
+@op:
+    lda #0
+    inx
+}
+
+.macro never_taken() {
+    lda #0
+    bne @done
+    .next @done
+@done:
+}
+
+.macro next_to_bytes(table) {
+    jmp (table)
+    .next table
+}

@@ -52,6 +52,9 @@ internal sealed class RegisterWalk
     /// <summary>Gets the control flow of the file the walk goes through.</summary>
     internal ControlFlow Flow => flow;
 
+    /// <summary>Gets the layout of the file the walk goes through.</summary>
+    internal CodeLayout Layout => layout;
+
     /// <summary>
     /// Returns the registers an instruction uses the value of, including the index register its
     /// mode adds, and the registers it certainly writes. A <c>rep</c> or <c>sep</c> whose mask

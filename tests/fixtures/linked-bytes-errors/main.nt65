@@ -23,7 +23,7 @@
 }
 
 .macro emit(v) {
-    .byte v                 ;! error[linked-value-may-not-fit]: `v` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(v)` for its low byte
+    .byte v
 }
 
 .segment CODE
@@ -38,7 +38,7 @@
     .byte start * 2         ;! error[linked-value-may-not-fit]: `start * 2` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(start * 2)` for its low byte
     .byte shifted(start)    ;! error[linked-value-may-not-fit]: `shifted(start)` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(shifted(start))` for its low byte
     .byte start + 1         ;! error[address-does-not-fit]: `start` is an absolute address, and `.byte` holds 8 bits: use `<start` for its low byte
-    emit!(start * 2)
+    emit!(start * 2)        ;! error[linked-value-may-not-fit]: `v` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(v)` for its low byte
 }
 .data pair: .type Pair { low = start / 256, high = start / 2 }  ;! error[linked-value-may-not-fit]: `start / 2` is worked out by the linker from an address, and `high` holds 8 bits, which nt65 cannot show it fits: use `<(start / 2)` for its low byte
 

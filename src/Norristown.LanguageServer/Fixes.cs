@@ -76,6 +76,13 @@ internal static class Fixes
                     [Edits.InsertAfter(tree, after, $"{Edits.IndentOf(tree, after)}.next {target}")]);
                 break;
 
+            case FixKind.LandingLabel when fix.Text is { } label && BranchTarget(tree, diagnostic) is { } target:
+                yield return Fix(diagnostic, fix.At is null ? $"Branch to `{label}`" : $"Label the landing `{label}` and branch to it",
+                    fix.At is { } landing
+                        ? [new Edit(tree, target.Span, label), LabelBefore(tree, landing.LineIndex, label)]
+                        : [new Edit(tree, target.Span, label)]);
+                break;
+
             case FixKind.Immediate when fix.Text is { } hex:
                 var number = Edits.SpanOf(tree, diagnostic.Span);
                 var written = tree.Text[number.Start..number.End];
@@ -571,6 +578,32 @@ internal static class Fixes
 
     private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
+
+    /// <summary>
+    /// Returns the target expression of the branch a diagnostic is reported at, or null where
+    /// no branch with an operand stands there. The target is the operand's last expression, which
+    /// is also the second of <c>bbr0 flags, *+5</c>.
+    /// </summary>
+    private static ExpressionSyntax? BranchTarget(SyntaxTree tree, Diagnostic diagnostic)
+    {
+        var span = Edits.SpanOf(tree, diagnostic.Span);
+        return Edits.StatementOn(tree, diagnostic.Span.LineIndex) is InstructionStatementSyntax { Operand: { } operand } statement
+            && statement.Span.Start == span.Start
+                ? operand.ChildNodes.OfType<ExpressionSyntax>().LastOrDefault()
+                : null;
+    }
+
+    /// <summary>
+    /// Returns an edit that declares <paramref name="label"/> on a line of its own before
+    /// <paramref name="line"/>, at the routine's margin, one level out from the instruction there,
+    /// which is where the formatter puts a cheap local.
+    /// </summary>
+    private static Edit LabelBefore(SyntaxTree tree, int line, string label)
+    {
+        var indent = Edits.IndentOf(tree, line);
+        var margin = indent.EndsWith(Edits.Indent, StringComparison.Ordinal) ? indent[..^Edits.Indent.Length] : "";
+        return new Edit(tree, new TextSpan(tree.LineStarts[line], 0), $"{margin}{label}:\n");
+    }
 
     /// <summary>
     /// Returns the edits that make a branch over a <c>jmp</c> into the one branch
