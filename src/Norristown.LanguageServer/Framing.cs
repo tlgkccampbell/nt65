@@ -29,6 +29,7 @@ internal sealed class Framing : MessageHandlerBase
     /// <summary>LSP's own code for a request that arrives before <c>initialize</c>.</summary>
     private const JsonRpcErrorCode ServerNotInitialized = (JsonRpcErrorCode)(-32002);
 
+    /// <summary>The header that gives a frame's length, which is the only header read.</summary>
     private const string ContentLength = "Content-Length:";
 
     /// <summary>The value <see cref="NextLengthAsync"/> returns for a stream that has ended.</summary>
@@ -289,6 +290,9 @@ internal sealed class Framing : MessageHandlerBase
         return true;
     }
 
+    /// <summary>
+    /// Refills the buffer from the stream, and returns false if the stream has ended.
+    /// </summary>
     private async ValueTask<bool> ReadMoreAsync(CancellationToken cancellationToken)
     {
         at = 0;

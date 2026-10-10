@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -12,8 +13,8 @@ namespace Norristown.LanguageServer;
 /// <see cref="Root"/> and <see cref="Repository"/> to check the grammar against the parser's
 /// reading of each line.
 /// <para>
-/// The language server colours every name by what it refers to, and the client draws that
-/// colour over the grammar once the server answers. So that a name does not change colour at that
+/// The language server colors every name by what it refers to, and the client draws that
+/// color over the grammar once the server answers. So that a name does not change color at that
 /// point, the grammar gives each declaration the scope that VS Code maps the server's token type
 /// to. For example, the name after <c>.proc</c> is <c>entity.name.function</c>, as a
 /// <c>function</c> token is. A declaration is recognized from its own line, or from the block it
@@ -40,7 +41,7 @@ internal static class TextMateGrammar
     public const string Kind = "storage.type.nt65";
     public const string Mode = "constant.language.mode.nt65";
 
-    // The scopes VS Code gives the server's token types, which a theme colours them by.
+    // The scopes VS Code gives the server's token types, which a theme colors them by.
     public const string Macro = "entity.name.function.preprocessor.nt65";
     public const string Function = "entity.name.function.nt65";
     public const string Namespace = "entity.name.namespace.nt65";
@@ -90,6 +91,11 @@ internal static class TextMateGrammar
         return Encoding.UTF8.GetString(stream.ToArray()) + "\n";
     }
 
+    /// <summary>
+    /// Builds the repository. Its <c>line</c> list holds the rules every line is scoped with, in
+    /// the order they are tried, and the other lists hold the rules of blocks that reach past a
+    /// line.
+    /// </summary>
     private static Dictionary<string, IReadOnlyList<TextMateRule>> Build()
     {
         var line = new List<TextMateRule>();
@@ -237,6 +243,7 @@ internal static class TextMateGrammar
         return rules;
     }
 
+    /// <summary>Writes a list of rules as a <c>patterns</c> array.</summary>
     private static void WritePatterns(Utf8JsonWriter json, IReadOnlyList<TextMateRule> rules)
     {
         json.WriteStartArray("patterns");
@@ -245,6 +252,11 @@ internal static class TextMateGrammar
         json.WriteEndArray();
     }
 
+    /// <summary>
+    /// Writes one rule as the grammar file states it. An include names its list, a match gives its
+    /// scope or the scope of each group, and a block gives its begin and end with the rules tried
+    /// between them.
+    /// </summary>
     private static void WriteRule(Utf8JsonWriter json, TextMateRule rule)
     {
         json.WriteStartObject();
@@ -266,7 +278,7 @@ internal static class TextMateGrammar
             {
                 if (captures[g] is not { } captured)
                     continue;
-                json.WriteStartObject(g.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                json.WriteStartObject(g.ToString(CultureInfo.InvariantCulture));
                 json.WriteString("name", captured);
                 json.WriteEndObject();
             }

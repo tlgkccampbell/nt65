@@ -5,10 +5,10 @@ namespace Norristown.LanguageServer;
 
 /// <summary>
 /// Computes the semantic tokens of a file, which classify every name by what it refers to. The
-/// TextMate grammar colours what the lexer knows, and these tokens are drawn over it where the
+/// TextMate grammar colors what the lexer knows, and these tokens are drawn over it where the
 /// analysis knows more. A member spelled like a register, such as <c>Joy::A</c> or an enum's
-/// <c>X</c>, is therefore coloured as the member it is. A name that refers to nothing keeps the
-/// grammar's colour.
+/// <c>X</c>, is therefore colored as the member it is. A name that refers to nothing keeps the
+/// grammar's color.
 /// </summary>
 internal static class NameHighlighting
 {
@@ -44,7 +44,7 @@ internal static class NameHighlighting
         var (line, character, end) = (0, 0, -1);
 
         // A bare word a condition compares a parameter with is one of a fixed set of words the
-        // parameter accepts, much as a member is one of its enum's, so it is coloured as one.
+        // parameter accepts, much as a member is one of its enum's, so it is colored as one.
         var words = ComparedWords.In(model)
             .Select(word => (Span: word.Word.Span, Type: IndexOf("enumMember"), Modifiers: ReadOnly));
         var names = model.References.Select(reference =>
@@ -55,7 +55,7 @@ internal static class NameHighlighting
             return (reference.Span, Type: type, Modifiers: modifiers | (reference.IsDeclaration ? Declaration : 0));
         });
 
-        // A module is not a symbol, but the module path in a `.place` is still coloured as a
+        // A module is not a symbol, but the module path in a `.place` is still colored as a
         // namespace.
         var modules = tree.Root.DescendantNodes().OfType<PlaceDirectiveSyntax>()
             .SelectMany(place => place.Name.Names)
@@ -120,10 +120,11 @@ internal static class NameHighlighting
                 : [new Protocol.SemanticTokensEdit(head, removed, inserted.Count == 0 ? null : inserted)]);
     }
 
+    /// <summary>Returns the token type and modifiers that a reference to a symbol gets.</summary>
     private static (int Type, int Modifiers) Classify(Symbol symbol)
     {
         // A function's parameters are constants in its scope, given a value by each call; they
-        // are coloured as parameters.
+        // are colored as parameters.
         var (type, modifiers) = symbol.IsEnumMember ? ("enumMember", ReadOnly)
             : symbol.Scope.Owner is { Kind: SymbolKind.Func } ? ("parameter", 0)
             : symbol.Kind switch
@@ -143,6 +144,7 @@ internal static class NameHighlighting
         return (IndexOf(type), modifiers);
     }
 
+    /// <summary>Returns the number that stands for a token type in the legend.</summary>
     private static int IndexOf(string type)
     {
         for (var i = 0; i < Legend.TokenTypes.Count; i++)

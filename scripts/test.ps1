@@ -43,7 +43,7 @@ if ($Benchmark) {
     }
 }
 
-# Not -stopOnFail: xUnit then exits as if cancelled (Ctrl+C status), which upsets the calling
+# Not -stopOnFail: xUnit then exits as if canceled (Ctrl+C status), which upsets the calling
 # shell. The gate stops at the first failing step, which is the fail-fast that matters.
 #
 # -parallelMode all runs the tests within a class in parallel, not only the classes. The two

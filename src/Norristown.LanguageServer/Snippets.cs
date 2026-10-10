@@ -22,7 +22,7 @@ internal static class Snippets
     /// The snippet for each block opener, keyed by its directive. <c>.proc</c> is not here
     /// because on the 65816 its snippet depends on how the program's other routines are declared.
     /// </summary>
-    private static readonly Dictionary<DirectiveKind, string> ByDirective = new()
+    private static readonly Dictionary<DirectiveKind, string> byDirective = new()
     {
         [DirectiveKind.Macro] = ".macro ${1:name}(${2:parameters}) {\n    $0\n}",
         // A `.func` is one line rather than a block, but it is here because its shape (a name, a
@@ -53,7 +53,7 @@ internal static class Snippets
     public static string? Of(DirectiveKind directive, ProgramModel program, Cpu cpu)
     {
         if (directive != DirectiveKind.Proc)
-            return ByDirective.GetValueOrDefault(directive);
+            return byDirective.GetValueOrDefault(directive);
 
         // On the 65816 a routine is declared with the processor state it assumes, and most of a
         // program's routines declare the same one. The most common is the likeliest for a new

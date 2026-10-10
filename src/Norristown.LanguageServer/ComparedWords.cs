@@ -6,7 +6,7 @@ namespace Norristown.LanguageServer;
 /// <summary>
 /// Finds the bare words a file's macro conditions compare a parameter's argument with, such as a
 /// mode or a word a <c>one(...)</c> lists (<see cref="ComparedWord"/>). Such a word is never
-/// looked up as a name, so it has no symbol reference. Hover, semantic colouring and completion
+/// looked up as a name, so it has no symbol reference. Hover, semantic coloring and completion
 /// use these words instead.
 /// </summary>
 internal static class ComparedWords

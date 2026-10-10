@@ -1,3 +1,4 @@
+using System.Globalization;
 using Norristown.Flow;
 using Norristown.Semantics;
 
@@ -47,11 +48,14 @@ internal static class RunsFrom
     {
         if (!contexts.Of(routine).HasFlag(RoutineContext.Interrupt) || contexts.Unfollowed(routine) is not { Count: > 0 } spans)
             return null;
-        var lines = spans.Select(span => (routine.Tree.GetLineIndex(span.Start) + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        var lines = spans.Select(span => (routine.Tree.GetLineIndex(span.Start) + 1).ToString(CultureInfo.InvariantCulture));
         return $"line{(spans.Count == 1 ? "" : "s")} {string.Join(", ", lines)}, where nt65 cannot tell where control goes";
     }
 
-    /// <summary>Returns whether a name is coloured as a routine that runs under an interrupt.</summary>
+    /// <summary>
+    /// Returns a value indicating whether a name is colored as a routine that runs under an
+    /// interrupt.
+    /// </summary>
     /// <param name="contexts">The contexts of the program.</param>
     /// <param name="routine">The routine, as the program has it now.</param>
     public static bool IsUnderInterrupt(RoutineContexts contexts, Symbol routine) =>

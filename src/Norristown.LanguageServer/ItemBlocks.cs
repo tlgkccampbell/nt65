@@ -96,7 +96,7 @@ internal static class ItemBlocks
         var indent = Edits.IndentOf(tree, line);
         var lines = list.Inline.Select(item => $"{indent}{Edits.Indent}{item.GetTextOnOneLine()}\n");
         var text = $"{{{Remark(tree, list.End, last)}\n{string.Concat(lines)}{indent}}}";
-        return new Edit(tree, new TextSpan(start, LineEnd(tree, last) - start), text);
+        return new Edit(tree, new TextSpan(start, Lines.EndOf(tree, last) - start), text);
     }
 
     /// <summary>
@@ -117,7 +117,7 @@ internal static class ItemBlocks
         var items = string.Join(", ", list.Items.Select(item => item.GetTextOnOneLine()));
         var text = list.Directive is UseDirectiveSyntax ? $"{{{items}}}" : items;
         var opener = tree.GetLineIndex(brace.Span.Start);
-        var end = LineEnd(tree, block.Closer!.LineIndex);
+        var end = Lines.EndOf(tree, block.Closer!.LineIndex);
         return new Edit(tree, new TextSpan(brace.Span.Start, end - brace.Span.Start), text + Remark(tree, brace.Span.End, opener));
     }
 
@@ -143,17 +143,8 @@ internal static class ItemBlocks
     /// </summary>
     private static string Remark(SyntaxTree tree, int from, int line)
     {
-        var rest = tree.Text[from..LineEnd(tree, line)];
+        var rest = tree.Text[from..Lines.EndOf(tree, line)];
         return string.IsNullOrWhiteSpace(rest) ? "" : rest;
-    }
-
-    /// <summary>Returns where the 0-based line <paramref name="line"/> ends, before its line break.</summary>
-    private static int LineEnd(SyntaxTree tree, int line)
-    {
-        var end = tree.GetLineEnd(line);
-        while (end > tree.LineStarts[line] && tree.Text[end - 1] is '\r' or '\n')
-            end--;
-        return end;
     }
 
     /// <summary>

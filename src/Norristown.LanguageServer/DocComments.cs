@@ -41,10 +41,7 @@ internal static class DocComments
     }
 
     /// <summary>Returns one line of the file, without its line break.</summary>
-    private static string Text(SyntaxTree tree, int line)
-    {
-        return tree.Text[tree.LineStarts[line]..tree.GetLineEnd(line)].TrimEnd('\n', '\r');
-    }
+    private static string Text(SyntaxTree tree, int line) => Lines.TextOf(tree, line);
 
     /// <summary>
     /// Returns the text of a comment line. The <c>;</c> that marks it and the single space that

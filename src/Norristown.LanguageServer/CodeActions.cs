@@ -65,6 +65,19 @@ internal static class CodeActions
     }
 
     /// <summary>
+    /// Converts the edits of <paramref name="change"/> to the protocol's workspace edit, grouped
+    /// by the file each belongs to and written with that file's line breaks.
+    /// </summary>
+    public static Protocol.WorkspaceEdit ToWorkspaceEdit(Change change) =>
+        new(WithLineBreaksOfFiles(change).Edits
+            .GroupBy(edit => edit.Tree)
+            .ToDictionary(
+                group => Uris.ToUri(group.Key.Path),
+                group => (IReadOnlyList<Protocol.TextEdit>)[.. group
+                    .OrderBy(edit => edit.Span.Start)
+                    .Select(edit => new Protocol.TextEdit(Lsp.ToRange(edit.Tree, edit.Span), edit.Text))]));
+
+    /// <summary>
     /// Returns the changes offered over <paramref name="range"/>, of the kinds the client asked
     /// for, before any edits left for later are found.
     /// </summary>
@@ -107,19 +120,6 @@ internal static class CodeActions
             Renaming(change),
             change.Refused is { } why ? new Protocol.CodeActionDisabled(why) : null);
     }
-
-    /// <summary>
-    /// Converts the edits of <paramref name="change"/> to the protocol's workspace edit, grouped
-    /// by the file each belongs to and written with that file's line breaks.
-    /// </summary>
-    public static Protocol.WorkspaceEdit ToWorkspaceEdit(Change change) =>
-        new(WithLineBreaksOfFiles(change).Edits
-            .GroupBy(edit => edit.Tree)
-            .ToDictionary(
-                group => Uris.ToUri(group.Key.Path),
-                group => (IReadOnlyList<Protocol.TextEdit>)[.. group
-                    .OrderBy(edit => edit.Span.Start)
-                    .Select(edit => new Protocol.TextEdit(Lsp.ToRange(edit.Tree, edit.Span), edit.Text))]));
 
     /// <summary>
     /// Returns <paramref name="change"/> with the line breaks in its edits written the way each
