@@ -133,8 +133,9 @@ internal sealed class StateChecks
         var width = state.Of(register);
         var text = SyntaxFacts.TextOf(mnemonic);
         var item = StateRegister.Of(register).Item;
+        var part = register == WidthRegister.A ? StateParts.A : StateParts.Index;
         if (width == Width.Unchanged && Owner(step, routine) == routine.DisplayName
-            && signatures.DisagreementOn(routine, register == WidthRegister.A ? StateParts.A : StateParts.Index) is { } callers)
+            && signatures.DisagreementOn(routine, part) is { } callers)
         {
             ReportDisagreement(step, text, register, routine, callers);
         }
@@ -143,7 +144,7 @@ internal sealed class StateChecks
             Report(step, Catalogue.WidthUnknown.Message(
                 text,
                 Format(register),
-                $"{Assumes(step, routine, register == WidthRegister.A ? StateParts.A : StateParts.Index, item + "*")}, which assumes nothing about it"),
+                $"{Assumes(step, routine, part, item + "*")}, which assumes nothing about it"),
                 Declares(step, item, routine));
         }
         else if (!IsKnown(width))
@@ -220,18 +221,9 @@ internal sealed class StateChecks
             {
                 if (SegmentOf(symbol) is not { DirectPage: { } page } segment)
                     continue;
-                var what = $"`{symbol.DisplayName}` is in segment `{segment.Name}`, which expects the direct page at {StateValue.Hex(page, 4)}";
-                if (state.D.Kind == StateValueKind.Unchanged)
-                {
-                    Report(step, Catalogue.DirectPageUnknown.Message(
-                        what, $"{Assumes(step, routine, StateParts.DirectPage, "dp*")}, which assumes nothing about D"));
-                }
-                else if (!state.D.IsKnown)
-                {
-                    Report(step, Catalogue.DirectPageUnknown.Message(
-                        what, Unknown(whyD)));
-                }
-                else if (page != state.D.Value)
+                var what = $"`{symbol.DisplayName}` is in segment `{segment.Name}`, "
+                    + $"which expects the direct page at {StateValue.Hex(page, 4)}";
+                if (DirectPageKnown(step, what, state, whyD, routine) && page != state.D.Value)
                 {
                     Report(step, Catalogue.DirectPageMismatch.Message(
                         symbol.DisplayName, segment.Name, StateValue.Hex(page, 4), StateValue.Hex(state.D.Value, 4)));
@@ -344,28 +336,8 @@ internal sealed class StateChecks
             Part(StateRegister.A, exit.A, state.A);
         if ((held & StateParts.Index) != 0)
             Part(StateRegister.Index, exit.Index, state.Index);
-        if ((held & StateParts.Mode) == 0)
-        {
-            // The mode is inferred from what the returns leave, so there is nothing to check.
-        }
-        else if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
-        {
-            Report(step, Catalogue.AssertedItemNotRestored.Message(
-                lead, name, "e*", "the mode", "what it was on entry", where));
-        }
-        else if (IsKnown(exit.E) && exit.E != state.E)
-        {
-            Report(step, Catalogue.ReturnStateMismatch.Message(
-                lead,
-                name,
-                $"in {Mode(exit.E)} mode",
-                IsKnown(state.E)
-                    ? $"the processor is in {Mode(state.E)} mode {where}"
-                    : $"the mode is not known {where}{Cause.Because(whyMode)}"),
-                Declared(IsKnown(state.E) ? ProcessorState.Format(state.E) : null),
-                null);
-        }
-
+        if ((held & StateParts.Mode) != 0)
+            CheckMode();
         if ((held & StateParts.DirectPage) != 0)
             Value(StateRegister.DirectPage, exit.D, state.D);
         if ((held & StateParts.DataBank) != 0)
@@ -393,6 +365,28 @@ internal sealed class StateChecks
                         ? $"{register.Name} is {here.Describe(register.Digits)} {where}"
                         : $"{register.Name} is not known {where}"),
                     Declared(here.IsBounded ? here.Format(register) : null),
+                    null);
+            }
+        }
+
+        // A mode the signature leaves to be inferred from what the returns leave is not checked.
+        void CheckMode()
+        {
+            if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
+            {
+                Report(step, Catalogue.AssertedItemNotRestored.Message(
+                    lead, name, "e*", "the mode", "what it was on entry", where));
+            }
+            else if (IsKnown(exit.E) && exit.E != state.E)
+            {
+                Report(step, Catalogue.ReturnStateMismatch.Message(
+                    lead,
+                    name,
+                    $"in {Mode(exit.E)} mode",
+                    IsKnown(state.E)
+                        ? $"the processor is in {Mode(state.E)} mode {where}"
+                        : $"the mode is not known {where}{Cause.Because(whyMode)}"),
+                    Declared(IsKnown(state.E) ? ProcessorState.Format(state.E) : null),
                     null);
             }
         }
@@ -664,35 +658,15 @@ internal sealed class StateChecks
 
     /// <summary>
     /// Reports a problem with <paramref name="step"/>'s statement, in the expansion the step
-    /// belongs to.
+    /// belongs to, with the fixes its message allows. Either fix may be null, and where only
+    /// <paramref name="also"/> is given it is the one fix offered.
     /// </summary>
-    public void Report(Step step, DiagnosticMessage message) => ReportAt(step.Statement, step, message);
-
-    /// <summary>
-    /// Reports a problem with <paramref name="step"/>'s statement, in the expansion the step
-    /// belongs to, and attaches the fix its message names.
-    /// </summary>
-    public void Report(Step step, DiagnosticMessage message, DiagnosticFix? fix)
-    {
-        Report(step, message);
-        if (fix is not null)
-            diagnostics[^1] = diagnostics[^1] with { Fix = fix };
-    }
-
-    /// <summary>
-    /// Reports a problem with <paramref name="step"/>'s statement, in the expansion the step
-    /// belongs to, and attaches the two fixes its message allows. Either fix may be null.
-    /// </summary>
-    public void Report(Step step, DiagnosticMessage message, DiagnosticFix? fix, DiagnosticFix? also)
-    {
-        Report(step, message);
-        diagnostics[^1] = (fix, also) switch
+    public void Report(Step step, DiagnosticMessage message, DiagnosticFix? fix = null, DiagnosticFix? also = null) =>
+        diagnostics.Add(Expansion.Problem(model.Tree, step.Statement, step.On, Severity.Error, message) with
         {
-            (null, null) => diagnostics[^1],
-            (null, { } only) => diagnostics[^1] with { Fix = only },
-            _ => diagnostics[^1] with { Fix = fix, Also = also },
-        };
-    }
+            Fix = fix ?? also,
+            Also = fix is null ? null : also,
+        });
 
     /// <summary>
     /// Reports a problem with <paramref name="node"/>, in the expansion that
@@ -718,17 +692,7 @@ internal sealed class StateChecks
         if (model.ValueOf(expression, step.On).AsNumber() is not { } address)
             return;
         var what = $"`d:{StateValue.Hex(address, 4)}` is reached through the direct page";
-        if (state.D.Kind == StateValueKind.Unchanged)
-        {
-            Report(step, Catalogue.DirectPageUnknown.Message(
-                what, $"{Assumes(step, routine, StateParts.DirectPage, "dp*")}, which assumes nothing about D"));
-        }
-        else if (!state.D.IsKnown)
-        {
-            Report(step, Catalogue.DirectPageUnknown.Message(
-                what, Unknown(whyD)));
-        }
-        else if (address < state.D.Value || address > state.D.Value + 0xff)
+        if (DirectPageKnown(step, what, state, whyD, routine) && (address < state.D.Value || address > state.D.Value + 0xff))
         {
             Report(step, Catalogue.DirectPageOutOfReach.Message(
                 what,
@@ -736,6 +700,30 @@ internal sealed class StateChecks
                 StateValue.Hex(state.D.Value, 4),
                 StateValue.Hex(state.D.Value + 0xff, 4)));
         }
+    }
+
+    /// <summary>
+    /// Returns whether D is known at <paramref name="step"/>, where an operand that
+    /// <paramref name="what"/> describes reaches memory through it, and reports it where it is
+    /// not. A D that is as the routine was entered with is reported as assuming nothing, and any
+    /// other unknown D with <paramref name="whyD"/>, the cause the analysis found, if any.
+    /// </summary>
+    private bool DirectPageKnown(Step step, string what, ProcessorState state, Cause? whyD, Symbol routine)
+    {
+        if (state.D.Kind == StateValueKind.Unchanged)
+        {
+            Report(step, Catalogue.DirectPageUnknown.Message(
+                what, $"{Assumes(step, routine, StateParts.DirectPage, "dp*")}, which assumes nothing about D"));
+        }
+        else if (!state.D.IsKnown)
+        {
+            Report(step, Catalogue.DirectPageUnknown.Message(what, Unknown(whyD)));
+        }
+        else
+        {
+            return true;
+        }
+        return false;
     }
 
     /// <summary>

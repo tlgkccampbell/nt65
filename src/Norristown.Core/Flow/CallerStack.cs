@@ -168,7 +168,7 @@ internal static class CallerStack
         // the routine it is in.
         void Add(Symbol target)
         {
-            var owner = target is { Kind: SymbolKind.Label, Routine: { } routine } ? routine : target;
+            var owner = RegisterWalk.RoutineOf(target);
             if (owner.Signature is null || owner == region.Routine)
                 return;
             targets.Add(owner != target && labels.ContainsKey(RoutineKey.Of(target))

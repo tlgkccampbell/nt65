@@ -408,14 +408,21 @@ internal sealed class FlagAnalysis : IKnownFlags
         return mnemonic switch
         {
             MnemonicKind.Clc or MnemonicKind.Sec => StatusFlags.Carry,
-            MnemonicKind.Lda => state.Held.ValueOf(Registers.A) is null ? StatusFlags.None : StatusFlags.Negative | StatusFlags.Zero,
-            MnemonicKind.Ldx => state.Held.ValueOf(Registers.X) is null ? StatusFlags.None : StatusFlags.Negative | StatusFlags.Zero,
-            MnemonicKind.Ldy => state.Held.ValueOf(Registers.Y) is null ? StatusFlags.None : StatusFlags.Negative | StatusFlags.Zero,
+            MnemonicKind.Lda or MnemonicKind.Ldx or MnemonicKind.Ldy =>
+                state.Held.ValueOf(Loaded(mnemonic)) is null ? StatusFlags.None : FlagState.NZ,
             MnemonicKind.Jmp when !Instructions.Has(cpu, MnemonicKind.Bra) =>
-                StatusFlags.Negative | StatusFlags.Zero | StatusFlags.Carry | StatusFlags.Overflow,
+                FlagState.NZ | StatusFlags.Carry | StatusFlags.Overflow,
             _ => StatusFlags.None,
         };
     }
+
+    /// <summary>Returns the register that <c>lda</c>, <c>ldx</c> or <c>ldy</c> loads.</summary>
+    private static Registers Loaded(MnemonicKind load) => load switch
+    {
+        MnemonicKind.Lda => Registers.A,
+        MnemonicKind.Ldx => Registers.X,
+        _ => Registers.Y,
+    };
 
     /// <summary>
     /// Returns the state after the call a block ends with, which is what any of the routines it
@@ -851,8 +858,7 @@ internal sealed class FlagAnalysis : IKnownFlags
         var (held, carry) = Held(cpu, mnemonic, mode, bits, immediate, state);
         if (carry is { } carried)
             flags = flags.With(StatusFlags.Carry, carried);
-        var nz = StatusFlags.Negative | StatusFlags.Zero;
-        if ((flags.Known & nz) != nz
+        if ((flags.Known & FlagState.NZ) != FlagState.NZ
             && RegisterEffects.Each(held.NzFrom).Select(held.ValueOf).FirstOrDefault(value => value is not null) is { } result)
         {
             flags = flags.Loaded(result, bits);
@@ -928,7 +934,7 @@ internal sealed class FlagAnalysis : IKnownFlags
 
         var written = RegisterEffects.Written(mnemonic, mode, immediate);
         var held = before.Forget(written & (Registers.A | Registers.X | Registers.Y));
-        if ((FlagEffects.Written(mnemonic, mode, immediate) & (StatusFlags.Negative | StatusFlags.Zero)) != 0)
+        if ((FlagEffects.Written(mnemonic, mode, immediate) & FlagState.NZ) != 0)
             held = held with { NzFrom = Registers.None };
 
         var from = SetFrom(cpu, mnemonic, mode, state);

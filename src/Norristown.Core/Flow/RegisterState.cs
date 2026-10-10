@@ -85,34 +85,10 @@ public sealed record RegisterState(
     /// Gets the registers that hold exactly their own entry value here without relying on a keep
     /// nobody promised. See <see cref="RoutineRegisters.Backed"/>.
     /// </summary>
-    public Registers Backed
-    {
-        get
-        {
-            var backed = Registers.None;
-            foreach (var register in Every)
-            {
-                if (Of(register).Backs(register) && (register != Registers.A || AHigh.Backs(register)))
-                    backed |= register;
-            }
-            return backed;
-        }
-    }
+    public Registers Backed => Having(static (value, register) => value.Backs(register));
 
     /// <summary>Gets the registers that hold exactly their own entry value here.</summary>
-    public Registers Kept
-    {
-        get
-        {
-            var kept = Registers.None;
-            foreach (var register in Every)
-            {
-                if (Of(register).Holds(register) && (register != Registers.A || AHigh.Holds(register)))
-                    kept |= register;
-            }
-            return kept;
-        }
-    }
+    public Registers Kept => Having(static (value, register) => value.Holds(register));
 
     /// <summary>
     /// Returns what two paths arriving at one place agree on, which is what either of them may
@@ -189,6 +165,21 @@ public sealed record RegisterState(
     /// </summary>
     public RegisterState WithEach(Registers registers, RegisterValue value) =>
         registers == Registers.None ? this : Each(registers, _ => value);
+
+    /// <summary>
+    /// Returns the registers for which <paramref name="test"/> holds of what they hold here. For
+    /// the accumulator, it has to hold of both halves.
+    /// </summary>
+    private Registers Having(Func<RegisterValue, Registers, bool> test)
+    {
+        var found = Registers.None;
+        foreach (var register in Every)
+        {
+            if (test(Of(register), register) && (register != Registers.A || test(AHigh, register)))
+                found |= register;
+        }
+        return found;
+    }
 
     /// <summary>
     /// Returns this state with what each register of <paramref name="registers"/> holds changed by

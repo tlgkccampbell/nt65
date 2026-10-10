@@ -84,9 +84,8 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// top of them, which is the <paramref name="returnSize"/> bytes of the return address where
     /// there are none. A pull of any size takes the handed bytes, one byte at a time.
     /// </summary>
-    public static SavedStack Entered(int returnSize, int handed) => new(
-        [.. Enumerable.Repeat(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Width.Eight) { IsLeft = true, IsHanded = true }, handed)],
-        returnSize - handed);
+    public static SavedStack Entered(int returnSize, int handed) =>
+        new([.. Enumerable.Repeat(SavedPush.HandedByte, handed)], returnSize - handed);
 
     /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null when they do
@@ -160,7 +159,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
             return new SavedStack(pushes, offset + effect.Bytes);
         var left = pushes.ToBuilder();
         for (var i = 0; i < effect.Bytes; i++)
-            left.Add(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Width.Eight) { IsLeft = true });
+            left.Add(SavedPush.LeftByte);
         return new SavedStack(left.ToImmutable(), offset);
     }
 

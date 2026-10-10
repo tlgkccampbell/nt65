@@ -60,7 +60,7 @@ internal sealed class FlagLiveness
         foreach (var block in regions.SelectMany(region => region.Blocks))
         {
             foreach (var callee in block.Calls)
-                read.Add(FlagsOf(readsOf(callee).Assumed));
+                read.Add(FlagExits.FlagsOf(readsOf(callee).Assumed));
         }
         return read;
     }
@@ -127,7 +127,7 @@ internal sealed class FlagLiveness
             if (block.Calls.Count == 0 || flow.ReadsOf is not { } readsOf)
                 return Followed;
             foreach (var callee in block.Calls)
-                read |= FlagsOf(readsOf(callee).Assumed);
+                read |= FlagExits.FlagsOf(readsOf(callee).Assumed);
         }
         return read;
     }
@@ -191,14 +191,5 @@ internal sealed class FlagLiveness
             return Followed;
         var written = FlagEffects.Written(mnemonic, mode, immediate);
         return ((read & ~written) | FlagEffects.Read(mnemonic)) & Followed;
-    }
-
-    /// <summary>Returns the flags among <paramref name="registers"/>, as flags.</summary>
-    private static StatusFlags FlagsOf(Registers registers)
-    {
-        var flags = StatusFlags.None;
-        foreach (var register in RegisterEffects.Each(registers & Registers.Flags))
-            flags |= RegisterEffects.FlagOf(register);
-        return flags;
     }
 }

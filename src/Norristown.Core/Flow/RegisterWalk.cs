@@ -86,11 +86,7 @@ internal sealed class RegisterWalk
         // anything any one of them may have left.
         RegisterState? reached = null;
         foreach (var callee in block.Calls)
-        {
-            var kept = of(callee);
-            reached = RegisterState.Merge(
-                reached, state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown).Unbacking(kept.Unbacked));
-        }
+            reached = RegisterState.Merge(reached, Handed(state, of(callee)));
         return reached!;
     }
 
@@ -108,6 +104,13 @@ internal sealed class RegisterWalk
         target.Signature is not null ? target
             : target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner
             : null;
+
+    /// <summary>
+    /// Returns the routine that <paramref name="target"/> is a label inside, or
+    /// <paramref name="target"/> itself where it is anything else.
+    /// </summary>
+    public static Symbol RoutineOf(Symbol target) =>
+        target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
 
     /// <summary>
     /// Returns what reaches each block of <paramref name="region"/>, where the routine is entered

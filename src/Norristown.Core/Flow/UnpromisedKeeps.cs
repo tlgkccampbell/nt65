@@ -205,7 +205,7 @@ internal static class UnpromisedKeeps
                 {
                     after |= block.CallsUnknown ? Registers.All : Registers.None;
                     foreach (var callee in block.Calls)
-                        after |= reads(callee).Complete ? reads(callee).Read : Registers.All;
+                        after |= reads(callee).Assumed;
                 }
                 for (var j = block.Steps.Count - 1; j >= 0; j--)
                     after = Before(walk, block.Steps[j], after);
@@ -298,7 +298,6 @@ internal static class UnpromisedKeeps
     /// </summary>
     private static bool SetsNAndZFirst(BasicBlock block)
     {
-        const StatusFlags NZ = StatusFlags.Negative | StatusFlags.Zero;
         var set = StatusFlags.None;
         foreach (var step in block.Steps)
         {
@@ -310,14 +309,14 @@ internal static class UnpromisedKeeps
             }
             var mnemonic = instruction.MnemonicKind;
             if (Instructions.IsCall(mnemonic) || mnemonic == MnemonicKind.Php
-                || (FlagEffects.Read(mnemonic) & NZ & ~set) != StatusFlags.None)
+                || (FlagEffects.Read(mnemonic) & FlagState.NZ & ~set) != StatusFlags.None)
             {
                 return false;
             }
 
             // An immediate `bit` sets Z alone, and nothing here says which form this one is.
-            set |= mnemonic == MnemonicKind.Bit ? StatusFlags.Zero : FlagEffects.Written(mnemonic, null, null) & NZ;
-            if (set == NZ)
+            set |= mnemonic == MnemonicKind.Bit ? StatusFlags.Zero : FlagEffects.Written(mnemonic, null, null) & FlagState.NZ;
+            if (set == FlagState.NZ)
                 return true;
         }
         return false;

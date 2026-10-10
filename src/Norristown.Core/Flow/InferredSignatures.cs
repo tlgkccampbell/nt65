@@ -66,6 +66,10 @@ public sealed class InferredSignatures
     // the file's model, which is kept across edits that do not touch the file.
     private static readonly ConditionalWeakTable<SemanticModel, Uses> usesIn = new();
 
+    // Each part of the state a caller may say something about, one at a time.
+    private static readonly StateParts[] eachPart =
+        [StateParts.A, StateParts.Index, StateParts.Mode, StateParts.DirectPage, StateParts.DataBank, StateParts.ProgramBank];
+
     private readonly Dictionary<RoutineKey, Signature> found;
     private readonly HashSet<RoutineKey> unreturned;
     private readonly HashSet<RoutineKey> unsettled;
@@ -226,9 +230,7 @@ public sealed class InferredSignatures
         StateValue.Merge(a.B, b.B));
 
     /// <summary>Returns the single parts of <paramref name="parts"/>.</summary>
-    private static IEnumerable<StateParts> Parts(StateParts parts) =>
-        new[] { StateParts.A, StateParts.Index, StateParts.Mode, StateParts.DirectPage, StateParts.DataBank, StateParts.ProgramBank }
-            .Where(part => (parts & part) != 0);
+    private static IEnumerable<StateParts> Parts(StateParts parts) => eachPart.Where(part => (parts & part) != 0);
 
     /// <summary>Returns <paramref name="entry"/> with <paramref name="parts"/> taken from <paramref name="defaults"/>.</summary>
     private static ProcessorState Defaulted(ProcessorState entry, StateParts parts, ProcessorState defaults) => new(

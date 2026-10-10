@@ -14,6 +14,15 @@ namespace Norristown.Flow;
 /// </param>
 public readonly record struct SavedPush(RegisterValue Value, PushSize Size, Width Width)
 {
+    /// <summary>Gets one byte a called routine left on the stack, which holds nothing known.</summary>
+    public static SavedPush LeftByte => new(RegisterValue.Unknown, PushSize.OneByte, Width.Eight) { IsLeft = true };
+
+    /// <summary>
+    /// Gets one byte the routine was entered with above its return address, which holds nothing
+    /// known.
+    /// </summary>
+    public static SavedPush HandedByte => LeftByte with { IsHanded = true };
+
     /// <summary>
     /// Gets what the other flags held, for a push of the status register, or null for any other
     /// push.

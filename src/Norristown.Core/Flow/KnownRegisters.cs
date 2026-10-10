@@ -18,6 +18,9 @@ namespace Norristown.Flow;
 /// <param name="NzFrom">The registers whose value N and Z were last set from, and that still hold it.</param>
 internal readonly record struct KnownRegisters(long? A, long? X, long? Y, Registers NzFrom)
 {
+    // The registers a constant is followed in, one at a time.
+    private static readonly Registers[] Each = [Registers.A, Registers.X, Registers.Y];
+
     /// <summary>Gets the state in which nothing is known about any register.</summary>
     public static KnownRegisters Unknown => default;
 
@@ -47,7 +50,7 @@ internal readonly record struct KnownRegisters(long? A, long? X, long? Y, Regist
     public KnownRegisters Forget(Registers written)
     {
         var state = this with { NzFrom = NzFrom & ~written };
-        foreach (var register in (Registers[])[Registers.A, Registers.X, Registers.Y])
+        foreach (var register in Each)
         {
             if ((written & register) != 0)
                 state = state.With(register, null);
@@ -62,7 +65,7 @@ internal readonly record struct KnownRegisters(long? A, long? X, long? Y, Regist
     public KnownRegisters LearnZero()
     {
         var state = this;
-        foreach (var register in (Registers[])[Registers.A, Registers.X, Registers.Y])
+        foreach (var register in Each)
         {
             if ((NzFrom & register) != 0)
                 state = state.With(register, 0);

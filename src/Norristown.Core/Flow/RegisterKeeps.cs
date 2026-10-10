@@ -235,7 +235,7 @@ public static class RegisterKeeps
         // ever sees what it leaves in them. A path that calls it or jumps into it ends there.
         RoutineRegisters Of(Symbol target)
         {
-            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            var routine = RegisterWalk.RoutineOf(target);
             if (routine.Signature is { NeverReturns: true })
                 return RoutineRegisters.Everything;
             if (routine != target && foundAt.TryGetValue(RoutineKey.Of(target), out var there))
@@ -255,13 +255,13 @@ public static class RegisterKeeps
         Symbol Declining(Symbol target, Registers register)
         {
             var seen = new HashSet<Symbol>();
-            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            var routine = RegisterWalk.RoutineOf(target);
             while (routine.Signature?.Keeps is null or Registers.None
                 && regions.TryGetValue(RoutineKey.Of(routine), out var region) && seen.Add(routine)
                 && region.Blocks.SelectMany(block => block.Calls)
                     .FirstOrDefault(callee => (Of(callee).Unbacked & register) != Registers.None) is { } next)
             {
-                routine = next is { Kind: SymbolKind.Label, Routine: { } inside } ? inside : next;
+                routine = RegisterWalk.RoutineOf(next);
             }
             return routine;
         }
@@ -275,7 +275,7 @@ public static class RegisterKeeps
         // ones its own code wrote before the label.
         RoutineReads ReadsOf(Symbol target)
         {
-            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            var routine = RegisterWalk.RoutineOf(target);
             if (routine != target)
             {
                 if (!readsAt.TryGetValue(RoutineKey.Of(target), out var there))

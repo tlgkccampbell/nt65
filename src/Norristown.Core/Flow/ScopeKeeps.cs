@@ -94,8 +94,7 @@ internal static class ScopeKeeps
         for (var i = 0; i < block.Steps.Count; i++)
         {
             var step = block.Steps[i];
-            if (step.On is null)
-                within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
+            within = ScopeShape.Within(whole, step, within);
             if (!within)
                 continue;
             any = true;
