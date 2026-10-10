@@ -714,7 +714,7 @@ public sealed class StateAnalysis : IProcessorStates
                 => ModeUnknown($"{quoted} widens nothing in emulation mode", state.WhyE),
             MnemonicKind.Rep or MnemonicKind.Sep => new($"{quoted} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
             MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
-                => new($"{quoted} calls through a pointer, and its `.next` names no routine", "a `.next` that names them lets their exit state flow here"),
+                => new($"{quoted} calls through a pointer, and its `.next` names no routine or label", "a `.next` that names them lets their exit state flow here"),
             MnemonicKind.Jsr or MnemonicKind.Jsl => new($"{quoted} returns with it unknown", "an `.ensure` after it sets it"),
             _ => new($"{quoted} makes it unknown", "a `.state` after it declares what it is"),
         };

@@ -333,7 +333,7 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
             if (step == block.Steps[^1] && RegisterWalk.CallsAtEnd(block))
             {
                 if (block.CallsUnknown || block.Calls.Count == 0)
-                    return block.Next is null ? $"`{text}` has no `.next`" : $"the `.next` under `{text}` names no routine";
+                    return block.Next is null ? $"`{text}` has no `.next`" : $"the `.next` under `{text}` names no routine or label";
                 if (block.Calls.FirstOrDefault(callee => !of(callee).Complete) is { } incomplete)
                 {
                     return of(incomplete) == RoutineRegisters.Nothing
