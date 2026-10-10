@@ -162,9 +162,7 @@ public sealed class CompletionTests
 
         var items = await client.CompletionAsync(MainUri, position, timeout);
 
-        var labels = items.Select(item => item.Label).ToHashSet();
-        Assert.All(offered, label => Assert.Contains(label, labels));
-        Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));
+        AssertOffers(items, offered, notOffered);
     }
 
     /// <summary>
@@ -253,6 +251,15 @@ public sealed class CompletionTests
 
         var items = await client.CompletionAsync(MainUri, position, timeout);
 
+        AssertOffers(items, offered, notOffered);
+    }
+
+    /// <summary>
+    /// Checks that <paramref name="items"/> offer every label in <paramref name="offered"/> and
+    /// none in <paramref name="notOffered"/>.
+    /// </summary>
+    private static void AssertOffers(IReadOnlyList<CompletionItem> items, string[] offered, string[] notOffered)
+    {
         var labels = items.Select(item => item.Label).ToHashSet();
         Assert.All(offered, label => Assert.Contains(label, labels));
         Assert.All(notOffered, label => Assert.DoesNotContain(label, labels));

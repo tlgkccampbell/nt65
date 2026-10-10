@@ -115,11 +115,12 @@ public sealed class KeystrokeBenchmark(ITestOutputHelper output)
         var analyzed = new SortedSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < 30; i++)
         {
-            var (range, typed) = i % 2 == 0
-                ? (new Range(new Position(line, start), new Position(line, end)), text)
-                : undo is null
-                    ? (new Range(new Position(line, 0), new Position(line + 1, 0)), "")
-                    : (new Range(new Position(line, start), new Position(line, start + text.Length)), undo);
+            var (range, typed) = (i % 2, undo) switch
+            {
+                (0, _) => (new Range(new Position(line, start), new Position(line, end)), text),
+                (_, null) => (new Range(new Position(line, 0), new Position(line + 1, 0)), ""),
+                _ => (new Range(new Position(line, start), new Position(line, start + text.Length)), undo),
+            };
             var watch = Stopwatch.StartNew();
             workspace.Change(new VersionedTextDocumentIdentifier(uri, ++version),
                 [new TextDocumentContentChangeEvent(range, typed)]);
