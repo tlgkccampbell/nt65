@@ -157,7 +157,7 @@ internal sealed class FamilyDeclarer(
         }
 
         var instances = new List<(Symbol Member, Symbol Instance)>();
-        foreach (var member in members.Symbols.Where(symbol => symbol.IsEnumMember))
+        foreach (var member in members.EnumMembers)
         {
             var instance = DeclareInstance(family, member);
             instances.Add((member, instance));

@@ -50,6 +50,13 @@ public sealed class Scope
     public IReadOnlyList<Symbol> Symbols => order;
 
     /// <summary>
+    /// Gets the members of an enum body, in source order. An enum body parses nothing but
+    /// members, so this is every symbol of such a scope; it is the one place that says which
+    /// symbols <c>.countof</c>, <c>.each</c> and a <c>.multiproc</c> count as members.
+    /// </summary>
+    public IEnumerable<Symbol> EnumMembers => order.Where(symbol => symbol.IsEnumMember);
+
+    /// <summary>
     /// Gets a value indicating whether every scope from here out to the file has a name, so that
     /// what is declared here can be reached with <c>::</c>. An anonymous <c>.scope { }</c> is
     /// inline code, and nothing outside it can name what it declares. Nothing outside a macro body
