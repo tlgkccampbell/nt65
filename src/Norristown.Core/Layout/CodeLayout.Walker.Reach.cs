@@ -51,41 +51,38 @@ public sealed partial class CodeLayout
                 ? [Expression(operand)!, second]
                 : Expression(operand) is { } only ? [only] : [];
             foreach (var expression in expressions)
-            {
-                var reported = false;
-                foreach (var (name, segmentName) in Named(expression))
-                {
-                    if (Unseen(mnemonic.Text, mnemonic.MnemonicKind, name, segmentName, transfer, mode != AddressingMode.Long)
-                        is { } message)
-                    {
-                        Report(expression, message);
-                        reported = true;
-                    }
-                }
-                if (transfer && !reported && OutOfBank(mnemonic.Text, expression) is { } outOfBank)
-                    Report(expression, outOfBank);
-                if (!reported && PointerOutsideBankZero(mnemonic.Text, expression, mode) is { } outside)
-                    Report(expression, outside);
-            }
+                CheckExpression(mnemonic.Text, mnemonic.MnemonicKind, expression, transfer, mode);
         }
 
         /// <summary>
         /// Checks a long branch such as <c>jeq</c>, which is a near transfer however it is written,
-        /// against what its segment can reach.
+        /// against what its segment can reach. The message suggests no long form, as it suggests
+        /// none for the conditional branch the long branch stands for.
         /// </summary>
-        private void CheckReach(SyntaxToken mnemonic, SyntaxNode target)
+        private void CheckReach(SyntaxToken mnemonic, SyntaxNode target) =>
+            CheckExpression(mnemonic.Text, MnemonicKind.Beq, target, transfer: true, AddressingMode.Relative);
+
+        /// <summary>
+        /// Checks one expression of an operand against what the code's segment can reach. Each
+        /// name it holds that the segment cannot see is reported. Where none is, a
+        /// <paramref name="transfer"/> is checked for a target in another bank, and a pointer in
+        /// <paramref name="mode"/> for a pointer outside bank zero.
+        /// </summary>
+        private void CheckExpression(string text, MnemonicKind kind, SyntaxNode expression, bool transfer, AddressingMode mode)
         {
             var reported = false;
-            foreach (var (name, segmentName) in Named(target))
+            foreach (var (name, segmentName) in Named(expression))
             {
-                if (Unseen(mnemonic.Text, MnemonicKind.Beq, name, segmentName, transfer: true, near: true) is { } message)
+                if (Unseen(text, kind, name, segmentName, transfer, mode != AddressingMode.Long) is { } message)
                 {
-                    Report(target, message);
+                    Report(expression, message);
                     reported = true;
                 }
             }
-            if (!reported && OutOfBank(mnemonic.Text, target) is { } outOfBank)
-                Report(target, outOfBank);
+            if (transfer && !reported && OutOfBank(text, expression) is { } outOfBank)
+                Report(expression, outOfBank);
+            if (!reported && PointerOutsideBankZero(text, expression, mode) is { } outside)
+                Report(expression, outside);
         }
 
         /// <summary>

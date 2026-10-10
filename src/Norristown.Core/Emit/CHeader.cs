@@ -88,6 +88,14 @@ public sealed class CHeader
         _ => null,
     };
 
+    /// <summary>Returns the C keyword that declares <paramref name="type"/>, which is <c>struct</c> or <c>union</c>.</summary>
+    private static string Keyword(Symbol type) => type.Kind == SymbolKind.Union ? "union" : "struct";
+
+    /// <summary>
+    /// Writes the whole header inside the include guard <paramref name="guard"/>: constants,
+    /// enums, types, data and routines, in that order, and then the comment listing what C
+    /// cannot name.
+    /// </summary>
     private void WriteAll(string guard)
     {
         var exported = program.Files
@@ -161,6 +169,7 @@ public sealed class CHeader
         Line($"#endif /* {guard} */");
     }
 
+    /// <summary>Writes an enum with each member whose value nt65 knows as a C enumerator.</summary>
     private void Enum(Symbol enumeration)
     {
         Line("");
@@ -188,8 +197,7 @@ public sealed class CHeader
                 Layout(held, types, visiting);
         }
 
-        var keyword = type.Kind == SymbolKind.Union ? "union" : "struct";
-        var name = $"{keyword} {CName(type.OutputName)}";
+        var name = $"{Keyword(type)} {CName(type.OutputName)}";
         Line("");
         Line($"{name} {{");
         foreach (var member in members)
@@ -216,7 +224,7 @@ public sealed class CHeader
         {
             var type = symbol.Type ?? (directive.Type is { } named ? ModelOf(symbol).SymbolOf(named) : null);
             if (type is not null && defined.Contains(type))
-                return $"{(type.Kind == SymbolKind.Union ? "union" : "struct")} {CName(type.OutputName)} {name}{dimension}";
+                return $"{Keyword(type)} {CName(type.OutputName)} {name}{dimension}";
             if (type is not null)
             {
                 diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
@@ -246,7 +254,9 @@ public sealed class CHeader
         return false;
     }
 
+    /// <summary>Returns the model of the file that declares <paramref name="symbol"/>.</summary>
     private SemanticModel ModelOf(Symbol symbol) => program.Files.First(file => file.Tree == symbol.Tree);
 
+    /// <summary>Appends one line to the header.</summary>
     private void Line(string line) => text.Append(line).Append('\n');
 }

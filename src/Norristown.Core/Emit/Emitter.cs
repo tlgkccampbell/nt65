@@ -237,10 +237,17 @@ public sealed class Emitter
     /// </summary>
     public static string OutputPath(SemanticModel model, string? outRoot = null)
     {
-        var path = model.FileScope.Module is { } module
-            ? module.Replace("::", "/", StringComparison.Ordinal) + ".s"
-            : Paths.Normalized(model.Tree.Path).Split('/')[^1] is var name
-                && name.EndsWith(".nt65", StringComparison.OrdinalIgnoreCase) ? name[..^5] + ".s" : name + ".s";
+        string stem;
+        if (model.FileScope.Module is { } module)
+        {
+            stem = module.Replace("::", "/", StringComparison.Ordinal);
+        }
+        else
+        {
+            var name = Paths.Normalized(model.Tree.Path).Split('/')[^1];
+            stem = name.EndsWith(".nt65", StringComparison.OrdinalIgnoreCase) ? name[..^5] : name;
+        }
+        var path = stem + ".s";
         return string.IsNullOrEmpty(outRoot) || outRoot == "." ? path : $"{outRoot.TrimEnd('/')}/{path}";
     }
 
@@ -281,10 +288,14 @@ public sealed class Emitter
     private static AddressSize? Implicit(AddressSize? size) => size == AddressSize.Absolute ? null : size;
 
     /// <summary>Returns where a call appears in the source, as the comment before its expansion names it.</summary>
-    private static string Where(StatementSyntax call)
-    {
-        return $"{call.Tree.Path}:{call.LineIndex + 1}";
-    }
+    private static string Where(StatementSyntax call) => $"{call.Tree.Path}:{call.LineIndex + 1}";
+
+    /// <summary>
+    /// Returns whether a node is, or holds, the current address <c>*</c>, whose value depends on
+    /// where the line stands and so has to be written there.
+    /// </summary>
+    private static bool UsesCurrentAddress(SyntaxNode node) =>
+        node is CurrentAddressExpressionSyntax || node.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any();
 
     /// <summary>
     /// Returns the value of the one byte a line of <paramref name="directive"/>'s values writes,
@@ -656,6 +667,18 @@ public sealed class Emitter
             return;
         }
 
+        WalkBody(block, kind);
+    }
+
+    /// <summary>
+    /// Writes a block that opens a routine, a data declaration, a scope, a segment block or a
+    /// region, along with every line inside it, and closes what it opened afterwards.
+    /// </summary>
+    private void WalkBody(BlockSyntax block, BlockKind kind)
+    {
+        var lines = block.Members;
+        var opener = block.Opener.Statement;
+
         // A segment block anywhere but the file's own top level temporarily switches away from
         // the enclosing segment, which is what `.pushseg` and `.popseg` express. A region is
         // always at file level.
@@ -924,12 +947,12 @@ public sealed class Emitter
             statements.Walk(line, rest);
             return;
         }
-        var bytes = rest is null ? 0 : layout.Of(rest, context.Expansion)?.Length ?? 0;
-        if (rest is not null)
-            WriteWidthDirective(rest);
+        var bytes = 0;
         var rewriter = new TokenRewriter();
         if (rest is not null)
         {
+            bytes = layout.Of(rest, context.Expansion)?.Length ?? 0;
+            WriteWidthDirective(rest);
             expressions.Substitute(rest, rewriter);
             expressions.ReplaceFrameSlot(rest, rewriter);
             expressions.Direct(rest, rewriter);
@@ -1015,10 +1038,20 @@ public sealed class Emitter
             return;
         }
 
+        // A directive with no values reserves its room, which is zeros.
+        if (directive.Tail is not (BracedDataSyntax { Value: ValueListSyntax } or InlineDataSyntax))
+        {
+            var reserved = Reservations(laid.Length).ToList();
+            WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0]);
+            foreach (var rest in reserved.Skip(1))
+                Code(line, $"{Body}.res {rest}", (int)rest);
+            return;
+        }
+
         // A list is written without its braces, as the directive's own values are.
         var rewriter = new TokenRewriter();
         string text;
-        string? comment = null;
+        string? comment;
         string? single;
         if (directive.Tail is BracedDataSyntax { Value: ValueListSyntax list })
         {
@@ -1032,19 +1065,12 @@ public sealed class Emitter
             text = $"{ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text)} {values}";
             single = list.Values is [var one] && IsConstant(one) ? values : null;
         }
-        else if (directive.Tail is InlineDataSyntax { Values: var inline })
+        else
         {
+            var inline = ((InlineDataSyntax)directive.Tail).Values;
             expressions.Substitute(directive, rewriter);
             text = rewriter.Bare(directive, out comment);
             single = inline is [var only] && IsConstant(only) ? rewriter.Render(only).Trim() : null;
-        }
-        else
-        {
-            var reserved = Reservations(laid.Length).ToList();
-            WithName(line, symbol, $".res {reserved[0]}", (int)reserved[0], comment);
-            foreach (var rest in reserved.Skip(1))
-                Code(line, $"{Body}.res {rest}", (int)rest, comment);
-            return;
         }
 
         // One text in a counted `.byte` array is padded with zero to the count, so the line
@@ -1163,20 +1189,17 @@ public sealed class Emitter
         // A string cannot be expressed as a ca65 constant. It is used through `.strlen` and
         // `.strat`, which are numbers by the time anything is written. A setting is written as
         // its value wherever it is used, and is not written here.
-        if (!statement.IsSetting && model.SymbolAt(statement.Name) is { } reference)
-        {
-            if (reference.Value.IsString)
-                return;
-            var rewriter = new TokenRewriter();
-            rewriter.Replacements[statement.Keyword.Position] = "";
-            rewriter.Replacements[statement.Name.Position] = NameOf(reference);
-            expressions.Substitute(statement.Value, rewriter);
-            var text = rewriter.Render(statement);
-            if (statement.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any())
-                Declare(line, text);
-            else
-                Definition(text);
-        }
+        if (statement.IsSetting || model.SymbolAt(statement.Name) is not { } reference || reference.Value.IsString)
+            return;
+        var rewriter = new TokenRewriter();
+        rewriter.Replacements[statement.Keyword.Position] = "";
+        rewriter.Replacements[statement.Name.Position] = NameOf(reference);
+        expressions.Substitute(statement.Value, rewriter);
+        var text = rewriter.Render(statement);
+        if (UsesCurrentAddress(statement))
+            Declare(line, text);
+        else
+            Definition(text);
     }
 
     /// <summary>
@@ -1191,7 +1214,7 @@ public sealed class Emitter
         var rewriter = new TokenRewriter();
         expressions.Substitute(address, rewriter);
         var text = $"{NameOf(reference)} = {rewriter.Render(address)}";
-        if (address is CurrentAddressExpressionSyntax || address.DescendantNodes().OfType<CurrentAddressExpressionSyntax>().Any())
+        if (UsesCurrentAddress(address))
             Declare(line, text);
         else
             Definition(text);
@@ -1487,7 +1510,7 @@ public sealed class Emitter
     /// Appends a line to the output, without trailing spaces and tagged with this emitter's
     /// file.
     /// </summary>
-    private void Write(EmittedLine line) => lines.Add(line with { Text = line.Text.TrimEnd(), File = file });
+    private void Write(EmittedLine line) => lines.Add(line.InFile(file));
 
     /// <summary>
     /// Writes a <c>.place</c> as the module it places, in full, between a comment naming the
@@ -1602,10 +1625,10 @@ public sealed class Emitter
         {
             if (DataSyntax.IsElementType(node))
                 emitter.Elements(Line, node, symbol: null);
-            else if (emitter.layout.Of(node, emitter.context.Expansion) is null)
-                emitter.NotTranspiled(node);
+            else if (Laid(node) is { } laid)
+                emitter.Source(Line, node, laid.Length);
             else
-                emitter.Source(Line, node, emitter.layout.Of(node, emitter.context.Expansion)?.Length ?? 0);
+                emitter.NotTranspiled(node);
         }
 
         /// <inheritdoc/>
@@ -1614,19 +1637,13 @@ public sealed class Emitter
         /// <inheritdoc/>
         public override void VisitInstructionStatement(InstructionStatementSyntax node)
         {
-            if (SyntaxFacts.IsLongBranch(node.MnemonicKind)
-                && emitter.layout.Of(node, emitter.context.Expansion) is { } laid)
-            {
+            var laid = Laid(node);
+            if (laid is not null && SyntaxFacts.IsLongBranch(node.MnemonicKind))
                 emitter.Branch(Line, node, laid);
-            }
-            else if (emitter.layout.Of(node, emitter.context.Expansion) is { Opcode: { } opcode } encoded)
-            {
-                emitter.Encoded(Line, node, encoded, opcode);
-            }
+            else if (laid is { Opcode: { } opcode })
+                emitter.Encoded(Line, node, laid, opcode);
             else
-            {
-                emitter.Source(Line, node, emitter.layout.Of(node, emitter.context.Expansion)?.Length ?? 0);
-            }
+                emitter.Source(Line, node, laid?.Length ?? 0);
         }
 
         /// <inheritdoc/>
@@ -1661,6 +1678,9 @@ public sealed class Emitter
 
         /// <inheritdoc/>
         public override void VisitPlaceDirective(PlaceDirectiveSyntax node) => emitter.Place(node);
+
+        /// <summary>Returns what a statement assembles to in the expansion being written, or null when it generates no bytes.</summary>
+        private LineLayout? Laid(StatementSyntax statement) => emitter.layout.Of(statement, emitter.context.Expansion);
     }
 
     /// <summary>

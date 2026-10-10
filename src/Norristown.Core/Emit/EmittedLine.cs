@@ -53,6 +53,12 @@ internal sealed partial record EmittedLine(
     /// <summary>Where a generated comment starts, so that a column of them lines up.</summary>
     private const int CommentColumn = 36;
 
+    /// <summary>
+    /// Returns the line as the output holds it, without trailing spaces and tagged with the index
+    /// <paramref name="file"/> of the source it counts its line in.
+    /// </summary>
+    public EmittedLine InFile(int file) => this with { Text = Text.TrimEnd(), File = file };
+
     /// <summary>Returns the text with its generated comment at the column where comments line up.</summary>
     public static string Commented(string text, string? comment) =>
         comment is null ? text : text + new string(' ', Math.Max(CommentColumn - text.Length, 2)) + "; " + OneLine(comment);

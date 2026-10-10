@@ -64,10 +64,11 @@ internal static class LinePasses
             // A run longer than one `.res` reserves is left as it is. Gathering it would need
             // several directives, and a file with that many equal lines in it is a repetition
             // nobody would have written by hand either.
+            var value = RepeatedByte(lines[i]);
             var run = 1;
-            while (i + run < lines.Count && run < DataLengths.MaxReservation && Same(lines[i + run], lines[i]) && RepeatedByte(lines[i]) is not null)
+            while (value is not null && i + run < lines.Count && run < DataLengths.MaxReservation && Same(lines[i + run], lines[i]))
                 run++;
-            if (run >= MinimumFill && RepeatedByte(lines[i]) is { } value)
+            if (run >= MinimumFill && value is not null)
             {
                 var indent = lines[i].Text[..(lines[i].Text.Length - lines[i].Text.TrimStart().Length)];
                 kept.Add(lines[i] with
@@ -156,8 +157,7 @@ internal static class LinePasses
     }
 
     /// <summary>Appends a line as the emitter appends every line, trimmed and recording its source file.</summary>
-    private static void Add(List<EmittedLine> lines, EmittedLine line, int file) =>
-        lines.Add(line with { Text = line.Text.TrimEnd(), File = file });
+    private static void Add(List<EmittedLine> lines, EmittedLine line, int file) => lines.Add(line.InFile(file));
 
     /// <summary>
     /// Returns the lines each iteration came out as, or null when no <c>.repeat</c> could

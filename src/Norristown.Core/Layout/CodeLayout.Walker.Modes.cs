@@ -91,6 +91,7 @@ public sealed partial class CodeLayout
             return false;
         }
 
+        /// <summary>Returns an address size as a message names it.</summary>
         private static string Format(AddressSize size) => size switch
         {
             AddressSize.ZeroPage => "direct-page",
@@ -112,33 +113,7 @@ public sealed partial class CodeLayout
                 return widths[0];
             if (candidates.Length == 1)
             {
-                // A prefix in the source is binding, so a prefix that the only available form cannot
-                // honour is an error rather than being quietly dropped. For example, `lda z:($10),y`
-                // has no direct form, and ca65 would read the text as `(dp),y`. A `d:` prefix is
-                // checked separately, where its direct-page offset is worked out.
-                if (Operands.PrefixSize(operand) is { } prefixSize && !ThroughDirectPage(operand)
-                    && Instructions.Width(candidates[0]) is { } width && width != prefixSize
-                    && !Instructions.IsControlTransfer(mnemonic.MnemonicKind))
-                {
-                    Report(operand, Catalogue.AddressingModeMissing.Message(
-                        mnemonic.Text, Format(prefixSize), CpuNames.Format(cpu)));
-                }
-
-                // The only available form reaches an address of its own width and no wider. For
-                // example, `(ptr),y` takes a zero-page pointer, and the linker would cut an absolute
-                // pointer to its low byte, if it noticed at all. A control transfer's target is
-                // checked for distance instead.
-                else if (Operands.PrefixSize(operand) is null
-                    && !(Instructions.IsControlTransfer(mnemonic.MnemonicKind) && candidates[0] is AddressingMode.Absolute
-                        or AddressingMode.Long or AddressingMode.Relative or AddressingMode.RelativeLong
-                        or AddressingMode.DirectRelative)
-                    && Instructions.Width(candidates[0]) is { } reach
-                    && Expression(operand) is { } pointer
-                    && model.AddressSizeOf(pointer, segment, expansion) is { } wide && wide > reach)
-                {
-                    Report(operand, Catalogue.AddressingModeTooNarrow.Message(
-                        mnemonic.Text, Format(reach), pointer.GetText().Trim(), Format(wide)));
-                }
+                CheckOnlyForm(mnemonic, operand, candidates[0]);
                 CheckOperand(mnemonic, operand, candidates[0], substituted, bits, sizeUnknown);
                 return candidates[0];
             }
@@ -159,6 +134,42 @@ public sealed partial class CodeLayout
             }
             CheckOperand(mnemonic, operand, chosen, substituted, bits, sizeUnknown);
             return chosen;
+        }
+
+        /// <summary>
+        /// Checks an operand against <paramref name="only"/>, the one form the instruction has for
+        /// its shape, which the operand's own width cannot change.
+        /// </summary>
+        private void CheckOnlyForm(SyntaxToken mnemonic, SyntaxNode operand, AddressingMode only)
+        {
+            var transfers = Instructions.IsControlTransfer(mnemonic.MnemonicKind);
+
+            // A prefix in the source is binding, so a prefix that the only available form cannot
+            // honor is an error rather than being quietly dropped. For example, `lda z:($10),y`
+            // has no direct form, and ca65 would read the text as `(dp),y`. A `d:` prefix is
+            // checked separately, where its direct-page offset is worked out.
+            if (Operands.PrefixSize(operand) is { } prefixSize)
+            {
+                if (!ThroughDirectPage(operand) && Instructions.Width(only) is { } width && width != prefixSize && !transfers)
+                {
+                    Report(operand, Catalogue.AddressingModeMissing.Message(
+                        mnemonic.Text, Format(prefixSize), CpuNames.Format(cpu)));
+                }
+                return;
+            }
+
+            // The only available form reaches an address of its own width and no wider. For
+            // example, `(ptr),y` takes a zero-page pointer, and the linker would cut an absolute
+            // pointer to its low byte, if it noticed at all. A control transfer's target is
+            // checked for distance instead.
+            var targets = transfers && only is AddressingMode.Absolute or AddressingMode.Long or AddressingMode.Relative
+                or AddressingMode.RelativeLong or AddressingMode.DirectRelative;
+            if (!targets && Instructions.Width(only) is { } reach && Expression(operand) is { } pointer
+                && model.AddressSizeOf(pointer, segment, expansion) is { } wide && wide > reach)
+            {
+                Report(operand, Catalogue.AddressingModeTooNarrow.Message(
+                    mnemonic.Text, Format(reach), pointer.GetText().Trim(), Format(wide)));
+            }
         }
 
         /// <summary>
@@ -186,16 +197,14 @@ public sealed partial class CodeLayout
             {
                 if (Operands.PrefixSize(operand) is not null)
                 {
-                    Report(operand,
-                        Catalogue.TransferPrefix.Message(mnemonic.Text));
+                    Report(operand, Catalogue.TransferPrefix.Message(mnemonic.Text));
+                    return;
                 }
 
                 // On the 65816 whether a routine is called near or far is decided by its signature,
                 // and the processor-state analysis checks that along with the rest of the call.
-                else if (!(cpu == Cpu.Wdc65816 && NamesRoutine(expression)))
-                {
+                if (!(cpu == Cpu.Wdc65816 && NamesRoutine(expression)))
                     CheckDistance(mnemonic, expression, mode);
-                }
                 return;
             }
 

@@ -89,11 +89,24 @@ public sealed partial class CodeLayout
             if (expansion is not null || !Placements.IsWellPlaced(directive))
                 return;
 
-            // The placed module may emit to any segment, so every segment's run ends here.
+            // The placed module may emit to any segment, so every segment's run ends here, and so
+            // does the run of the bytes outside every segment.
             foreach (var named in runs.Keys.ToList())
                 runs[named] = nextStream++;
             measuredIn[Stream] = nextStream++;
             layout.placePoints.Add(new PlacePoint(directive, layout.steps.Count, Measured, segment));
+        }
+
+        /// <summary>
+        /// Ends the run the walk is emitting into, so that nothing after this point stands at a
+        /// distance nt65 knows from anything before it. The next byte starts a new run.
+        /// </summary>
+        private void EndRun()
+        {
+            if (segment is { } named)
+                runs[named] = nextStream++;
+            else
+                measuredIn[Stream] = nextStream++;
         }
 
         /// <summary>
@@ -125,10 +138,8 @@ public sealed partial class CodeLayout
                 CheckWritten(statement);
             var offset = filled.GetValueOrDefault(Measured);
             layout.positions[StepKey.Of(statement, expansion)] = new BytePosition(Measured, offset, length);
-            if (length == DataLengths.Unpredictable && segment is { } named)
-                runs[named] = nextStream++;
-            else if (length == DataLengths.Unpredictable)
-                measuredIn[Stream] = nextStream++;
+            if (length == DataLengths.Unpredictable)
+                EndRun();
             else
                 filled[Measured] = offset + length;
         }

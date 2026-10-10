@@ -221,7 +221,10 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
         }
         var (width, bigEndian) = ElementFormat(element!);
         var value = given is null ? Constant(0) : output.ValueText(given, width, bigEndian, directive == DirectiveKind.Addr);
-        yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}",
-            size, ByteValue(directive, [value], size));
+
+        // A big-endian value wider than a word has no ca65 directive, so its zero is written as
+        // the bytes the directive would hold.
+        var written = given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value;
+        yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {written}", size, ByteValue(directive, [value], size));
     }
 }

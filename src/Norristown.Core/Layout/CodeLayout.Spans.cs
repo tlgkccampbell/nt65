@@ -59,17 +59,9 @@ public sealed partial class CodeLayout
             return default;
         var hidden = HiddenSteps();
         if (At(from, hidden) is not { } start)
-        {
-            return new CycleSpan(null, IsInsideLabel(from)
-                ? $"`{from.DisplayName}` is a position inside an instruction whose bytes nt65 could not follow"
-                : $"`{from.DisplayName}` is not in any laid-out code");
-        }
+            return Missing(from);
         if (At(to, hidden) is not { } end)
-        {
-            return new CycleSpan(null, IsInsideLabel(to)
-                ? $"`{to.DisplayName}` is a position inside an instruction whose bytes nt65 could not follow"
-                : $"`{to.DisplayName}` is not in any laid-out code");
-        }
+            return Missing(to);
         if (counted[start].Routine is not { } routine || counted[end].Routine != routine)
             return new CycleSpan(null, "the two positions are in different routines");
         if (StreamOf(start, hidden) != StreamOf(end, hidden))
@@ -136,6 +128,14 @@ public sealed partial class CodeLayout
             return new CycleSpan(null, Loop(edges, arriving, hidden));
         return new CycleSpan(upperBound ? bounds.Maximum : bounds.Minimum, null);
     }
+
+    /// <summary>
+    /// Returns the span without a count for an end that is at no step of the completed walk,
+    /// with the reason.
+    /// </summary>
+    private static CycleSpan Missing(Symbol end) => new(null, IsInsideLabel(end)
+        ? $"`{end.DisplayName}` is a position inside an instruction whose bytes nt65 could not follow"
+        : $"`{end.DisplayName}` is not in any laid-out code");
 
     /// <summary>
     /// Returns a value indicating whether <paramref name="symbol"/> is a position a <c>.label</c>

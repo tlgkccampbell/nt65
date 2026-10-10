@@ -118,26 +118,22 @@ internal static class OutputNames
         foreach (var measured in own)
         {
             ends.Add(measured);
-            var end = EndLabelOf(names, measured);
-            if (names.Claimed(end) is { } other)
-            {
-                diagnostics.Add(new Diagnostic(measured.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Message(other.QualifiedName, $"the end of `{measured.QualifiedName}`", end),
-                    [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
-            }
-            names.Claim(end);
+            ClaimFixed(EndLabelOf(names, measured), measured, "the end of");
         }
-
         foreach (var type in model.Symbols.Where(symbol => symbol.Tree == model.Tree && IsSized(symbol)))
+            ClaimFixed(SizeConstantOf(names, type), type, "the size of");
+
+        // A fixed spelling is claimed whether or not another symbol already has it, and the
+        // collision is reported against the declaration the spelling is derived from.
+        void ClaimFixed(string name, Symbol owner, string what)
         {
-            var size = SizeConstantOf(names, type);
-            if (names.Claimed(size) is { } other)
+            if (names.Claimed(name) is { } other)
             {
-                diagnostics.Add(new Diagnostic(type.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Message(other.QualifiedName, $"the size of `{type.QualifiedName}`", size),
+                diagnostics.Add(new Diagnostic(owner.DeclarationSpan,
+                    Catalogue.OutputNameCollision.Message(other.QualifiedName, $"{what} `{owner.QualifiedName}`", name),
                     [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
             }
-            names.Claim(size);
+            names.Claim(name);
         }
     }
 
