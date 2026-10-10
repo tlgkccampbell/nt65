@@ -10,8 +10,9 @@ namespace Norristown.Project;
 /// <para>
 /// A configuration gives a segment's size, its home bank and the memory area it runs in. The
 /// segment is <c>zp</c> when its <c>type</c> is <c>zp</c> or it runs wholly in page zero, and its
-/// home bank is the bank of the address it runs at. A segment that several links place must agree on every fact nt65 uses,
-/// because nt65 analyzes each module once, whichever links it goes into.
+/// home bank is the bank of the address it runs at. A segment that several links place must
+/// agree on every fact nt65 uses, because nt65 analyzes each module once, whichever links it
+/// goes into.
 /// </para>
 /// </summary>
 public static class SegmentLinks
@@ -133,7 +134,7 @@ public static class SegmentLinks
             Unwritten = Unwritten(placed, config),
             Fill = Fill(placed, config),
         };
-        return new Placed(segment, config.Path, note);
+        return new Placed(segment, note);
     }
 
     /// <summary>
@@ -218,13 +219,7 @@ public static class SegmentLinks
         }
 
         var there = first.Placements[0];
-        var difference = segment.Size != first.Size ? $"is `{Format(segment.Size)}` here and `{Format(first.Size)}`"
-            : segment.Space != first.Space ? $"is in {AddressSpace.Format(segment.Space)} here and in {AddressSpace.Format(first.Space)}"
-            : segment.Bank is { } bank && first.Bank is { } other && bank != other
-                ? $"is in bank {StateValue.Hex(bank, 2)} here and in bank {StateValue.Hex(other, 2)}"
-            : !segment.Mirrors.SequenceEqual(first.Mirrors) ? "has other mirrors here than"
-            : null;
-        if (difference is not null)
+        if (Disagreement(segment, first) is { } difference)
         {
             diagnostics.Add(new Diagnostic(segment.Placements[0],
                 Catalogue.LinkedSegmentsDisagree.Message(segment.Name, difference, there.File),
@@ -245,6 +240,22 @@ public static class SegmentLinks
                 ? first.Fill
                 : new SegmentFill(null, $"the configs that place segment `{segment.Name}`"),
         };
+    }
+
+    /// <summary>
+    /// Returns the phrase that says how <paramref name="segment"/>, as one link places it,
+    /// differs from <paramref name="first"/>, the same segment as an earlier link placed it, or
+    /// null when the two agree on its size, its space, its bank and its mirrors.
+    /// </summary>
+    private static string? Disagreement(Segment segment, Segment first)
+    {
+        if (segment.Size != first.Size)
+            return $"is `{Format(segment.Size)}` here and `{Format(first.Size)}`";
+        if (segment.Space != first.Space)
+            return $"is in {AddressSpace.Format(segment.Space)} here and in {AddressSpace.Format(first.Space)}";
+        if (segment.Bank is { } bank && first.Bank is { } other && bank != other)
+            return $"is in bank {StateValue.Hex(bank, 2)} here and in bank {StateValue.Hex(other, 2)}";
+        return segment.Mirrors.SequenceEqual(first.Mirrors) ? null : "has other mirrors here than";
     }
 
     /// <summary>
@@ -296,6 +307,7 @@ public static class SegmentLinks
         return segment;
     }
 
+    /// <summary>Returns a size as the project file's <c>size</c> spells it.</summary>
     private static string Format(AddressSize size) => size switch
     {
         AddressSize.ZeroPage => "zp",
@@ -305,7 +317,6 @@ public static class SegmentLinks
 
     /// <summary>Represents a segment as one link places it.</summary>
     /// <param name="Segment">The segment, with what that link's configuration says about it.</param>
-    /// <param name="Config">The logical path of the link's configuration.</param>
     /// <param name="Area">What the project says about the memory area it runs in, if anything.</param>
-    private sealed record Placed(Segment Segment, string Config, Link.Area? Area);
+    private sealed record Placed(Segment Segment, Link.Area? Area);
 }

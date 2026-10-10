@@ -185,7 +185,7 @@ public static class ProjectFile
             diagnostics.Add(new Diagnostic(span, Catalogue.SettingNotANumber.Message(name)));
             return null;
         }
-        return new Processor.SettingValue(name, value, span);
+        return new SettingValue(name, value, span);
     }
 
     /// <summary>
@@ -365,6 +365,10 @@ public static class ProjectFile
         // link the same one.
         private readonly Dictionary<string, LinkerConfig?> configs = new(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Reads <c>cpu</c>, the processor the program is built for. Returns null when the file
+        /// gives none, or names one nt65 does not know.
+        /// </summary>
         public Cpu? Cpu(JsonElement root, Key keys)
         {
             if (String(root, keys, CpuKey) is not { } named)
@@ -528,41 +532,32 @@ public static class ProjectFile
                 var segment = new ProjectSegment(property.Name, At(key));
                 foreach (var attribute in property.Value.EnumerateObject())
                 {
-                    if (!SegmentKeys.Contains(attribute.Name, StringComparer.Ordinal))
+                    switch (attribute.Name)
                     {
-                        Report(key, Catalogue.ProjectSegmentKeyUnknown.Message(property.Name, attribute.Name));
-                        continue;
-                    }
-                    if (attribute.Name == SizeKey)
-                    {
-                        if (attribute.Value.ValueKind == JsonValueKind.String
-                            && SegmentNames.ParseSize(attribute.Value.GetString() ?? "") is { } size)
-                        {
+                        case SizeKey when attribute.Value.ValueKind == JsonValueKind.String
+                            && SegmentNames.ParseSize(attribute.Value.GetString() ?? "") is { } size:
                             segment = segment with { Size = size };
-                        }
-                        else
-                        {
+                            break;
+                        case SizeKey:
                             Report(key, Catalogue.ProjectSegmentSizeMissing.Message(property.Name));
-                        }
-                        continue;
+                            break;
+                        case SpaceKey:
+                            if (SpaceName(attribute.Value, key) is { } space)
+                                segment = segment with { Space = space };
+                            break;
+                        case MirrorsKey:
+                            segment = segment with { Mirrors = Banks(property.Name, key, attribute.Value) };
+                            break;
+                        default:
+                            if (!SegmentKeys.Contains(attribute.Name, StringComparer.Ordinal))
+                                Report(key, Catalogue.ProjectSegmentKeyUnknown.Message(property.Name, attribute.Name));
+                            else if (StateRegister.FromAttribute(attribute.Name) is { } register)
+                            {
+                                var value = new Given(Number(attribute.Value));
+                                segment = register == StateRegister.DirectPage ? segment with { DirectPage = value } : segment with { Bank = value };
+                            }
+                            break;
                     }
-                    if (attribute.Name == SpaceKey)
-                    {
-                        if (attribute.Value.ValueKind == JsonValueKind.String && attribute.Value.GetString() is { Length: > 0 } space)
-                            segment = segment with { Space = space };
-                        else
-                            Report(key, Catalogue.SpaceNotAName);
-                        continue;
-                    }
-                    if (attribute.Name == MirrorsKey)
-                    {
-                        segment = segment with { Mirrors = Banks(property.Name, key, attribute.Value) };
-                        continue;
-                    }
-                    if (StateRegister.FromAttribute(attribute.Name) is not { } register)
-                        continue;
-                    var value = new Given(Number(attribute.Value));
-                    segment = register == StateRegister.DirectPage ? segment with { DirectPage = value } : segment with { Bank = value };
                 }
                 read.Add(segment);
             }
@@ -603,12 +598,7 @@ public static class ProjectFile
                     }
                 }
                 if (property.Value.TryGetProperty(SpaceKey, out var space))
-                {
-                    if (space.ValueKind == JsonValueKind.String && space.GetString() is { Length: > 0 } named)
-                        link = link with { Space = named };
-                    else
-                        Report(key?[SpaceKey], Catalogue.SpaceNotAName);
-                }
+                    link = link with { Space = SpaceName(space, key?[SpaceKey]) };
                 if (Object(property.Value, key, MemoryKey, out var memory))
                     link = link with { Memory = Areas(memory, key?[MemoryKey]) };
                 read.Add(link);
@@ -640,10 +630,8 @@ public static class ProjectFile
                     }
                     else if (setting.Name == SpaceKey)
                     {
-                        if (setting.Value.ValueKind == JsonValueKind.String && setting.Value.GetString() is { Length: > 0 } space)
+                        if (SpaceName(setting.Value, key) is { } space)
                             area = area with { Space = space };
-                        else
-                            Report(key, Catalogue.SpaceNotAName);
                     }
                     else
                     {
@@ -744,6 +732,11 @@ public static class ProjectFile
             return banks;
         }
 
+        /// <summary>
+        /// Reads the list of strings under <paramref name="name"/> in <paramref name="owner"/>, or
+        /// returns an empty list when there is none. An item that is not a string is reported and
+        /// left out.
+        /// </summary>
         public IReadOnlyList<string> Strings(JsonElement owner, Key? keys, string name)
         {
             if (!owner.TryGetProperty(name, out var value))
@@ -765,6 +758,10 @@ public static class ProjectFile
             return read;
         }
 
+        /// <summary>
+        /// Reads the string under <paramref name="name"/> in <paramref name="owner"/>, or returns
+        /// null when there is none or the value is not a string, which is reported.
+        /// </summary>
         public string? String(JsonElement owner, Key? keys, string name)
         {
             if (!owner.TryGetProperty(name, out var value))
@@ -774,6 +771,13 @@ public static class ProjectFile
             Report(keys?[name], Catalogue.ProjectNotAString.Message(name));
             return null;
         }
+
+        /// <summary>
+        /// Reports <paramref name="message"/> at <paramref name="key"/>, or at the start of the
+        /// file when there is no key to point at.
+        /// </summary>
+        public void Report(Key? key, DiagnosticMessage message) =>
+            diagnostics.Add(new Diagnostic(At(key), Severity.Error, message));
 
         /// <summary>
         /// Returns the linker config at the logical path <paramref name="logical"/>, read once, or
@@ -787,11 +791,16 @@ public static class ProjectFile
         }
 
         /// <summary>
-        /// Reports <paramref name="message"/> at <paramref name="key"/>, or at the start of the
-        /// file when there is no key to point at.
+        /// Returns the address space that a <c>space</c> value names, or null after reporting at
+        /// <paramref name="key"/> that the value is not a name.
         /// </summary>
-        public void Report(Key? key, DiagnosticMessage message) =>
-            diagnostics.Add(new Diagnostic(At(key), Severity.Error, message));
+        private string? SpaceName(JsonElement value, Key? key)
+        {
+            if (value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } space)
+                return space;
+            Report(key, Catalogue.SpaceNotAName);
+            return null;
+        }
 
         /// <summary>
         /// Returns a value indicating whether <paramref name="word"/> is one of the three

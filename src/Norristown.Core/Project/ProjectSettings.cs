@@ -85,7 +85,10 @@ public sealed record ProjectSettings(
             .Select(link => link.ConfigPath)
             .Distinct(StringComparer.Ordinal);
 
-    // The problems with the project file itself, to which the problems with its links are added.
+    /// <summary>
+    /// Gets the problems with the project file itself, before the problems with its links are
+    /// added, so that a configuration that replaces the links can report its own.
+    /// </summary>
     private IReadOnlyList<Diagnostic> FileDiagnostics { get; init; } = [];
 
     /// <summary>

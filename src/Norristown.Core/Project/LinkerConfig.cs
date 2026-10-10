@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Norristown.Project;
 
 /// <summary>
@@ -40,9 +42,17 @@ public sealed class LinkerConfig
         var symbols = reader.Symbols;
         long? Value(IReadOnlyList<Token> tokens) => new Evaluator(tokens, symbols).Evaluate();
 
+        // Returns an attribute's value, or null when the entry does not give the attribute.
+        long? ValueOf(Attributes attributes, string name) =>
+            attributes.TryGetValue(name, out var tokens) ? Value(tokens) : null;
+
+        // Returns an attribute as a number given, or null when the entry does not give it.
+        Given? GivenOf(Attributes attributes, string name) =>
+            attributes.TryGetValue(name, out var tokens) ? new Given(Value(tokens)) : null;
+
         // ld65 takes a `fillval` from 0 to 255 and refuses anything else, so a value outside
         // that range is as unknown as one nt65 cannot work out.
-        Given? FillOf(Dictionary<string, IReadOnlyList<Token>> attributes) =>
+        Given? FillOf(Attributes attributes) =>
             attributes.TryGetValue("fillval", out var fill)
                 ? new Given(Value(fill) is { } value and >= 0 and <= 0xFF ? value : null)
                 : null;
@@ -50,11 +60,7 @@ public sealed class LinkerConfig
         var memory = new Dictionary<string, MemoryArea>(StringComparer.Ordinal);
         foreach (var (name, at, attributes) in reader.Memory)
         {
-            memory.TryAdd(name, new MemoryArea(
-                name,
-                attributes.TryGetValue("start", out var start) ? Value(start) : null,
-                attributes.TryGetValue("size", out var size) ? Value(size) : null,
-                at)
+            memory.TryAdd(name, new MemoryArea(name, ValueOf(attributes, "start"), ValueOf(attributes, "size"), at)
             {
                 // ld65 writes an area to the output file unless its `file` is empty. A `file` given
                 // as anything nt65 cannot read is taken as written, so nothing is reported for it.
@@ -71,9 +77,9 @@ public sealed class LinkerConfig
                 Load = Word(attributes, "load"),
                 Run = Word(attributes, "run"),
                 Type = Word(attributes, "type")?.ToLowerInvariant(),
-                Start = attributes.TryGetValue("start", out var start) ? new Given(Value(start)) : null,
-                Offset = attributes.TryGetValue("offset", out var offset) ? new Given(Value(offset)) : null,
-                Align = attributes.TryGetValue("align", out var align) ? new Given(Value(align)) : null,
+                Start = GivenOf(attributes, "start"),
+                Offset = GivenOf(attributes, "offset"),
+                Align = GivenOf(attributes, "align"),
                 Defines = Word(attributes, "define")?.Equals("yes", StringComparison.OrdinalIgnoreCase) == true,
                 Fill = FillOf(attributes),
             });
@@ -88,7 +94,7 @@ public sealed class LinkerConfig
     /// Returns the word an attribute is set to, such as <c>ROM</c> for <c>load = ROM</c>, or null
     /// when the attribute is not given or is not a single word.
     /// </summary>
-    private static string? Word(Dictionary<string, IReadOnlyList<Token>> attributes, string name) =>
+    private static string? Word(Attributes attributes, string name) =>
         attributes.TryGetValue(name, out var tokens) && tokens is [{ Kind: TokenKind.Name or TokenKind.String } token]
             ? token.Text
             : null;
@@ -225,21 +231,43 @@ public sealed class LinkerConfig
         public string? RunsIn => Run ?? Load;
     }
 
+    /// <summary>Identifies what a token of a configuration is.</summary>
     private enum TokenKind
     {
+        /// <summary>A block, entry, attribute or symbol name.</summary>
         Name,
+
+        /// <summary>A decimal, <c>$</c> hexadecimal or <c>%</c> binary number.</summary>
         Number,
+
+        /// <summary>A quoted string, or <c>%O</c>, which stands for the output file's name.</summary>
         String,
+
+        /// <summary>A brace, a bracket, an operator or a separator.</summary>
         Punctuation,
 
-        // A value only ld65's command line gives, such as `%S`.
+        /// <summary>A value only ld65's command line gives, such as <c>%S</c>.</summary>
         Unknown,
     }
 
+    /// <summary>Represents one token of a configuration and where it is written.</summary>
     private sealed record Token(TokenKind Kind, string Text, Span Span)
     {
+        /// <summary>Returns a value indicating whether the token is the punctuation <paramref name="punctuation"/>.</summary>
         public bool Is(string punctuation) => Kind == TokenKind.Punctuation && Text == punctuation;
     }
+
+    /// <summary>
+    /// Represents the attributes of one entry, by name, each as the tokens of its value. ld65
+    /// reads attribute names without regard to case.
+    /// </summary>
+    private sealed class Attributes() : Dictionary<string, IReadOnlyList<Token>>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Represents one entry of a <c>MEMORY</c> or <c>SEGMENTS</c> block.</summary>
+    /// <param name="Name">The entry's name.</param>
+    /// <param name="At">Where the configuration names the entry.</param>
+    /// <param name="Attributes">The entry's attributes.</param>
+    private sealed record Entry(string Name, Span At, Attributes Attributes);
 
     /// <summary>
     /// Reads the blocks of a configuration into named entries, each with its attributes as the
@@ -249,16 +277,25 @@ public sealed class LinkerConfig
     {
         private int at;
 
-        public List<(string Name, Span At, Dictionary<string, IReadOnlyList<Token>> Attributes)> Memory { get; } = [];
+        /// <summary>Gets the entries of the <c>MEMORY</c> block, in order.</summary>
+        public List<Entry> Memory { get; } = [];
 
-        public List<(string Name, Span At, Dictionary<string, IReadOnlyList<Token>> Attributes)> Segments { get; } = [];
+        /// <summary>Gets the entries of the <c>SEGMENTS</c> block, in order.</summary>
+        public List<Entry> Segments { get; } = [];
 
+        /// <summary>Gets the value of each symbol the <c>SYMBOLS</c> block defines, by name.</summary>
         public Dictionary<string, IReadOnlyList<Token>> Symbols { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Gets the problems found so far.</summary>
         public List<Diagnostic> Diagnostics { get; } = [];
 
+        /// <summary>Gets the token being read, or null at the end of the configuration.</summary>
         private Token? Current => at < tokens.Count ? tokens[at] : null;
 
+        /// <summary>
+        /// Reads every block of the configuration, stopping at the first problem, since the rest
+        /// of a configuration that does not parse cannot be trusted.
+        /// </summary>
         public void ReadFile()
         {
             while (Current is { } section)
@@ -283,6 +320,10 @@ public sealed class LinkerConfig
             }
         }
 
+        /// <summary>
+        /// Reads the entries of the block <paramref name="block"/> up to its closing brace, and
+        /// returns false when the block does not parse.
+        /// </summary>
         private bool ReadEntries(string block)
         {
             while (Current is { } name && !name.Is("}"))
@@ -305,7 +346,7 @@ public sealed class LinkerConfig
                 }
                 if (!Expect(":", name))
                     return false;
-                var attributes = new Dictionary<string, IReadOnlyList<Token>>(StringComparer.OrdinalIgnoreCase);
+                var attributes = new Attributes();
                 while (Current is { } attribute && !attribute.Is(";"))
                 {
                     at++;
@@ -322,7 +363,7 @@ public sealed class LinkerConfig
                 if (!Expect(";", name))
                     return false;
 
-                var entry = (name.Text, name.Span, attributes);
+                var entry = new Entry(name.Text, name.Span, attributes);
                 if (block == "MEMORY")
                     Memory.Add(entry);
                 else if (block == "SEGMENTS")
@@ -363,6 +404,7 @@ public sealed class LinkerConfig
             return value;
         }
 
+        /// <summary>Skips the rest of a block nt65 does not read, through its closing brace.</summary>
         private void SkipBlock()
         {
             var depth = 1;
@@ -373,6 +415,10 @@ public sealed class LinkerConfig
             }
         }
 
+        /// <summary>
+        /// Reads the punctuation <paramref name="punctuation"/>, or reports that it is missing
+        /// after <paramref name="after"/> and returns false.
+        /// </summary>
         private bool Expect(string punctuation, Token after)
         {
             if (Current?.Is(punctuation) == true)
@@ -384,6 +430,7 @@ public sealed class LinkerConfig
             return false;
         }
 
+        /// <summary>Reports that the configuration does not parse, saying what is wrong at <paramref name="span"/>.</summary>
         private void Report(Span span, string problem) =>
             Diagnostics.Add(new Diagnostic(span, Catalogue.LinkedConfigInvalid.Message(problem)));
     }
@@ -401,6 +448,7 @@ public sealed class LinkerConfig
         private readonly HashSet<string> evaluating = evaluating ?? new(StringComparer.Ordinal);
         private int at;
 
+        /// <summary>Returns the value of the tokens, or null when it is unknown or they are not one expression.</summary>
         public long? Evaluate()
         {
             if (tokens.Count == 0)
@@ -481,7 +529,7 @@ public sealed class LinkerConfig
                 {
                     '$' => Convert.ToInt64(text[1..], 16),
                     '%' => Convert.ToInt64(text[1..], 2),
-                    _ => long.Parse(text, System.Globalization.CultureInfo.InvariantCulture),
+                    _ => long.Parse(text, CultureInfo.InvariantCulture),
                 };
             }
             catch (Exception e) when (e is FormatException or OverflowException or ArgumentException)
