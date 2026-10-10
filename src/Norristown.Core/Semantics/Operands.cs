@@ -94,7 +94,7 @@ public static class Operands
         {
             case NameExpressionSyntax:
                 return Bound(model, expression, on) is { } plain
-                    ? new OperandSubstitution(plain.Parameter, plain.Operand, 0, false, expression)
+                    ? new OperandSubstitution(plain.Parameter, plain.Operand, plain.Offset, false, expression)
                     : null;
 
             // `dest + 1` and `dest - 1` apply to the argument's expression, so that `dest+1`
@@ -106,13 +106,14 @@ public static class Operands
                     return null;
                 var sign = binary.OperatorToken.Kind == SyntaxKind.Minus ? -1 : 1;
                 return new OperandSubstitution(
-                    shifted.Parameter, shifted.Operand, sign * by, false, expression);
+                    shifted.Parameter, shifted.Operand, shifted.Offset + (sign * by), false, expression);
 
             // `.byteof(p, n)` may appear where the operand would be, and means byte n of the
-            // operand's value.
+            // operand's value. A byte of an immediate is a shift rather than a sum, so an
+            // argument that adds to an operand is not followed through to it.
             case CallExpressionSyntax call when IsByteOf(call):
                 var arguments = call.Arguments.Arguments;
-                if (arguments.Count < 1 || Bound(model, arguments[0], on) is not { } whole)
+                if (arguments.Count < 1 || Bound(model, arguments[0], on, shifts: false) is not { } whole)
                     return null;
                 var byteAt = arguments.Count > 1 ? model.ValueOf(arguments[1], on).AsNumber() ?? 0 : 0;
                 return new OperandSubstitution(whole.Parameter, whole.Operand, byteAt, true, expression);
@@ -126,12 +127,20 @@ public static class Operands
         register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Returns the operand parameter <paramref name="name"/> refers to, and the operand it was
-    /// given in the expansion <paramref name="on"/>. Returns null for a parameter with no
-    /// argument or of any other kind.
+    /// Returns the operand parameter <paramref name="name"/> refers to, the operand it was given in
+    /// the expansion <paramref name="on"/>, and the offset the operand is taken at. Returns null for
+    /// a parameter with no argument or of any other kind.
     /// </summary>
-    private static (MacroParameter Parameter, SyntaxNode Operand)? Bound(
-        SemanticModel model, SyntaxNode name, Expansion? on)
+    /// <remarks>
+    /// An argument that names an <c>operand</c> parameter of the macro that made the call, alone
+    /// or with <c>+ n</c>, is followed to the operand that parameter was given. It is read in the
+    /// caller's expansion, as <see cref="SemanticModel.GivenAt"/> gives it. The operand passed
+    /// through any number of macros is therefore the operand given once, and is laid out and
+    /// written the same way. Where <paramref name="shifts"/> is false, an argument that adds to
+    /// the operand it names is not followed.
+    /// </remarks>
+    private static (MacroParameter Parameter, SyntaxNode Operand, long Offset)? Bound(
+        SemanticModel model, SyntaxNode name, Expansion? on, bool shifts = true)
     {
         if (name is not NameExpressionSyntax
             || model.SymbolOf(name) is not { Kind: SymbolKind.MacroParameter, Parameter: { } parameter }
@@ -139,11 +148,19 @@ public static class Operands
         {
             return null;
         }
-        if (model.ArgumentFor(parameter.Symbol, on) is not { } argument || argument.Operand is not { } operand)
+        if (model.GivenAt(parameter.Symbol, on) is not { Argument.Operand: { } operand, Caller: var caller })
             return null;
 
         // An unbraced argument is an expression, which counts as a plain address operand. A
         // braced argument is already the operand it was written as.
-        return (parameter, operand);
+        var passed = operand switch
+        {
+            AbsoluteOperandSyntax absolute => Substituted(model, absolute, caller),
+            ExpressionSyntax expression => Read(model, expression, caller),
+            _ => null,
+        };
+        return passed is { ByteOf: false } && (shifts || passed.Offset == 0)
+            ? (parameter, passed.Operand, passed.Offset)
+            : (parameter, operand, 0);
     }
 }

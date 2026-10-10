@@ -23,7 +23,7 @@
 squares: .byte 0, 1, 4, 9
 
 .segment "FAST": zeropage
-; .proc fast  main.nt65:19
+; .proc fast  main.nt65:28
 fast:
     inc a:squares
     rts
@@ -36,7 +36,7 @@ main__pages:
     .byte .lobyte(__FAST_SIZE__)
     .byte .lobyte(__FAST_RUN__)
 
-; .proc main  main.nt65:32
+; .proc main  main.nt65:41
 main__main:
     ldx #.lobyte(__FAST_SIZE__)
 main__copy:
@@ -55,17 +55,31 @@ main__copy:
     rts
 ; end of main
 
-; .proc given  main.nt65:50
+; .proc given  main.nt65:59
 main__given:
-    ; load!({#.spanof(FAST)})  main.nt65:51
+    ; load!({#.spanof(FAST)})  main.nt65:60
     lda #.lobyte(__FAST_SIZE__)
     ; end of load!
-    ; load!(.runof(FAST))  main.nt65:52
+    ; load!(.runof(FAST))  main.nt65:61
     lda z:.lobyte(__FAST_RUN__)
     ; end of load!
     ldy #0
-    ; load!({(.runof(FAST)),y})  main.nt65:54
+    ; load!({(.runof(FAST)),y})  main.nt65:63
     lda (.lobyte(__FAST_RUN__)),y
     ; end of load!
+    ; load!({.runof(FAST) + 1,x})  main.nt65:64
+    lda z:.lobyte(__FAST_RUN__ + 1),x
+    ; end of load!
+    ; load_from!({.runof(FAST) + 1,x})  main.nt65:65
+    ; load!(source)  main.nt65:17
+    lda z:.lobyte(__FAST_RUN__ + 1),x
+    ; end of load!
+    ; end of load_from!
+    ; load_next!(.runof(FAST))  main.nt65:66
+    lda z:.lobyte(__FAST_RUN__+1)
+    ; end of load_next!
+    ; load_next!({.runof(FAST),x})  main.nt65:67
+    lda z:.lobyte(__FAST_RUN__+1),x
+    ; end of load_next!
     rts
 ; end of given
