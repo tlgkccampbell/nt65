@@ -322,7 +322,7 @@ internal sealed class DiagnosticsPublisher : IDisposable
         // where another file's model, or the routines its tokens mark, have changed since the
         // last publish, which covers every edit made meanwhile. A file that an edit does not
         // analyze again keeps its model, and an edit that changes how another file's names are
-        // coloured changes what that file sees, so that file is analyzed again. An edit that adds
+        // colored changes what that file sees, so that file is analyzed again. An edit that adds
         // or removes a call can still change which routines run under an interrupt in a file it
         // does not analyze again, which is why the marked routines are compared as well. Tokens
         // that came to read anything else would need this check to change with them.

@@ -69,7 +69,7 @@ internal static class ExtractProc
     /// gives these lines.
     /// </summary>
     private static string? Called(SyntaxTree tree, int first) =>
-        Edits.StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
+        Edits.StatementOn(tree, first) is LabeledLineSyntax labeled ? labeled.Label.Name.Text.TrimStart('@') : null;
 
     /// <summary>
     /// Returns the lines of the selection, provided each is code a call can replace, which means
@@ -226,8 +226,7 @@ internal static class ExtractProc
     private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
     {
         InstructionStatementSyntax instruction => instruction,
-        LabeledLineSyntax labelled => labelled.Statement as InstructionStatementSyntax,
+        LabeledLineSyntax labeled => labeled.Statement as InstructionStatementSyntax,
         _ => null,
     };
-
 }

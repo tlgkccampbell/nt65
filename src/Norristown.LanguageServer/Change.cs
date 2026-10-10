@@ -24,7 +24,7 @@ namespace Norristown.LanguageServer;
 /// </param>
 /// <param name="Refused">
 /// Why it cannot be applied here, or null if it can. A change that would alter what the line
-/// means is offered greyed out with the reason rather than left out, so that a programmer
+/// means is offered grayed out with the reason rather than left out, so that a programmer
 /// looking for it finds the reason.
 /// </param>
 /// <param name="Later">

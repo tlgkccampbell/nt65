@@ -220,10 +220,10 @@ internal static class InlayHints
     /// </summary>
     private static Mark? Implied(SemanticModel model, StatementSyntax statement)
     {
-        // A struct or union member is a labelled line inside the type's body, and its offset is
+        // A struct or union member is a labeled line inside the type's body, and its offset is
         // what a reader of the body wants to know.
-        if (statement is LabeledLineSyntax labelled
-            && model.SymbolAt(labelled.Label.Name) is { Kind: SymbolKind.Member } member)
+        if (statement is LabeledLineSyntax labeled
+            && model.SymbolAt(labeled.Label.Name) is { Kind: SymbolKind.Member } member)
         {
             return member.Value.AsNumber() is not { } offset
                 ? null
@@ -272,8 +272,8 @@ internal static class InlayHints
                 : "";
             return new Mark(cycles.ToString(), $"This line takes {Hovers.Format(cycles)}.{why}");
         }
-        if (statement is not LabeledLineSyntax { Statement: null } labelled
-            || model.SymbolAt(labelled.Label.Name) is not { } label)
+        if (statement is not LabeledLineSyntax { Statement: null } labeled
+            || model.SymbolAt(labeled.Label.Name) is not { } label)
         {
             return null;
         }
@@ -379,7 +379,7 @@ internal static class InlayHints
     private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
     {
         InstructionStatementSyntax instruction => instruction,
-        LabeledLineSyntax labelled => labelled.Statement as InstructionStatementSyntax,
+        LabeledLineSyntax labeled => labeled.Statement as InstructionStatementSyntax,
         _ => null,
     };
 

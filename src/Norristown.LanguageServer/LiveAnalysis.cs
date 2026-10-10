@@ -13,7 +13,7 @@ namespace Norristown.LanguageServer;
 /// analysis leaves the one it starts from unchanged, so two could run at once safely. They wait
 /// so that each starts from the one just before it. Then only what the latest edit changed is
 /// analyzed again, and two analyses of the whole program never compete for the processor. An
-/// analysis that every request has stopped waiting for is cancelled.
+/// analysis that every request has stopped waiting for is canceled.
 /// </para>
 /// <para>
 /// An analysis after an edit may leave the program-wide answers for later, as
@@ -178,7 +178,7 @@ internal sealed class LiveAnalysis(Analyzer analyzer, Func<ProgramAnalysis, Canc
 
     /// <summary>
     /// Returns the result of <paramref name="awaited"/>, which is <paramref name="run"/>'s
-    /// analysis or its settling, once it finishes. The run is cancelled when this was the last
+    /// analysis or its settling, once it finishes. The run is canceled when this was the last
     /// request waiting for it and its analysis has not finished.
     /// </summary>
     private async Task<ProgramAnalysis> WaitAsync(Run run, Task<ProgramAnalysis> awaited, CancellationToken cancellation)
@@ -196,7 +196,7 @@ internal sealed class LiveAnalysis(Analyzer analyzer, Func<ProgramAnalysis, Canc
                 run.IsAbandoned |= abandoned;
             }
 
-            // The source is cancelled outside the lock, because cancelling runs whatever the
+            // The source is canceled outside the lock, because canceling runs whatever the
             // analysis registered on its token. The run was marked under the lock, so no request
             // joins it in between.
             if (abandoned)
@@ -209,8 +209,10 @@ internal sealed class LiveAnalysis(Analyzer analyzer, Func<ProgramAnalysis, Canc
     /// <param name="task">The analysis.</param>
     private sealed class Run(CancellationTokenSource source, Task<ProgramAnalysis> task)
     {
+        /// <summary>Gets the source that cancels the analysis.</summary>
         public CancellationTokenSource Source { get; } = source;
 
+        /// <summary>Gets the analysis.</summary>
         public Task<ProgramAnalysis> Task { get; } = task;
 
         /// <summary>Gets the source that stops settling the analysis once the files change.</summary>
@@ -227,13 +229,13 @@ internal sealed class LiveAnalysis(Analyzer analyzer, Func<ProgramAnalysis, Canc
 
         /// <summary>
         /// Gets or sets a value indicating whether every request stopped waiting before the
-        /// analysis finished, so that it is being cancelled.
+        /// analysis finished, so that it is being canceled.
         /// </summary>
         public bool IsAbandoned { get; set; }
 
         /// <summary>
         /// Gets a value indicating whether another request can wait for this analysis. It cannot
-        /// once the analysis has been cancelled or abandoned. An analysis that failed is still the
+        /// once the analysis has been canceled or abandoned. An analysis that failed is still the
         /// answer for the files as they stand, since running it again would only fail again.
         /// </summary>
         public bool IsUsable => Task.IsCompletedSuccessfully || Task.IsFaulted || (!Task.IsCompleted && !IsAbandoned);

@@ -428,15 +428,10 @@ internal static class Hovers
     }
 
     /// <summary>
-    /// Returns the value of the call a function's name appears in, which may be text, or an unknown
-    /// value when the name is not called there or nt65 cannot evaluate the call, as in a macro
-    /// body whose parameters have no arguments yet.
-    /// </summary>
-    /// <summary>
-    /// Adds what the configuration makes of a constant at file level: whether the build set a
-    /// setting or left it at its default, and whether an <c>.if</c> may test any other constant.
-    /// The program's configuration is asked rather than a file's, because a file an edit did not
-    /// reach keeps the configuration of the analysis before the edit.
+    /// Adds what the configuration makes of a constant at file level, which is whether the build
+    /// set a setting or left it at its default, and whether an <c>.if</c> may test any other
+    /// constant. The program's configuration is asked rather than a file's, because a file an
+    /// edit did not reach keeps the configuration of the analysis before the edit.
     /// </summary>
     private static void Stage(HoverCard card, Configuration configuration, Symbol symbol)
     {
@@ -451,6 +446,11 @@ internal static class Hovers
             card.Row("known", decided ? "decided by the configuration" : "once the declarations are read");
     }
 
+    /// <summary>
+    /// Returns the value of the call a function's name appears in, which may be text, or an unknown
+    /// value when the name is not called there or nt65 cannot evaluate the call, as in a macro
+    /// body whose parameters have no arguments yet.
+    /// </summary>
     private static Value Called(SemanticModel model, SymbolReference reference)
     {
         var token = model.Tree.Root.FindToken(reference.Span.Start);
@@ -708,8 +708,8 @@ internal static class Hovers
             return null;
         }
 
-        // Show the instruction's full datasheet name as a trailing comment, since a reader who
-        // already knows what `xba` stands for is not the one hovering it.
+        // Show the instruction's full name as a trailing comment, since a reader who already
+        // knows what `xba` stands for is not the one hovering it.
         var mnemonic = (statement as InstructionStatementSyntax)?.MnemonicKind;
         var line = Headline(model.Tree.Text[statement.Span.Start..statement.Span.End]);
         var card = new HoverCard(

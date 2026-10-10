@@ -65,7 +65,7 @@ internal sealed class Workspace
     /// analysis back. <see cref="Compiler"/> analyzes when none is given.
     /// </param>
     /// <param name="failed">
-    /// Is told of each analysis that fails for any reason but being cancelled, which is a bug in
+    /// Is told of each analysis that fails for any reason but being canceled, which is a bug in
     /// nt65 that no request would otherwise say anything about.
     /// </param>
     public Workspace(Analyzer? analyzer = null, Action<Exception>? failed = null)
