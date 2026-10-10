@@ -90,12 +90,15 @@ internal static class CaretProcessor
         }
         rows.Add(Row("flags", FlagsOf(known), Entered(registers)));
 
-        var stack = StackRows.Of(analysis, registers, state);
         var callers = Callers(analysis, region.Routine, uriOf);
         (Protocol.ProcessorCaller Caller, InstructionStatementSyntax Call)? through =
             callers.FirstOrDefault(each => chosen.Any(location => Same(each.Caller.At, location)));
         if (through is { Caller: null })
             through = null;
+
+        // A chosen call supplies the return address and what its caller pushed beneath it, so the
+        // routine's own stack stops above the copy it was entered with.
+        var stack = StackRows.Of(analysis, registers, state, aboveReturn: through is not null);
         rows.Add(Stack(analysis, stack, through));
         return new Protocol.ProcessorResult(
             region.Routine.DisplayName,
