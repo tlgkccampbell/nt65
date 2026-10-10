@@ -388,7 +388,7 @@ public sealed class StackEffects
     private static Height Copied(RegisterWalk walk, Layout.Step step, MnemonicKind mnemonic, Height height)
     {
         var mode = walk.Layout.Of(step.Statement, step.On)?.Mode;
-        var immediate = StepOperands.Immediate(walk.Model, walk.Layout, step);
+        var immediate = walk.Immediate(step);
         var pointing = StackWrites.Pointing(mnemonic, mode, immediate, height.Pointing);
         var variants = walk.VariantsOf(step);
         foreach (var variant in variants)

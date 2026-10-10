@@ -243,7 +243,7 @@ internal sealed class SourceWalk
         if (step.Statement is not InstructionStatementSyntax statement)
             return after.WithCopy(before.Pointing, before.Pointed);
         var mode = ModeOf(step);
-        var immediate = StepOperands.Immediate(model, layout, step);
+        var immediate = registers.Immediate(step);
         var pointing = StackWrites.Pointing(statement.MnemonicKind, mode, immediate, before.Pointing);
         foreach (var variant in variants)
             pointing &= StackWrites.Pointing(variant, mode, immediate, before.Pointing);

@@ -1465,10 +1465,14 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the instruction written at <paramref name="step"/> as the analysis runs it, or null
-    /// where the step holds no instruction.
+    /// where the step holds no instruction. An immediate that a store the program acknowledges
+    /// with <c>.patch</c> may rewrite is not known, because what is written says only what the
+    /// program starts from.
     /// </summary>
     private Executing? ExecutingAt(Step step) => step.Statement is InstructionStatementSyntax statement
-        ? new Executing(statement.MnemonicKind, layout.Of(statement, step.On)?.Mode, StepOperands.Immediate(model, layout, step), null)
+        ? new Executing(
+            statement.MnemonicKind, layout.Of(statement, step.On)?.Mode,
+            flow.RewrittenOperands.Contains(step.Key) ? null : StepOperands.Immediate(model, layout, step), null)
         : null;
 
     /// <summary>
