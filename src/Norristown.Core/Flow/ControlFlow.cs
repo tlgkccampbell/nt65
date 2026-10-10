@@ -697,7 +697,7 @@ public sealed class ControlFlow
     private static string? Uncounted(Step step) =>
         (step.Statement as InstructionStatementSyntax)?.MnemonicKind switch
         {
-            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles per byte, and the number of bytes is in A",
+            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles per byte, and moves one byte more than the 16-bit accumulator holds, which nt65 does not know here",
             MnemonicKind.Jam => "`jam` stops the processor, and nothing after it runs until a reset",
             _ => null,
         };

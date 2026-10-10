@@ -109,10 +109,11 @@ public sealed partial class CodeLayout
     /// are laid out a byte wide and every <c>.ensure</c> emits every instruction it could. That
     /// is enough to find where control goes, since no edge depends on a length. On any CPU,
     /// <paramref name="flags"/> gives the flags known before each statement, so that an
-    /// <c>.ensure</c> emits nothing for a flag already so.
+    /// <c>.ensure</c> emits nothing for a flag already so. It also gives the accumulator's
+    /// constant, which is how many bytes a block move moves.
     /// </summary>
     public static CodeLayout Create(
-        SemanticModel model, Cpu cpu, IProcessorStates? states = null, Func<SyntaxNode, Expansion?, FlagValues?>? flags = null)
+        SemanticModel model, Cpu cpu, IProcessorStates? states = null, IKnownFlags? flags = null)
     {
         // Every long branch starts short, and those found out of reach are lengthened until none
         // changes. This terminates because a branch only ever grows. Only the last walk is kept,

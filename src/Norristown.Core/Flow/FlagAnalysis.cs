@@ -29,7 +29,7 @@ namespace Norristown.Flow;
 /// another value. An <c>.ensure</c> gives them their values whatever it emits to do so.
 /// </para>
 /// </summary>
-internal sealed class FlagAnalysis
+internal sealed class FlagAnalysis : IKnownFlags
 {
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
@@ -152,6 +152,13 @@ internal sealed class FlagAnalysis
         var known = state.Known & ~(state.Unbacked | state.Quiet);
         return new FlagValues(known, state.Set & known);
     }
+
+    /// <summary>
+    /// Returns the constant the accumulator holds just before <paramref name="statement"/> in
+    /// <paramref name="on"/>, or null where it is not known or no path reaches it, which is what
+    /// layout asks about a block move.
+    /// </summary>
+    public long? Accumulator(SyntaxNode statement, Expansion? on) => Before(statement, on)?.Held.A;
 
     /// <summary>
     /// Returns the signature a call to <paramref name="target"/> is checked against: its own, or,

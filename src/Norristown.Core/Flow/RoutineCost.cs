@@ -21,9 +21,9 @@ namespace Norristown.Flow;
 /// </param>
 /// <param name="Uncounted">
 /// A sentence saying why there is no count, where an instruction nt65 knows takes a time that
-/// only the running program decides. That instruction is a block move, whose length is in A. It
-/// is null wherever the count is known, and wherever the uncounted line has already been
-/// reported.
+/// only the running program decides. That instruction is a block move whose accumulator nt65 does
+/// not know. It is null wherever the count is known, and wherever the uncounted line has already
+/// been reported.
 /// </param>
 /// <param name="Excluded">
 /// For a cost with calls, the items it leaves out because nt65 cannot count them, in the order

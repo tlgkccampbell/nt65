@@ -1,0 +1,37 @@
+; On the 65816 `mvn` and `mvp` move one byte more than the 16-bit accumulator holds, at 7 cycles a
+; byte. Where the accumulator is a constant the flag analysis knows, a block move has a count, so a
+; span across it has one too. Every number below is worked out by hand: a 16-bit immediate load
+; costs 2 + 1 = 3 cycles.
+.module main
+
+.cpu 65816
+
+.segment CODE
+
+; The index loads leave the accumulator as `lda` loaded it. The move runs $001F + 1 = 32 times, which
+; is 7 × 32 = 224 cycles. The three loads before it cost 3 each, so the pass is 9 + 224 = 233.
+.export .proc copy_down: native, a16, i16 {
+    start:
+    lda #$001f
+    ldx #$2000
+    ldy #$3000
+    mvn #$7e, #$7f
+    done:
+    rts
+}
+
+.assert .mincycles(copy_down::start, copy_down::done) == 233, "the downward copy changed"
+.assert .maxcycles(copy_down::start, copy_down::done) == 233, "the downward copy changed"
+
+; `mvp` counts the same way. A count of zero moves one byte, which is 7 cycles, so with the load
+; before it the pass is 3 + 7 = 10.
+.export .proc copy_one: native, a16, i16 {
+    start:
+    lda #0
+    mvp #$7e, #$7e
+    done:
+    rts
+}
+
+.assert .mincycles(copy_one::start, copy_one::done) == 10, "the one-byte copy changed"
+.assert .maxcycles(copy_one::start, copy_one::done) == 10, "the one-byte copy changed"

@@ -1792,11 +1792,13 @@ label:
   a block of their own that goes on there. No code runs into that block. Every byte has to be
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
-  control goes, move the stack or change the widths; a run of more than 32 bytes, or one that
-  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). Each
+  control goes, move the stack or change the widths; a run whose last instruction starts 32 bytes
+  or more from the position, or one that runs into data or past the routine's bytes, is an error
+  too (hidden-path-unfollowed). Each
   decoded instruction is counted as a written one is, in the processor state and with the
   decimal flag that reach the position, and a decoded `cld`, `sed` or `tcd` is followed. The
-  output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there.
+  output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there,
+  each instruction with its cycles, and what the run costs in all.
 - `.patch @op as dex, iny` also lists the instructions the store can turn the one at `@op`
   into. A variant replaces the opcode, so it keeps the instruction's addressing mode and
   operand, and the CPU must have it in that form. A variant may not move the stack, change the
@@ -2229,7 +2231,12 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
-decimal mode, which is known where the flag analysis knows the decimal flag. Cycles are processor
+decimal mode, which is known where the flag analysis knows the decimal flag. A block move, `mvn`
+or `mvp`, moves one byte more than the 16-bit accumulator C holds, at 7 cycles a byte, so it has
+a count only where the flag analysis knows C: where A is 16 bits wide and an immediate load gave
+it its constant, as `lda #$00ff` before `mvn` does, which is 7 × 256 = 1792 cycles. An 8-bit load
+leaves the high byte as it was, so it gives no count, and a routine with a move nt65 cannot count
+says why on its lens. Cycles are processor
 cycles; memory speed is the board's. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
@@ -2245,9 +2252,13 @@ or more `dex` or `dey` written in a row before the `bne` or `bpl` that takes the
 again, with one way into the loop, one way out of it, and nothing else in it, nor any routine
 called between the load and the loop, touching that register. On the 65816 a change to the index
 width touches it too, since it clears the high byte. The loop is found from the back edge and the blocks that dominate it, so a turn may
-branch and may call; a loop inside one is counted first, and the turns multiply. `bne` needs
+branch and may call; a loop inside one is counted first, and the turns multiply. The test may
+end the loop, or begin it where a jump enters the loop at the test, as `jmp test` over the body
+does; there the test runs as many times as the count says and the body one time fewer. `bne` needs
 the stride to divide the count, and `bpl` a count with the sign bit clear, or it is not
-counting down from that immediate at all. Every other loop keeps the `+`, because a loop
+counting down from that immediate at all. A count of 0 under `bne` wraps round before the first
+test, so the loop runs the register's whole range: 256 times, or 65536 with a 16-bit index on
+the 65816. Every other loop keeps the `+`, because a loop
 counted wrongly is worse than one not counted.
 
 A routine holding an instruction the CPU does not have, or does not take that operand for,

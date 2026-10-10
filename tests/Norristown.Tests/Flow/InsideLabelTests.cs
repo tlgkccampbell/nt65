@@ -53,7 +53,12 @@ public sealed class InsideLabelTests
         Assert.Contains(":= (main__top + $01)", output.Replace("main__main__top", "main__top", StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
-    /// <summary>The hover on the name shows what the bytes from the position run as.</summary>
+    /// <summary>
+    /// The hover on the name shows what the bytes from the position run as, with what each
+    /// instruction costs and what they cost in all. On the 6502 <c>asl $91</c> is a direct
+    /// read-modify-write at 5 cycles, and <c>cmp ($38),y</c> an indirect-indexed read at 5, or 6
+    /// across a page, so the run is 10 to 11.
+    /// </summary>
     [Fact]
     public void TheHoverShowsTheHiddenInstructions()
     {
@@ -64,7 +69,40 @@ public sealed class InsideLabelTests
         var hover = Hovers.At(analysis, analysis.File(Analysis.Path), Text.IndexOf("bcc in", StringComparison.Ordinal) + 5);
 
         Assert.NotNull(hover);
-        Assert.Contains("asl $91; cmp ($38),y", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("asl $91 (5); cmp ($38),y (5-6)", hover.Contents.Value, StringComparison.Ordinal);
+        Assert.Contains("10-11 in all", hover.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The limit of 32 bytes applies to where each decoded instruction starts, so a last
+    /// instruction that starts inside the limit and ends past it still lands. The bytes from
+    /// <c>@top + 1</c> of <paramref name="loads"/> written <c>lda #$A9</c> run one byte out of
+    /// step with them, as <paramref name="loads"/> decoded <c>lda #$A9</c>, the last taking its
+    /// operand from the opcode of <c>lda $EAA5</c>. Then the operand of that instruction runs as
+    /// <c>lda $EA</c>, which starts 2 × loads bytes from the position and lands on <c>rts</c>.
+    /// With 15 loads it starts at byte 30 and ends at byte 32, and with 16 it starts at byte 32,
+    /// past the limit. An immediate load costs 2 cycles and a direct one 3, so the run costs
+    /// 2 × loads + 3.
+    /// </summary>
+    [Theory]
+    [InlineData(14, 31)]
+    [InlineData(15, 33)]
+    [InlineData(16, null)]
+    public void TheLimitAppliesToWhereTheLastInstructionStarts(int loads, int? cycles)
+    {
+        var text = $".module main\n.cpu 6502\n.segment CODE\n.export .proc main {{\n    clc\n    bcc in\n@top:\n"
+            + string.Concat(Enumerable.Repeat("    lda #$A9\n", loads))
+            + "    .label in = @top + 1\n    lda $EAA5\n    rts\n}\n";
+
+        if (cycles is { } count)
+        {
+            Assert.Equal(new CycleCount(count), HiddenCycles(Cpu.Mos6502, text));
+            return;
+        }
+        var diagnostics = Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", text)).Diagnostics;
+        Assert.Contains(
+            "nt65 cannot follow the bytes from `in`: they do not reach the start of an instruction",
+            diagnostics.Select(d => d.Message));
     }
 
     /// <summary>
