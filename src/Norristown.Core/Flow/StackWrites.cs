@@ -41,12 +41,30 @@ internal static class StackWrites
     /// writes into the bytes on the stack, where <paramref name="pointing"/> holds the registers
     /// that hold S there.
     /// </summary>
-    public static bool Into(SemanticModel model, Step step, AddressingMode? mode, Registers pointing)
+    public static bool Into(SemanticModel model, Step step, AddressingMode? mode, Registers pointing) =>
+        Into(mode, StepOperands.Constant(model, step), mode == AddressingMode.StackRelative && IntoFrame(model, step), pointing);
+
+    /// <summary>
+    /// Returns whether <paramref name="decoded"/>, a store the bytes of a <see cref="HiddenPath"/>
+    /// decode as, writes into the bytes on the stack, where <paramref name="pointing"/> holds the
+    /// registers that hold S there. A decoded store names no member of a <c>.frame</c>, because it
+    /// has no operand as written.
+    /// </summary>
+    public static bool Into(HiddenInstruction decoded, Registers pointing) =>
+        Into(decoded.Mode, decoded.Operand, intoFrame: false, pointing);
+
+    /// <summary>
+    /// Returns whether a store laid out in <paramref name="mode"/> writes into the bytes on the
+    /// stack. <paramref name="address"/> is the value of its operand, or null where nt65 cannot
+    /// work it out, and <paramref name="intoFrame"/> tells whether the operand names a member of a
+    /// <c>.frame</c>.
+    /// </summary>
+    private static bool Into(AddressingMode? mode, long? address, bool intoFrame, Registers pointing)
     {
-        var onPage = StepOperands.Constant(model, step) is not { } address ? (bool?)null : (address & ~0xffL) == 0x100;
+        var onPage = address is not { } known ? (bool?)null : (known & ~0xffL) == 0x100;
         return mode switch
         {
-            AddressingMode.StackRelative => !IntoFrame(model, step),
+            AddressingMode.StackRelative => !intoFrame,
             AddressingMode.AbsoluteX => (pointing & Registers.X) != Registers.None && onPage != false,
             AddressingMode.AbsoluteY => (pointing & Registers.Y) != Registers.None && onPage != false,
             AddressingMode.Absolute => onPage == true,

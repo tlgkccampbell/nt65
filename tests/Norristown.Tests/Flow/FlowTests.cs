@@ -422,6 +422,24 @@ public sealed class FlowTests
     }
 
     /// <summary>
+    /// Checks that an instruction the bytes from a <c>.label</c> inside an instruction decode as
+    /// writes the counter as the same instruction written there would. From the second byte of
+    /// <c>lda $E8</c> the processor runs <c>inx</c>, and from that of <c>lda $EA</c> it runs
+    /// <c>nop</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("lda $EA", true)]
+    [InlineData("lda $E8", false)]
+    public void AHiddenWriteInsideTheLoopStopsItBeingCounted(string instruction, bool counted)
+    {
+        var region = Region(
+            ".proc p {\n    ldx #4\n@loop:\n    lsr a\n    bcc inside\n@op:\n    " + instruction
+                + "\n    .label inside = @op + 1\n    dex\n    bne @loop\n    rts\n}\n");
+
+        Assert.Equal(counted, region.Cost.Maximum is not null);
+    }
+
+    /// <summary>
     /// Checks that on the 65816 an instruction that may change the index width counts as writing
     /// the counter, because it clears the high byte. A <c>rep</c> or <c>sep</c> that leaves the
     /// index width alone does not.

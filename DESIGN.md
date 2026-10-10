@@ -1497,7 +1497,8 @@ known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`
 pins them at. Placed directly after a label, a `.state` is that label's declaration.
 
 Where such a label can also be entered from outside its routine — it is exported, a path
-from another routine names it, or a call from anywhere names it — the declaration is everything
+from another routine names it, a call from anywhere names it, or it is an item of a table that
+anything but its routine's own jumps dispatches through (§7.4) — the declaration is everything
 the label assumes: a part it does
 not give is unknown there, whatever the routine's own paths leave, except a part the routine's
 signature says `*`, which stays unchanged there as it does at a label nothing reaches. The two
@@ -1801,7 +1802,10 @@ label:
   from 1 to the instruction's length less 1 (label-position-invalid). nt65 decodes the bytes
   from there as the CPU runs them, through the next instructions if need be, until they reach
   the start of an instruction as written, and the flow analysis gives the decoded instructions
-  a block of their own that goes on there. No code runs into that block. Every byte has to be
+  a block of their own that goes on there. No code runs into that block. Each decoded
+  instruction has its full effect on the flags, the registers, the stack and the processor
+  state, as the same instruction written there would, so a decoded `tcd` leaves D unknown and
+  a decoded `mvn` moves B. Every byte has to be
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
   control goes, move the stack or change the widths; a run whose last instruction starts 32 bytes
@@ -1953,8 +1957,11 @@ instruction that only reads its bytes, as `lda table,x` is. Then only the
 jumps those annotations are under reach its labels, and the flags each jump leaves flow in as
 they do along a branch, so `sec` before an RTS dispatch leaves C known to be 1 in every entry. A
 `.next` under a call is not such a jump, since the call comes back with other flags. The register
-and processor-state analyses enter such a label only along the flow graph's edges, as they do
-any label that data outside every routine, or in the label's own routine, names.
+and processor-state analyses use the same rule: a label in such a table is entered only along the
+flow graph's edges, and a label in any other table a `.next` spreads, such as one another routine's
+`.next` or a call's names, is entered from outside its routine. On the 65816, a label that
+another routine's `.next` or a call's reaches this way needs a `.state`, as a jump into the
+routine does.
 
 An interrupt handler, and a `plp` that restores a status byte saved elsewhere, so the
 analysis stack holds no saved P for it:

@@ -1,0 +1,63 @@
+; On the 65816, a label that another routine's `.next` reaches through a table is a jump into
+; that routine, as `jmp` to the label is. It needs a `.state`, the jump is checked against it,
+; and the routine assumes only what it declares there. A table that a call's `.next` names makes
+; its labels entries even in the routine that makes the call.
+.module main
+
+.cpu 65816
+
+.export widens, jumps_wide, declares, jumps_declared, calls_own
+
+.segment CODE
+
+.proc widens: a8, i8, native {
+    rep #$20
+    jmp (wide)
+    .next wide
+    inside:
+    lda #$1234
+    sep #$20
+    rts
+}
+
+.proc jumps_wide: a8, i8, native {
+    jmp (wide)              ;! error[entry-not-declared]: `inside` is inside routine `widens`: mark it an entry point with a `.state` after the label
+    .next wide
+}
+
+.proc declares: a8, i8, native {
+    rep #$20
+    jmp (declared)
+    .next declared
+    inside:
+    .state a16, i8, native
+    lda #$1234
+    sep #$20
+    rts
+}
+
+.proc jumps_declared: a8, i8, native {
+    jmp (declared)          ;! error[call-state-mismatch]: `.next inside` needs `a16`, but A is 8-bit here
+    .next declared
+}
+
+; The path from above pushes A before `helper`, and the call enters `helper` without that push.
+; The call then comes back with what the path from `helper` leaves, which is a byte short.
+.proc calls_own: a8, i8, native, keeps a {
+    bcs @call
+    pha
+    helper:
+    .state a8, i8, native
+    pla
+    rts                     ;! error[keeps-broken]: `calls_own` promises `keeps a`, but A is not the same as on entry here, because `helper` can be entered from outside `calls_own`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `helper` to the same side of it as the code that reads them; on `calls_own`, `pushed n` declares what the caller pushed beneath the return address, and `pulls n` the bytes handed above it ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address when the routine is entered at `helper`, having pulled more than the routine pushed: keep each push and its pull on one side of `helper`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
+@call:
+    ldx #0
+    jsr (own_calls,x)
+    .next own_calls
+    rts                     ;! error[keeps-broken]: `calls_own` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address, having pulled more than the routine pushed: declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
+}
+
+.segment RODATA
+.data wide:      .addr widens::inside
+.data declared:  .addr declares::inside
+.data own_calls: .addr calls_own::helper

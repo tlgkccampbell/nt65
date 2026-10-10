@@ -53,7 +53,7 @@ internal sealed class SourceWalk
         this.states = states;
         effects = flow.Effects;
         registers = new RegisterWalk(model, layout, flow, states);
-        outside = new OutsideEntries(model, layout);
+        outside = new OutsideEntries(model, layout, flow);
     }
 
     /// <summary>

@@ -67,7 +67,7 @@ public sealed class StateAnalysis : IProcessorStates
         this.effects = effects;
         this.signatures = signatures;
         checks = new StateChecks(model, layout, ranges, SignatureOf, signatures);
-        outside = new OutsideEntries(model, layout);
+        outside = new OutsideEntries(model, layout, flow);
     }
 
     /// <summary>Gets what is wrong with the widths, the mode and the calls in this file.</summary>
@@ -760,16 +760,22 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
 
-        // The bytes from a position inside an instruction that end in a return leave as a return
-        // written there would. The instructions before it change no width, mode or stack.
-        if (layout.HiddenPathAt(step)?.Return is { } hidden)
+        // The bytes from a position inside an instruction run as the instructions they decode as,
+        // each with the effect it would have written there. A return that ends them leaves as a
+        // return written there would. The checks below look at an operand as written, which a
+        // decoded instruction does not have, so only the effects are taken from these.
+        if (layout.HiddenPathAt(step) is { } hidden)
         {
-            if (report is not null && SignatureOf(routine) is not { HasNoCaller: true })
+            Executing? ran = null;
+            foreach (var decoded in hidden.Instructions)
             {
-                report.CheckReturn(step, hidden.Mnemonic, state.Processor, routine, state.WhyE);
-                Leaving(routine, state.Processor);
+                var executing = Executing.Of(decoded);
+                state = Execute(step, executing, ran, null, BlockEnd.Through, state, routine, report);
+                ran = executing;
             }
-            return state;
+            return hidden.Return is { } leaving
+                ? Execute(step, Executing.Of(leaving), ran, null, end, state, routine, report)
+                : state;
         }
 
         // Flow that runs into data goes where the data's `.next` says, which is treated as a
@@ -781,18 +787,10 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
 
+        var written = ExecutingAt(step)!;
         var mnemonic = statement.MnemonicKind;
-        var mode = layout.Of(statement, step.On)?.Mode;
+        var mode = written.Mode;
         var processor = state.Processor;
-
-        // A store into the bytes on the stack may change a P, D or B saved there, and nt65 does
-        // not follow which byte it changes, so nothing saved on the stack is known afterwards.
-        // The register walk forgets the flags and registers such a store may change the same way.
-        var pointing = StackWrites.Pointing(mnemonic, mode, StepOperands.Immediate(model, layout, step), state.Pointing);
-        state = Instructions.Facts(mnemonic).Stores && StackWrites.Into(model, step, mode, state.Pointing)
-            ? state with { Stack = null, WhyStack = Cause.StackWritten($"`{statement.GetText().Trim()}`"), Pointing = pointing }
-            : state with { Pointing = pointing };
-        var stack = state.Stack;
         if (mode == AddressingMode.Immediate && Instructions.SizedBy(mnemonic) is { } register)
         {
             report?.CheckImmediate(
@@ -801,12 +799,52 @@ public sealed class StateAnalysis : IProcessorStates
         if (report is not null)
             Slot(step, mode, state, report);
         report?.CheckMemory(step, mnemonic, mode, processor, state.WhyD, routine);
+        return Execute(step, written, previous is { } before ? ExecutingAt(before) : null, next, end, state, routine, report);
+    }
+
+    /// <summary>
+    /// Returns what one instruction does to the state, whether it is written at
+    /// <paramref name="step"/> or decoded from the bytes of the <see cref="HiddenPath"/> there.
+    /// Both run through this one transition, so a decoded instruction has the effect the same
+    /// instruction written there would have.
+    /// </summary>
+    /// <param name="step">The step the instruction is written at, or the <c>.label</c> whose path decodes it.</param>
+    /// <param name="executing">The instruction.</param>
+    /// <param name="previous">The instruction that ran just before it in the same block, or null where there is none.</param>
+    /// <param name="next">The <c>.next</c> that says where control goes after it, or null.</param>
+    /// <param name="end">
+    /// How the block ends where the instruction is its last, and <see cref="BlockEnd.Through"/> for every other.
+    /// </param>
+    /// <param name="state">The state before the instruction.</param>
+    /// <param name="routine">The routine the instruction is in.</param>
+    /// <param name="report">The checks to report to, or null on a walk toward the fixed point.</param>
+    /// <returns>The state after the instruction.</returns>
+    private FlowState Execute(
+        Step step, Executing executing, Executing? previous, NextDirectiveSyntax? next, BlockEnd end, FlowState state,
+        Symbol routine, StateChecks? report)
+    {
+        var mnemonic = executing.Mnemonic;
+        var mode = executing.Mode;
+        var processor = state.Processor;
+
+        // A store into the bytes on the stack may change a P, D or B saved there, and nt65 does
+        // not follow which byte it changes, so nothing saved on the stack is known afterwards.
+        // The register walk forgets the flags and registers such a store may change the same way.
+        var pointing = StackWrites.Pointing(mnemonic, mode, executing.Immediate, state.Pointing);
+        var intoStack = Instructions.Facts(mnemonic).Stores
+            && (executing.Decoded is { } stored
+                ? StackWrites.Into(stored, state.Pointing)
+                : StackWrites.Into(model, step, mode, state.Pointing));
+        state = intoStack
+            ? state with { Stack = null, WhyStack = Cause.StackWritten(Quoted(step, executing)), Pointing = pointing }
+            : state with { Pointing = pointing };
+        var stack = state.Stack;
 
         switch (mnemonic)
         {
             case MnemonicKind.Rep:
             case MnemonicKind.Sep:
-                return state with { Processor = Flags(step, mnemonic == MnemonicKind.Rep, processor) };
+                return state with { Processor = Flags(step, executing, mnemonic == MnemonicKind.Rep, processor) };
 
             // `clc` then `xce` enters native mode, and `sec` then `xce` emulation mode. Any
             // other `xce` swaps in an unknown carry, so the mode becomes unknown.
@@ -814,7 +852,7 @@ public sealed class StateAnalysis : IProcessorStates
             // 8-bit width stays 8, which it is after either mode. Any other width becomes
             // unknown, because a 16-bit width is 8 bits if the processor was in emulation mode.
             case MnemonicKind.Xce:
-                if (FollowsClc(previous))
+                if (previous is { Mnemonic: MnemonicKind.Clc })
                 {
                     return state with
                     {
@@ -828,7 +866,7 @@ public sealed class StateAnalysis : IProcessorStates
                 }
                 return state with
                 {
-                    Processor = previous is { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Sec } }
+                    Processor = previous is { Mnemonic: MnemonicKind.Sec }
                         ? processor with { A = Width.Eight, Index = Width.Eight, E = ProcessorMode.Emulation }
                         : processor with { A = Width.Unknown, Index = Width.Unknown, E = ProcessorMode.Unknown },
                 };
@@ -840,16 +878,23 @@ public sealed class StateAnalysis : IProcessorStates
                 {
                     Processor = processor with
                     {
-                        D = processor.A == Width.Sixteen && previous is { } load && Loaded(load) is { } page
+                        D = processor.A == Width.Sixteen && Loaded(previous) is { } page
                             ? StateValue.Of(page & 0xffff)
                             : StateValue.Unknown,
                     },
                 };
 
-            // A block move leaves the data bank at its destination.
+            // A block move leaves the data bank at its destination. A decoded one holds the
+            // destination in the first byte after its opcode.
             case MnemonicKind.Mvn:
             case MnemonicKind.Mvp:
-                return state with { Processor = processor with { B = MovedTo(step) } };
+                return state with
+                {
+                    Processor = processor with
+                    {
+                        B = executing.Decoded is { } move ? StateValue.Of(move.Operand & 0xff) : MovedTo(step),
+                    },
+                };
 
             // What a push saves is kept in the routine's terms, so a pull outside the macro body
             // that pushed it reads the same state. A part that was a `*` item is also marked with
@@ -869,7 +914,7 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Pha:
                 return state with
                 {
-                    Stack = Bytes(processor.A) is { } bytes && previous is { } loader && Loaded(loader) is { } loaded
+                    Stack = Bytes(processor.A) is { } bytes && Loaded(previous) is { } loaded
                         ? stack?.PushValue(StateValue.Of(loaded & (bytes == 1 ? 0xff : 0xffff)), bytes)
                         : Push(stack, Bytes(processor.A)),
                 };
@@ -893,7 +938,7 @@ public sealed class StateAnalysis : IProcessorStates
             case MnemonicKind.Pea:
                 return state with
                 {
-                    Stack = stack?.PushValue(StepOperands.Constant(model, step) is { } pushed ? StateValue.Of(pushed & 0xffff) : StateValue.Unknown, 2),
+                    Stack = stack?.PushValue(Constant(step, executing) is { } pushed ? StateValue.Of(pushed & 0xffff) : StateValue.Unknown, 2),
                 };
             case MnemonicKind.Pei:
             case MnemonicKind.Per:
@@ -950,8 +995,10 @@ public sealed class StateAnalysis : IProcessorStates
                 }
                 return state;
 
+            // The layout refuses to decode an instruction that changes where control goes, so
+            // only a written one can be a call or a jump.
             default:
-                return Transferred(step, mnemonic, mode, next, end, state, routine, report);
+                return executing.Decoded is null ? Transferred(step, mnemonic, mode, next, end, state, routine, report) : state;
         }
     }
 
@@ -1005,7 +1052,7 @@ public sealed class StateAnalysis : IProcessorStates
             report.CheckCallTarget(step, mnemonic, target);
         }
         if (report is not null && next is not null)
-            CheckNamed(step, next, state, routine, report);
+            CheckNamed(step, next, state, routine, report, target);
 
         // A `.next .return` goes back to the caller, so the state there is checked as a return's.
         if (report is not null && next?.ReturnToken is not null && end == BlockEnd.Return
@@ -1098,15 +1145,32 @@ public sealed class StateAnalysis : IProcessorStates
     /// <summary>
     /// Checks each place a <c>.next</c> names as a jump from here. A jump to a routine's start is
     /// checked as a tail call, and a jump to a label inside another routine as a jump into it.
+    /// Such a label is an entry point whether the <c>.next</c> names it directly or through a
+    /// table, so it needs a <c>.state</c>, and the jump is checked against what it declares, as a
+    /// <c>jmp</c> to the label is. <paramref name="operand"/> is the label the statement's own
+    /// operand names, which has been checked already.
     /// </summary>
-    private void CheckNamed(Step step, NextDirectiveSyntax next, FlowState state, Symbol routine, StateChecks report)
+    private void CheckNamed(
+        Step step, NextDirectiveSyntax next, FlowState state, Symbol routine, StateChecks report, Symbol? operand = null)
     {
         foreach (var named in flow.Named(next, step.On).Select(named => named.Symbol))
         {
             if (named.Signature is not null && SignatureOf(named) is { } signature)
                 TailCalled(step, ".next", MnemonicKind.None, named, signature, state, routine, report);
             else if (Interior(named, routine) is { } inside)
+            {
+                if (named != operand)
+                {
+                    if (named.StateDeclaration is null)
+                    {
+                        report.Report(step, Catalogue.EntryNotDeclared.Message(named.DisplayName, inside.DisplayName),
+                            new DiagnosticFix(FixKind.State, At: named.DeclarationSpan));
+                    }
+                    if (DeclaredElsewhere(named) is { } declared)
+                        report.CheckEntry(step, $"`.next {named.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
+                }
                 JumpedInto(step, ".next", named, inside, state, routine, report);
+            }
         }
     }
 
@@ -1316,8 +1380,9 @@ public sealed class StateAnalysis : IProcessorStates
     /// become known. In emulation mode the widths are pinned at 8 and nothing changes. Where the
     /// mode is not known, a <c>sep</c> still makes them 8, which they are in either mode. A mask
     /// that nt65 cannot work out, or that a store into the code may write, leaves both unknown.
+    /// <paramref name="executing"/> is the instruction, at <paramref name="step"/>.
     /// </summary>
-    private ProcessorState Flags(Step step, bool reset, ProcessorState state)
+    private ProcessorState Flags(Step step, Executing executing, bool reset, ProcessorState state)
     {
         // Emulation mode pins both widths at 8 regardless of the operand, so an operand nt65
         // cannot work out changes nothing there. The mode is checked first, because forgetting
@@ -1327,7 +1392,7 @@ public sealed class StateAnalysis : IProcessorStates
 
         // A store a `.patch` acknowledges may write the mask, and the mask as written then says
         // only what the program starts from, as an operand nt65 cannot work out says nothing.
-        if (flow.RewrittenOperands.Contains(step.Key) || StepOperands.Constant(model, step) is not { } flags)
+        if ((executing.Decoded is null && flow.RewrittenOperands.Contains(step.Key)) || Constant(step, executing) is not { } flags)
             return state with { A = Width.Unknown, Index = Width.Unknown };
 
         var width = reset
@@ -1341,13 +1406,34 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
-    /// Returns the constant <paramref name="step"/> loads into A, for an <c>lda #c</c>, or null for
-    /// anything else.
+    /// Returns the constant <paramref name="executing"/> loads into A, for an <c>lda #c</c>, or null
+    /// for anything else, and where there is no instruction.
     /// </summary>
-    private long? Loaded(Step step) =>
-        step.Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Lda }
-            ? StepOperands.Immediate(model, layout, step)
-            : null;
+    private static long? Loaded(Executing? executing) =>
+        executing is { Mnemonic: MnemonicKind.Lda } ? executing.Immediate : null;
+
+    /// <summary>
+    /// Returns the instruction written at <paramref name="step"/> as the analysis runs it, or null
+    /// where the step holds no instruction.
+    /// </summary>
+    private Executing? ExecutingAt(Step step) => step.Statement is InstructionStatementSyntax statement
+        ? new Executing(statement.MnemonicKind, layout.Of(statement, step.On)?.Mode, StepOperands.Immediate(model, layout, step), null)
+        : null;
+
+    /// <summary>
+    /// Returns the value of the operand of <paramref name="executing"/>, at <paramref name="step"/>,
+    /// or null where it is not a constant. For example, this is the <c>c</c> of <c>rep #c</c> or
+    /// <c>pea c</c>.
+    /// </summary>
+    private long? Constant(Step step, Executing executing) =>
+        executing.Decoded is { } decoded ? decoded.Operand : StepOperands.Constant(model, step);
+
+    /// <summary>
+    /// Returns <paramref name="executing"/>, at <paramref name="step"/>, as written and quoted,
+    /// for a cause to name.
+    /// </summary>
+    private static string Quoted(Step step, Executing executing) =>
+        executing.Decoded is { } decoded ? $"`{decoded}`" : $"`{step.Statement.GetText().Trim()}`";
 
     /// <summary>
     /// Returns the destination bank of <c>mvn #src, #dst</c>, which is where it leaves the data
@@ -1764,5 +1850,20 @@ public sealed class StateAnalysis : IProcessorStates
             : saved.Kind == StateValueKind.Within ? StateValue.Among(saved.Banks)
             : saved.IsBounded ? saved
             : StateValue.Unknown;
+    }
+
+    /// <summary>
+    /// Represents one instruction as the analysis runs it. That is either the instruction written
+    /// at a step or one that the bytes of a <see cref="HiddenPath"/> decode as.
+    /// </summary>
+    /// <param name="Mnemonic">The instruction's mnemonic.</param>
+    /// <param name="Mode">Its addressing mode, or null where the layout chose none.</param>
+    /// <param name="Immediate">The value of its immediate, or null where it has none that nt65 can work out.</param>
+    /// <param name="Decoded">The instruction the bytes decode as, or null for one written at the step.</param>
+    private sealed record Executing(MnemonicKind Mnemonic, AddressingMode? Mode, long? Immediate, HiddenInstruction? Decoded)
+    {
+        /// <summary>Returns <paramref name="decoded"/> as the analysis runs it.</summary>
+        public static Executing Of(HiddenInstruction decoded) =>
+            new(decoded.Mnemonic, decoded.Mode, RegisterWalk.Immediate(decoded), decoded);
     }
 }
