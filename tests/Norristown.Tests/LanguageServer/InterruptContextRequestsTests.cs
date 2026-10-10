@@ -119,7 +119,7 @@ public sealed class InterruptContextRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedAsync(timeout, (Uri, Source));
 
-        var tokens = SemanticTokensTests.Decode(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Source,
+        var tokens = DecodedTokens.Describe(client.Initialized.Capabilities.SemanticTokensProvider!.Legend, Source,
             await client.SemanticTokensAsync(Uri, timeout));
 
         Assert.Equal(

@@ -551,10 +551,8 @@ public sealed class FlagHintsTests
 
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body, string cpu = "6502")
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Header(cpu) + body));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, document.Tree.Path);
+        var document = AnalyzedDocument.Of((Uri, Header(cpu) + body));
+        return (document.Analysis, document.Path);
     }
 
     private static string Header(string cpu) => $".module main\n.cpu {cpu}\n.segment CODE\n";

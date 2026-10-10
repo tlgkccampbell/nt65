@@ -22,6 +22,16 @@ internal static class Locate
         Match(text, find, occurrence).Caret;
 
     /// <summary>
+    /// Returns the empty range at the position <see cref="At"/> returns, which is how a request
+    /// names a caret with nothing selected.
+    /// </summary>
+    public static Range Caret(string text, string find, int occurrence = 1)
+    {
+        var at = At(text, find, occurrence);
+        return new Range(at, at);
+    }
+
+    /// <summary>
     /// Returns the range from the <c>|</c> in <paramref name="find"/>, or from the start of
     /// the match when there is none, to the end of the <paramref name="occurrence"/>th match
     /// in <paramref name="text"/>.
@@ -30,6 +40,22 @@ internal static class Locate
     {
         var (caret, end) = Match(text, find, occurrence);
         return new Range(caret, end);
+    }
+
+    /// <summary>Returns the line and column of the character at <paramref name="offset"/> in <paramref name="text"/>.</summary>
+    public static Position PositionOf(string text, int offset)
+    {
+        var line = 0;
+        var lineStart = 0;
+        for (var i = 0; i < offset; i++)
+        {
+            if (text[i] == '\n')
+            {
+                line++;
+                lineStart = i + 1;
+            }
+        }
+        return new Position(line, offset - lineStart);
     }
 
     private static (Position Caret, Position End) Match(string text, string find, int occurrence)
@@ -44,20 +70,5 @@ internal static class Locate
                 throw new ArgumentException($"the text has no match {occurrence} for \"{plain}\"", nameof(find));
         }
         return (PositionOf(text, start + Math.Max(0, bar)), PositionOf(text, start + plain.Length));
-    }
-
-    private static Position PositionOf(string text, int offset)
-    {
-        var line = 0;
-        var lineStart = 0;
-        for (var i = 0; i < offset; i++)
-        {
-            if (text[i] == '\n')
-            {
-                line++;
-                lineStart = i + 1;
-            }
-        }
-        return new Position(line, offset - lineStart);
     }
 }

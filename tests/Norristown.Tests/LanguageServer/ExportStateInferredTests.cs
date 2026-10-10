@@ -136,9 +136,7 @@ public sealed class ExportStateInferredTests
 
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body, string header = Header)
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, header + body));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, document.Tree.Path);
+        var document = AnalyzedDocument.Of((Uri, header + body));
+        return (document.Analysis, document.Path);
     }
 }

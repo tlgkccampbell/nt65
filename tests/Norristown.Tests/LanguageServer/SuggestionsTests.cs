@@ -181,9 +181,7 @@ public sealed class SuggestionsTests
 
     private static (ProgramAnalysis Analysis, string Path) Analyzed(string body)
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Header + body));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, document.Tree.Path);
+        var document = AnalyzedDocument.Of((Uri, Header + body));
+        return (document.Analysis, document.Path);
     }
 }

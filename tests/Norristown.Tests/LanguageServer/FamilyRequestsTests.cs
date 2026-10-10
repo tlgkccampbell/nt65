@@ -1,5 +1,3 @@
-using Norristown.LanguageServer.Protocol;
-
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
@@ -95,8 +93,7 @@ public sealed class FamilyRequestsTests
         var text = Source.Replace("    jsr play::triangle", "    jsr play::", StringComparison.Ordinal);
         await using var client = await OpenAsync(timeout, text);
 
-        var items = await client.RequestAsync<IReadOnlyList<CompletionItem>>("textDocument/completion",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(Uri), Locate.At(text, "jsr play::|")), timeout);
+        var items = await client.CompletionAsync(Uri, Locate.At(text, "jsr play::|"), timeout);
 
         var labels = items.Select(item => item.Label).ToHashSet(StringComparer.Ordinal);
         Assert.Equal(["pulse1", "pulse2", "triangle"], labels.Order(StringComparer.Ordinal));
@@ -112,8 +109,7 @@ public sealed class FamilyRequestsTests
         var timeout = TestTimeout.Token();
         await using var client = await OpenAsync(timeout);
 
-        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
-            new CodeLensParams(new TextDocumentIdentifier(Uri)), timeout);
+        var lenses = await client.CodeLensesAsync(Uri, timeout);
         var folded = await client.HoverAsync(Uri, Locate.At(Source, ".multiproc Channel, |ch"), timeout);
         var unfolded = await client.HoverAsync(Uri, Locate.At(Source, ".proc |ch"), timeout);
 

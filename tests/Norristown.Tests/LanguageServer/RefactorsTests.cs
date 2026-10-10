@@ -46,7 +46,7 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.use gfx::clear\n.segment CODE\n.proc main {\n    jsr clear\n    rts\n}\n";
 
-        var action = Single(Main, "jsr clear", "Write `clear` as `gfx::clear`", "jsr ".Length);
+        var action = Single(Main, "jsr |clear", "Write `clear` as `gfx::clear`");
 
         Assert.Equal(
             ".module main\n.segment CODE\n.proc main {\n    jsr gfx::clear\n    rts\n}\n",
@@ -80,7 +80,7 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.export f\n.func f(m) = .switch(m, [1], 2, .select(1, .switch(m, [3], 4, [5], 6, 7), 8))\n";
 
-        var action = Single(Main, "[1]", "Lay out the expression across lines", 1, lineLength: 40);
+        var action = Single(Main, "[|1]", "Lay out the expression across lines", lineLength: 40);
 
         Assert.Equal(
             ".module main\n.export f\n.func f(m) = .switch(m,\n    [1], 2,\n    .select(\n        1,\n"
@@ -97,9 +97,9 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.export f\n.func f(m) = .switch(m, [1], 2, .select(1, .switch(m, [3], 4, [5], 6, 7), 8))\n";
         var laid = Editing.Apply(Main,
-            Single(Main, "[1]", "Lay out the expression across lines", 1, lineLength: 40).Edit!.Changes[Uri]);
+            Single(Main, "[|1]", "Lay out the expression across lines", lineLength: 40).Edit!.Changes[Uri]);
 
-        Assert.DoesNotContain(Actions(laid, At(laid, "[1]", 1), lineLength: 40),
+        Assert.DoesNotContain(Actions(laid, Locate.Caret(laid, "[|1]"), lineLength: 40),
             action => action.Title == "Lay out the expression across lines");
         Assert.Equal(laid, Norristown.Syntax.Formatter.Format(Norristown.Syntax.SyntaxTree.Parse("main.nt65", laid)));
     }
@@ -117,7 +117,7 @@ public sealed class RefactorsTests
             Editing.Apply(Broken, joined.Edit!.Changes[Uri]));
 
         const string Commented = ".module main\n.export X\n.const X = .select(\n    1,  ; one\n    2, 3)\n";
-        Assert.DoesNotContain(Actions(Commented, At(Commented, "2,")), action => action.Title.EndsWith("line", StringComparison.Ordinal)
+        Assert.DoesNotContain(Actions(Commented, Locate.Caret(Commented, "2,")), action => action.Title.EndsWith("line", StringComparison.Ordinal)
             || action.Title.EndsWith("lines", StringComparison.Ordinal));
 
         const string Set = ".module main\n.export X\n.const X = 2 .in [1, 2]\n";
@@ -255,7 +255,7 @@ public sealed class RefactorsTests
     {
         const string Main = ".module main\n.cpu 65816\n.segment CODE\n.proc add: a8, i8, reads a, c, keeps x, y {\n    adc $10\n    sta $10\n    rts\n}\n";
 
-        Assert.DoesNotContain(Actions(Main, At(Main, ".proc add")), action => action.Title.StartsWith("Declare `", StringComparison.Ordinal));
+        Assert.DoesNotContain(Actions(Main, Locate.Caret(Main, ".proc add")), action => action.Title.StartsWith("Declare `", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -288,9 +288,8 @@ public sealed class RefactorsTests
         const string Main = ".module main\n.cpu 65816\n.const FLAGS = $20\n.segment CODE\n"
             + ".proc widen: a8, i8 -> a16 {\n    rep FLAGS\n    rts\n}\n";
 
-        var caret = Locate.At(Main, "rep FLAGS");
         Assert.DoesNotContain(
-            Actions(Main, new Range(caret, caret)),
+            Actions(Main, Locate.Caret(Main, "rep FLAGS")),
             action => action.Title.StartsWith("Rewrite as `.ensure", StringComparison.Ordinal));
     }
 
@@ -412,7 +411,7 @@ public sealed class RefactorsTests
         var own = Main.Replace("\n", lineBreak, StringComparison.Ordinal);
         var extract = new Range(new Position(3, 0), new Position(6, 0));
 
-        foreach (var (title, range) in new[] { ("Extract into a `.proc`", extract), ("Bring in `gfx::clear` with `.use`", At(Main, "gfx::clear")) })
+        foreach (var (title, range) in new[] { ("Extract into a `.proc`", extract), ("Bring in `gfx::clear` with `.use`", Locate.Caret(Main, "gfx::clear")) })
         {
             var expected = Editing.Apply(Main, Single(Main, range, title).Edit!.Changes[Uri]);
             var edited = Editing.Apply(own, Single(own, range, title).Edit!.Changes[Uri]);
@@ -512,22 +511,11 @@ public sealed class RefactorsTests
 
     /// <summary>
     /// Returns the one action titled <paramref name="title"/> that is offered at the caret where
-    /// <paramref name="at"/> first appears in <paramref name="text"/>, moved by
-    /// <paramref name="offset"/> characters.
+    /// <paramref name="at"/> first appears in <paramref name="text"/>. A <c>|</c> in
+    /// <paramref name="at"/> marks the caret's column within the match.
     /// </summary>
-    private static CodeAction Single(
-        string text, string at, string title, int offset = 0, int lineLength = LineBreaks.DefaultLength) =>
-        Assert.Single(Actions(text, At(text, at, offset), lineLength), action => action.Title == title);
-
-    /// <summary>Returns an empty range at <paramref name="at"/> in the text, plus the offset.</summary>
-    private static Range At(string text, string at, int offset = 0)
-    {
-        var start = text.IndexOf(at, StringComparison.Ordinal) + offset;
-        var line = text[..start].Count(c => c == '\n');
-        var character = start - (text[..start].LastIndexOf('\n') + 1);
-        var caret = new Position(line, character);
-        return new Range(caret, caret);
-    }
+    private static CodeAction Single(string text, string at, string title, int lineLength = LineBreaks.DefaultLength) =>
+        Assert.Single(Actions(text, Locate.Caret(text, at), lineLength), action => action.Title == title);
 
     /// <summary>
     /// Returns the one action titled <paramref name="title"/> that is offered over
@@ -536,12 +524,10 @@ public sealed class RefactorsTests
     private static CodeAction Single(string text, Range range, string title) =>
         Assert.Single(Actions(text, range), action => action.Title == title);
 
+    /// <summary>Returns the refactorings offered over <paramref name="range"/> of the text, with <see cref="Gfx"/> open beside it.</summary>
     private static IReadOnlyList<CodeAction> Actions(string text, Range range, int lineLength = LineBreaks.DefaultLength)
     {
-        var workspace = new Workspace();
-        workspace.Open(new TextDocumentItem(GfxUri, "nt65", 1, Gfx));
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return CodeActions.In(analysis, analysis.ModelFor(document.Tree.Path)!, range, ["refactor"], lineLength);
+        var document = AnalyzedDocument.Of((GfxUri, Gfx), (Uri, text));
+        return CodeActions.In(document.Analysis, document.Model, range, ["refactor"], lineLength);
     }
 }

@@ -1,4 +1,3 @@
-using Norristown.LanguageServer.Protocol;
 using static Norristown.Tests.LanguageServer.EditingWorkspace;
 
 namespace Norristown.Tests.LanguageServer;
@@ -42,8 +41,7 @@ public sealed class SignatureHelpTests
         var (text, position) = WithLine(where, line);
         await using var client = await OpenAsync(text, timeout);
 
-        var help = await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout);
+        var help = await client.SignatureHelpAsync(MainUri, position, timeout);
 
         Assert.NotNull(help);
         var only = Assert.Single(help.Signatures);
@@ -58,7 +56,6 @@ public sealed class SignatureHelpTests
         var (text, position) = WithLine("body", "    lda (vic::BORDER),y|");
         await using var client = await OpenAsync(text, timeout);
 
-        Assert.Null(await client.RequestAsync<SignatureHelp?>("textDocument/signatureHelp",
-            new TextDocumentPositionParams(new TextDocumentIdentifier(MainUri), position), timeout));
+        Assert.Null(await client.SignatureHelpAsync(MainUri, position, timeout));
     }
 }

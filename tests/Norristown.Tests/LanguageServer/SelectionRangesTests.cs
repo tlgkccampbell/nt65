@@ -29,9 +29,7 @@ public sealed class SelectionRangesTests
     public async Task ACaretGrowsThroughTheTree()
     {
         var timeout = TestTimeout.Token();
-        await using var client = await TestClient.StartAsync(timeout);
-        await client.OpenAsync(Uri, Source);
-        Assert.Empty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, Source));
         Assert.True(client.Initialized.Capabilities.SelectionRangeProvider);
 
         // The caret on `origin`, in `lda origin,x`: the name, the operand it is part of, the

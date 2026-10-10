@@ -82,10 +82,7 @@ public sealed class PlacementRequestsTests
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string main, string part)
     {
-        var workspace = new Workspace();
-        workspace.Open(new TextDocumentItem(PartUri, "nt65", 1, part));
-        var document = workspace.Open(new TextDocumentItem(MainUri, "nt65", 1, main));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, analysis.ModelFor(document.Tree.Path)!);
+        var document = AnalyzedDocument.Of((PartUri, part), (MainUri, main));
+        return (document.Analysis, document.Model);
     }
 }

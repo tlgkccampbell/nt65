@@ -242,21 +242,21 @@ public sealed class LineBreaksTests
     private static CodeAction Single(string text, string at, string title) =>
         Assert.Single(Actions(text, At(text, at)), action => action.Title == title);
 
-    /// <summary>Returns an empty range where <paramref name="at"/> first appears in the text after its prefix.</summary>
+    /// <summary>
+    /// Returns an empty range where <paramref name="at"/> first appears in the text after its
+    /// prefix, so that a macro's name in the prefix is not found in place of its call.
+    /// </summary>
     private static Range At(string text, string at)
     {
         var start = text.IndexOf(at, text.StartsWith(Prefix, StringComparison.Ordinal) ? Prefix.Length : 0, StringComparison.Ordinal);
-        var line = text[..start].Count(c => c == '\n');
-        var caret = new Position(line, start - (text[..start].LastIndexOf('\n') + 1));
+        var caret = Locate.PositionOf(text, start);
         return new Range(caret, caret);
     }
 
     /// <summary>Returns the refactorings offered over <paramref name="range"/> of the text.</summary>
     private static IReadOnlyList<CodeAction> Actions(string text, Range range)
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return CodeActions.In(analysis, analysis.ModelFor(document.Tree.Path)!, range, ["refactor"]);
+        var document = AnalyzedDocument.Of((Uri, text));
+        return CodeActions.In(document.Analysis, document.Model, range, ["refactor"]);
     }
 }

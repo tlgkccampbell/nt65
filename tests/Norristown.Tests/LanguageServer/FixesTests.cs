@@ -509,21 +509,17 @@ public sealed class FixesTests
     /// the <c>.use</c>.
     /// </summary>
     [Fact]
-    public async Task AUseItemNothingNamesIsOfferedForRemoval()
+    public void AUseItemNothingNamesIsOfferedForRemoval()
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Main = ".module main\n.use gfx::{clear, fill}\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n";
-        var workspace = new Workspace();
-        workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, Main));
-        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token());
-        var model = analysis.ModelFor(document.Tree.Path)!;
+        var document = AnalyzedDocument.Of(("file:///c:/work/gfx.nt65", Gfx), (Uri, Main));
 
-        var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
+        var brought = Assert.Single(document.Analysis.DiagnosticsFor(document.Path));
         Assert.Equal("`fill` is brought in by `.use` and never used", brought.Message);
         Assert.True(brought.IsUnnecessary);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
+        var action = Assert.Single(CodeActions.In(document.Analysis, document.Model, Whole), IsAFix);
         Assert.Equal("Remove the `.use` of `fill`", action.Title);
         Assert.Equal(
             ".module main\n.use gfx::clear\n.segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n",
@@ -538,21 +534,17 @@ public sealed class FixesTests
     [InlineData(".use gfx::{\n    clear, fill\n}\n", ".use gfx::{\n    clear\n}\n")]
     [InlineData(".use gfx::{\n    clear\n    fill  ; spare\n}\n", ".use gfx::{\n    clear\n}\n")]
     [InlineData(".use gfx::{\n    fill\n}\n.use gfx::clear\n", ".use gfx::clear\n")]
-    public async Task AUseItemInABlockNothingNamesIsOfferedForRemoval(string uses, string kept)
+    public void AUseItemInABlockNothingNamesIsOfferedForRemoval(string uses, string kept)
     {
         const string Gfx = ".module gfx\n.segment CODE\n.export .proc clear {\n    rts\n}\n.export .proc fill {\n    rts\n}\n";
         const string Rest = ".segment CODE\n.export .proc main {\n    jsr clear\n    clc\n    rts\n}\n";
         var main = ".module main\n" + uses + Rest;
-        var workspace = new Workspace();
-        workspace.Open(new TextDocumentItem("file:///c:/work/gfx.nt65", "nt65", 1, Gfx));
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, main));
-        var analysis = await workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token());
-        var model = analysis.ModelFor(document.Tree.Path)!;
+        var document = AnalyzedDocument.Of(("file:///c:/work/gfx.nt65", Gfx), (Uri, main));
 
-        var brought = Assert.Single(analysis.DiagnosticsFor(document.Tree.Path));
+        var brought = Assert.Single(document.Analysis.DiagnosticsFor(document.Path));
         Assert.Equal("`fill` is brought in by `.use` and never used", brought.Message);
 
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), IsAFix);
+        var action = Assert.Single(CodeActions.In(document.Analysis, document.Model, Whole), IsAFix);
         Assert.Equal(".module main\n" + kept + Rest, Editing.Apply(main, action.Edit!.Changes[Uri]));
     }
 
@@ -633,9 +625,7 @@ public sealed class FixesTests
 
     private static (ProgramAnalysis Analysis, SemanticModel Model) Analyzed(string text)
     {
-        var workspace = new Workspace();
-        var document = workspace.Open(new TextDocumentItem(Uri, "nt65", 1, text));
-        var analysis = workspace.AnalysisForAsync(document.Tree.Path, TestTimeout.Token()).GetAwaiter().GetResult();
-        return (analysis, analysis.ModelFor(document.Tree.Path)!);
+        var document = AnalyzedDocument.Of((Uri, text));
+        return (document.Analysis, document.Model);
     }
 }
