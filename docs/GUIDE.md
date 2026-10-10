@@ -1266,7 +1266,23 @@ From that position nt65 decodes the bytes as the CPU runs them, until they reach
 instruction as written, here the `lsr`, and follows those instructions like any others. Hover
 shows them. A branch, a `.next` and an `.assert` may name the position. Every byte has to be one
 nt65 knows, so an operand only the linker knows is an error, and so is a byte the CPU has no
-instruction for, or an instruction that jumps, returns or touches the stack.
+instruction for, or an instruction that jumps or touches the stack.
+
+The one exception is a return. Branching into an operand whose byte is `$60` runs `rts`, which
+saves a byte, and nt65 treats it exactly as an `rts` written there: the routine's `keeps`, its
+exit flags and state, and what it leaves on the stack are all checked where it returns.
+
+```nt65
+.proc halve: keeps y {
+@top:
+    lda $60                         ; $A5 $60, and $60 runs as `rts`
+    .label done = @top + 1
+    lsr a
+    bcc done
+    ldx #1
+    rts
+}
+```
 
 An instruction with several forms names one with the words `.mode` uses, such as
 `.opcode(lda, absx)`, with `zp`, `zpx` and `zpy` for the direct page and `far` and `farx` for an

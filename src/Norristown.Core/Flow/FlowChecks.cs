@@ -419,6 +419,7 @@ internal sealed class FlowChecks
                 null when statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl } instruction
                     => SyntaxFacts.TextOf(instruction.MnemonicKind),
                 { ReturnToken: not null } => ".next .return",
+                null when layout.HiddenPathAt(unit.Step)?.Return is { } hidden => SyntaxFacts.TextOf(hidden.Mnemonic),
                 _ => null,
             };
             if (returned is not null && routine.Signature is { HasNoCaller: true } own)
@@ -430,8 +431,11 @@ internal sealed class FlowChecks
                     // A handler is left by `rti`, which is the instruction to use instead. A
                     // routine that never returns has no instruction that would do. It should
                     // leave some other way there, or not say `noreturn`. A `.next .return` has
-                    // no instruction to replace.
-                    own.IsInterrupt && unit.Next is null ? new DiagnosticFix(FixKind.Return, "rti") : null);
+                    // no instruction to replace, and nor has a return inside another
+                    // instruction's bytes.
+                    own.IsInterrupt && unit.Next is null && statement is InstructionStatementSyntax
+                        ? new DiagnosticFix(FixKind.Return, "rti")
+                        : null);
             }
             foreach (var called in Callees(unit))
             {

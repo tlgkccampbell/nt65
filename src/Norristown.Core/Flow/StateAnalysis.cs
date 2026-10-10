@@ -747,6 +747,18 @@ public sealed class StateAnalysis : IProcessorStates
             return state;
         }
 
+        // The bytes from a position inside an instruction that end in a return leave as a return
+        // written there would. The instructions before it change no width, mode or stack.
+        if (layout.HiddenPathAt(step)?.Return is { } hidden)
+        {
+            if (report is not null && SignatureOf(routine) is not { HasNoCaller: true })
+            {
+                report.CheckReturn(step, hidden.Mnemonic, state.Processor, routine, state.WhyE);
+                Leaving(routine, state.Processor);
+            }
+            return state;
+        }
+
         // Flow that runs into data goes where the data's `.next` says, which is treated as a
         // jump to each place named.
         if (step.Statement is not InstructionStatementSyntax statement)

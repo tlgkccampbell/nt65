@@ -1793,7 +1793,14 @@ label:
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
   control goes, move the stack or change the widths; a run of more than 32 bytes, or one that
-  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). Each
+  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). The one
+  exception is a return: bytes that decode as `rts`, or `rtl` on the 65816, end the path there,
+  and nothing after them is decoded. Branching into an operand whose byte is `$60` is a classic
+  way to save a byte, and the hidden return is treated exactly as an `rts` written at that point:
+  the flags, registers, stack, keeps and processor-state analyses check it as they check any
+  return, and so do the rules on which return a near or a far routine uses, a `noreturn`
+  routine and an interrupt handler. A decoded `rti`, `jmp`, `jsr`, `brk` or branch is still
+  refused, because its target or its state is not one the path can show. Each
   decoded instruction is counted as a written one is, in the processor state and with the
   decimal flag that reach the position, and a decoded `cld`, `sed` or `tcd` is followed. The
   output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there.
@@ -2229,8 +2236,10 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
-decimal mode, which is known where the flag analysis knows the decimal flag. Cycles are processor
-cycles; memory speed is the board's. Tooling shows the interval per
+decimal mode, which is known where the flag analysis knows the decimal flag. The instructions a
+position inside an instruction runs as (§7.4) are counted as written ones are, a return that
+ends such a path included, so a branch into the `$60` of an operand costs the `rts` it runs.
+Cycles are processor cycles; memory speed is the board's. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
 cannot resolve tells them half of an answer, and above each routine, and each inline `.scope`

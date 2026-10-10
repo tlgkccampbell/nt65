@@ -432,11 +432,19 @@ internal sealed class StateChecks
     /// </summary>
     public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine, Cause? whyMode = null)
     {
+        // A return inside another instruction's bytes has no mnemonic of its own to replace.
         var signature = signatureOf(routine) ?? Signature.Default;
+        var written = step.Statement is InstructionStatementSyntax;
         if (mnemonic == MnemonicKind.Rts && signature.IsFar)
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"), Own(step, FixKind.Return, "rtl"));
+        {
+            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"),
+                written ? Own(step, FixKind.Return, "rtl") : null);
+        }
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"), Own(step, FixKind.Return, "rts"));
+        {
+            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"),
+                written ? Own(step, FixKind.Return, "rts") : null);
+        }
         CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine,
             signature.Declared, whyMode);
     }

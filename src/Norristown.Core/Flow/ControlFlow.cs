@@ -420,8 +420,8 @@ public sealed class ControlFlow
         var step = unit.Step;
         if (step.Statement is FallthroughDirectiveSyntax)
             return BlockEnd.Fallthrough;
-        if (layout.HiddenPathAt(step) is not null)
-            return BlockEnd.Jump;
+        if (layout.HiddenPathAt(step) is { } hidden)
+            return hidden.Return is null ? BlockEnd.Jump : BlockEnd.Return;
 
         // A call returns to the statement after it, even where a `.next` lists the routines it
         // calls, unless it calls a routine that never returns. A call to a label inside a routine
@@ -1039,11 +1039,11 @@ public sealed class ControlFlow
                 continue;
 
             // The bytes from a position inside an instruction go on at the instruction whose start
-            // they reach, as a jump there would.
+            // they reach, as a jump there would, or return as a return written there would.
             if (layout.HiddenPathAt(tail.Step) is { } hidden)
             {
-                blocks[i].End = BlockEnd.Jump;
-                if (landed.TryGetValue(hidden.Landing, out var at))
+                blocks[i].End = hidden.Return is null ? BlockEnd.Jump : BlockEnd.Return;
+                if (hidden.Landing is { } reached && landed.TryGetValue(reached, out var at))
                     Edge(i, at, EdgeKind.Taken);
                 continue;
             }

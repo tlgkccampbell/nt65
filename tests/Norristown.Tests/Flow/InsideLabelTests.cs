@@ -86,7 +86,8 @@ public sealed class InsideLabelTests
     [InlineData("lda $10", "@top", "`.label in` has to name a byte inside an instruction of this routine, as `@op + 1` does: its value is not a label plus a number of bytes")]
     [InlineData("lda $10", "@top + 2", "`.label in` has to name a byte inside an instruction of this routine, as `@op + 1` does: the instruction at `@top` is 2 bytes long")]
     [InlineData("lda table", "@top + 1", "nt65 cannot follow the bytes from `in`: they run through the operand of `lda table`, which only the linker knows")]
-    [InlineData("lda $60", "@top + 1", "nt65 cannot follow the bytes from `in`: they run as `rts`, which changes where control goes")]
+    [InlineData("lda $40", "@top + 1", "nt65 cannot follow the bytes from `in`: they run as `rti`, which changes where control goes")]
+    [InlineData("lda $4C", "@top + 1", "nt65 cannot follow the bytes from `in`: they run as `jmp`, which changes where control goes")]
     [InlineData("lda $48", "@top + 1", "nt65 cannot follow the bytes from `in`: they run as `pha`, which moves the stack")]
     [InlineData("lda $3A", "@top + 1", "nt65 cannot follow the bytes from `in`: they run as $3A, which the 6502 has no instruction for, though the 6502x runs it as `nop`, and the 65sc02, the r65c02, the 65c02 and the 65816 run it as `dec`")]
     [InlineData("lda $AD", "@top + 1", "nt65 cannot follow the bytes from `in`: they run past the end of the routine's bytes")]
@@ -134,6 +135,36 @@ public sealed class InsideLabelTests
             + $"    .label in = {position}\n    nop\n    sta $10\n    rts\n}}\n";
 
         Assert.Equal(new CycleCount(cycles), HiddenCycles(Cpu.Wdc65C02, text));
+    }
+
+    /// <summary>
+    /// Bytes that decode as a return end the path there, and their cost counts the return as a
+    /// written one does. From the second byte of <c>lda $60E8</c> the processor runs <c>inx</c>,
+    /// 2 cycles, then <c>rts</c>, 6 cycles.
+    /// </summary>
+    [Fact]
+    public void AHiddenReturnIsCountedAsAWrittenOne()
+    {
+        var text = Header + ".export .proc main {\n@top:\n    lda $60E8\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n";
+
+        Assert.Equal(new CycleCount(8), HiddenCycles(Cpu.Mos6502, text));
+    }
+
+    /// <summary>
+    /// A hidden return leaves the routine as a written one does, so the path through it is a way
+    /// out, and the hover lists it among what the bytes run as.
+    /// </summary>
+    [Fact]
+    public void AHiddenReturnLeavesTheRoutine()
+    {
+        var text = Header + ".export .proc main {\n@top:\n    lda $60\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n";
+        var analysis = Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", text));
+        Assert.Empty(analysis.Diagnostics);
+
+        var model = analysis.File("main.nt65");
+        var hidden = analysis.LayoutFor("main.nt65")!.HiddenInstructionsOf(model.Symbol("in"));
+
+        Assert.Equal(["rts"], hidden!.Select(instruction => instruction.ToString()));
     }
 
     /// <summary>Returns what the bytes from the one <c>.label</c> of <paramref name="text"/> cost to run.</summary>

@@ -2743,7 +2743,8 @@ public static class Catalogue
         "From a position inside an instruction, nt65 decodes the bytes as the processor runs them, until they "
             + "reach the start of an instruction as written, and the analyses follow those instructions. Every "
             + "byte has to be known before linking, each instruction has to be one the processor has, and none may "
-            + "change where control goes or move the stack, or nt65 could not tell where they lead.");
+            + "change where control goes or move the stack, or nt65 could not tell where they lead. The one "
+            + "exception is an `rts` or an `rtl`, which ends the path and is checked as a return written there.");
 
     internal static DiagnosticDescriptor PatchVariantRejected { get; } = Entry(
         Area.ControlFlow,
