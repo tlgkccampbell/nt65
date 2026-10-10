@@ -11,7 +11,7 @@
 .export main__offsets
 .export main__start
 
-.import __FARDATA_LOAD__: far
+.import __FARDATA_LOAD__: abs
 
 .segment "FARDATA": far
 far_table: .byte 1, 2, 3
