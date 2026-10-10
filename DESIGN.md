@@ -567,6 +567,12 @@ state and models no memory behaviour, and the rule is the same on every processo
   The fix is code that maps the bank and jumps to `.loword(target)`. The 65816 decides this by
   declared home banks instead, because its configs often link code in one bank and run it
   through a mirror in another.
+- **The pointer of `jmp (abs)` and `jml [abs]` is read from bank `$00`** on the 65816, whatever
+  the data bank and the program bank are. A pointer whose linked range is not wholly in bank
+  `$00` is an error, unless every segment it names declares a bank or mirrors that make it
+  visible in bank `$00`, as a LoROM cartridge's ROM is. One whose placement nt65 cannot bound is
+  never reported. The fix is a pointer in bank `$00`, or `jmp (abs,x)`, which reads its pointer
+  from the program bank.
 
 As with spaces, a name that cannot be seen may still be used as a value: an immediate such as
 `#<name` or `#>name` and data such as `.addr name` are never reported, since a trampoline is
