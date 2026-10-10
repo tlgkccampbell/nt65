@@ -107,17 +107,24 @@ public static class Operands
     {
         ImmediateOperandSyntax => "imm",
         AccumulatorOperandSyntax => "acc",
-        IndirectOperandSyntax indirect => Is(indirect.IndexRegister, "y") ? "indy" : "ind",
-        IndexedIndirectOperandSyntax indexed => Is(indexed.InnerRegister, "s") ? "sry" : "indx",
-        LongIndirectOperandSyntax far => Is(far.IndexRegister, "y") ? "longy" : "long",
-        AbsoluteOperandSyntax absolute when Is(absolute.IndexRegister, "s") => "sr",
-        AbsoluteOperandSyntax absolute when Is(absolute.IndexRegister, "x") => "absx",
-        AbsoluteOperandSyntax absolute when Is(absolute.IndexRegister, "y") => "absy",
+        IndirectOperandSyntax indirect => IsRegister(indirect.IndexRegister, "y") ? "indy" : "ind",
+        IndexedIndirectOperandSyntax indexed => IsRegister(indexed.InnerRegister, "s") ? "sry" : "indx",
+        LongIndirectOperandSyntax far => IsRegister(far.IndexRegister, "y") ? "longy" : "long",
+        AbsoluteOperandSyntax absolute when IsRegister(absolute.IndexRegister, "s") => "sr",
+        AbsoluteOperandSyntax absolute when IsRegister(absolute.IndexRegister, "x") => "absx",
+        AbsoluteOperandSyntax absolute when IsRegister(absolute.IndexRegister, "y") => "absy",
         _ => "abs",
     };
 
     /// <summary>Returns a value indicating whether <paramref name="call"/> calls <c>.byteof</c>.</summary>
     public static bool IsByteOf(CallExpressionSyntax call) => call.BuiltinKind == BuiltinKind.Byteof;
+
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="register"/> is the index register
+    /// called <paramref name="name"/>, in any letter case.
+    /// </summary>
+    internal static bool IsRegister(SyntaxToken? register, string name) =>
+        register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns what <paramref name="expression"/>, the expression inside an operand, becomes in
@@ -157,9 +164,6 @@ public static class Operands
                 return null;
         }
     }
-
-    private static bool Is(SyntaxToken? register, string name) =>
-        register is { } token && token.Text.Equals(name, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Returns the operand parameter <paramref name="name"/> refers to, the operand it was given in

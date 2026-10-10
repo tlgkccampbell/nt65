@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Norristown.Semantics;
 
 /// <summary>
@@ -83,8 +81,7 @@ public readonly record struct StateValue(StateValueKind Kind, long Value)
     /// Formats a number as messages show it, in at least <paramref name="digits"/> hexadecimal
     /// digits, such as <c>$7e</c> or <c>$2100</c>.
     /// </summary>
-    public static string Hex(long value, int digits) =>
-        "$" + value.ToString("x" + digits.ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture);
+    public static string Hex(long value, int digits) => Semantics.Value.Hex(value, digits);
 
     /// <summary>
     /// Formats runs of banks as messages show them, after the word that suits their number, such

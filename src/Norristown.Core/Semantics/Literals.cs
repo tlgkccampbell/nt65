@@ -15,15 +15,12 @@ public static class Literals
     /// Returns the value of a number token such as <c>$1F</c>, <c>%1010</c> or <c>255</c>. A
     /// <c>_</c> between digits is ignored.
     /// </summary>
-    public static long? Number(string text) => text.Length switch
+    public static long? Number(string text) => text switch
     {
-        0 => null,
-        _ => text[0] switch
-        {
-            '$' => Parse(text[1..], 16),
-            '%' => Parse(text[1..], 2),
-            _ => Parse(text, 10),
-        },
+        "" => null,
+        ['$', .. var hex] => Parse(hex, 16),
+        ['%', .. var binary] => Parse(binary, 2),
+        _ => Parse(text, 10),
     };
 
     /// <summary>
@@ -72,6 +69,11 @@ public static class Literals
     public static long? Character(string literal) =>
         Text(literal) is { Length: 1 } text ? text[0] : null;
 
+    /// <summary>
+    /// Returns the value of <paramref name="digits"/> read in <paramref name="radix"/>, or null
+    /// for an empty string, a character that is not a digit of that radix, or a value that does
+    /// not fit in 64 bits.
+    /// </summary>
     private static long? Parse(string digits, int radix)
     {
         if (digits.Length == 0)

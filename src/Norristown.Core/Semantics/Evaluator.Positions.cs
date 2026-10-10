@@ -129,13 +129,13 @@ internal sealed partial class Evaluator
                     case DataDeclarationSyntax { Address: not null }:
                         break;
                     case DataDeclarationSyntax or DataDirectiveSyntax:
-                        writes.Add(new Write(segment, line.Span, BytesOnLine(line.Statement), false));
+                        writes.Add(new Write(segment, line.Span, BytesOnLine(line.Statement), Everywhere: false));
                         break;
                     case MacroCallSyntax or BlockSpliceSyntax:
-                        writes.Add(new Write(segment, line.Span, null, false));
+                        writes.Add(new Write(segment, line.Span, null, Everywhere: false));
                         break;
                     case PlaceDirectiveSyntax:
-                        writes.Add(new Write(null, line.Span, null, true));
+                        writes.Add(new Write(null, line.Span, null, Everywhere: true));
                         break;
                     default:
                         break;
@@ -158,13 +158,13 @@ internal sealed partial class Evaluator
                     Writes(block.Members, 1, segment, writes);
                     break;
                 case BlockKind.Data or BlockKind.DataBody or BlockKind.RecordInitializer:
-                    writes.Add(new Write(segment, block.Span, NestedBytes(block), false));
+                    writes.Add(new Write(segment, block.Span, NestedBytes(block), Everywhere: false));
                     break;
 
                 // A routine's own length is known only at layout. What it emits to other
                 // segments is in the segment blocks inside it, which emit at their position.
                 case BlockKind.Proc or BlockKind.MultiProc:
-                    writes.Add(new Write(segment, block.Span, null, false));
+                    writes.Add(new Write(segment, block.Span, null, Everywhere: false));
                     Detours(block.Members, segment, writes);
                     break;
                 case BlockKind.Macro or BlockKind.Struct or BlockKind.Union or BlockKind.Enum
@@ -175,7 +175,7 @@ internal sealed partial class Evaluator
                 case var kind when SyntaxFacts.IsItemBlock(kind):
                     break;
                 default:
-                    writes.Add(new Write(null, block.Span, null, true));
+                    writes.Add(new Write(null, block.Span, null, Everywhere: true));
                     break;
             }
         }
@@ -203,7 +203,7 @@ internal sealed partial class Evaluator
                     Writes(block.Members, 1, Constructs.SegmentOf(opener) ?? segment, writes);
                     break;
                 case BlockKind.Repeat or BlockKind.Each:
-                    writes.Add(new Write(null, block.Span, null, true));
+                    writes.Add(new Write(null, block.Span, null, Everywhere: true));
                     break;
                 default:
                     break;

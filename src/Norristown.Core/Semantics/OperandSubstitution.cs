@@ -68,6 +68,6 @@ public sealed record OperandSubstitution(
         _ => false,
     };
 
-    private static bool IsStack(SyntaxToken? register) =>
-        register is { } token && token.Text.Equals("s", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Returns a value indicating whether <paramref name="register"/> is <c>s</c>.</summary>
+    private static bool IsStack(SyntaxToken? register) => Operands.IsRegister(register, "s");
 }

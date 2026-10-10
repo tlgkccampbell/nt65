@@ -157,7 +157,9 @@ internal static class Operators
         return refused is null;
     }
 
+    /// <summary>Returns the message for an operation whose result does not fit in 64 bits.</summary>
     private static DiagnosticMessage Overflows(string expression) => Catalogue.ArithmeticOverflow.Message(expression);
 
+    /// <summary>Returns the 1 or 0 that a comparison or a logical operator yields.</summary>
     private static long Truth(bool condition) => condition ? 1 : 0;
 }
