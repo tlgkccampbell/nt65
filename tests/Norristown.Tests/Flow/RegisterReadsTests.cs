@@ -117,7 +117,7 @@ public sealed class RegisterReadsTests
     public void ARoutineThatTakesArgumentsReadsWhatIsPushed()
     {
         Assert.Equal(Registers.A, Read("65816",
-            ".proc f: args 1 {\n    rts\n}\n.proc p: a8 {\n    pha\n    jsr f\n    pla\n    rts\n}\n", "p"));
+            ".proc f: pushed 1 {\n    rts\n}\n.proc p: a8 {\n    pha\n    jsr f\n    pla\n    rts\n}\n", "p"));
     }
 
     /// <summary>

@@ -213,8 +213,8 @@ public static class SyntaxFacts
     private static readonly FrozenSet<string> pointStateItems =
         new[]
         {
-            "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "args", "interrupt",
-            "noreturn", "keeps", "reads", "saves", "c", "z", "n", "v",
+            "a8", "a16", "i8", "i16", "native", "emu", "near", "far", "inline", "pushed", "pulls",
+            "interrupt", "noreturn", "keeps", "reads", "saves", "c", "z", "n", "v",
         }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenSet<string> trackedStateParts =

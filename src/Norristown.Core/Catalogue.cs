@@ -1380,9 +1380,12 @@ public static class Catalogue
         "an `.if` cannot test {0}, which measures a declaration; check it with `.assert`",
         "An `.if` decides which declarations exist, so nt65 answers it before it reads any declaration. It can test "
             + "only what the configuration decides: literals, settings, built-ins such as `.target`, and the constants, "
-            + "functions and enum members declared at file level from those. A size, an offset, a count or a distance "
-            + "inside data is known only once the declarations are read. The notes lead from the value tested to the "
-            + "measurement. Check such a value with `.assert`, or choose with it using `.select` or `.switch`.");
+            + "functions and enum members declared at file level from those. It can also take `.sizeof` and `.countof` "
+            + "of a struct, union or enum declared at file level, outside every block, whose members are sized from "
+            + "those. A size, an offset, a count or a distance inside data, the extent of a routine, and a type declared "
+            + "under an `.if` or with a member sized by such a measurement are known only once the declarations are "
+            + "read. The notes lead from the value tested to the measurement. Check such a value with `.assert`, or "
+            + "choose with it using `.select` or `.switch`.");
 
     internal static DiagnosticDescriptor ConditionUsesAConditionalDeclaration { get; } = Entry(
         Area.Values,
@@ -2993,6 +2996,29 @@ public static class Catalogue
             + "them as the address to go to. A routine that pushes an address to jump through its return names where "
             + "it goes with a `.next`.");
 
+    internal static DiagnosticDescriptor ReturnPastHandedBytes { get; } = Entry(
+        Area.ControlFlow,
+        "return-past-handed-bytes",
+        Severity.Error,
+        "`{0}` returns through {1} of the bytes `{2}` declares above the return address: pull them first, or "
+            + "correct the count",
+        "`pulls n` in a routine's signature states that the routine is entered with n bytes above its return "
+            + "address and pulls them before it returns. Here some of them are still on the stack, so the return "
+            + "would pull them as the address to go to. Pull them before the return, or give `pulls` the number "
+            + "of bytes the routine really is entered with.");
+
+    internal static DiagnosticDescriptor ReturnBeneathEntry { get; } = Entry(
+        Area.ControlFlow,
+        "return-beneath-entry",
+        Severity.Error,
+        "`{0}` returns {1} beneath its return address{2}, having pulled more than the routine pushed{3}: {4}, or "
+            + "add a `.next` naming where it goes",
+        "nt65 counts what a routine pushes and pulls from where it was entered. A return pulls the address on top "
+            + "of the stack, so where the routine has pulled more than it pushed, the return goes through bytes "
+            + "that were beneath its own return address. A routine entered with bytes above its return address, "
+            + "which it pulls before it returns, declares them with `pulls n`. A routine that means to return "
+            + "somewhere else names where with a `.next`.");
+
     internal static DiagnosticDescriptor JumpTargetNotALabel { get; } = Entry(
         Area.ControlFlow,
         "jump-target-not-a-label",
@@ -3064,6 +3090,17 @@ public static class Catalogue
             + "handler leaves with `rti`, which pulls both. A call pushes only the return address, so the `rti` "
             + "would pull the wrong bytes and not return to the caller. The same holds for a call to a label "
             + "inside a handler, because the path from the label leaves by the handler's `rti`.");
+
+    internal static DiagnosticDescriptor PullsRoutineCalled { get; } = Entry(
+        Area.ControlFlow,
+        "pulls-routine-called",
+        Severity.Error,
+        "`{0}` declares `pulls {1}`, bytes it is entered with above its return address, and a call puts nothing "
+            + "there: enter it with a jump or a branch",
+        "`pulls n` states that a routine is entered with n bytes above its return address and pulls them before "
+            + "it returns. A call pushes the return address last, so nothing is above it, and the routine would "
+            + "pull the return address and whatever lies beneath it instead. Such a routine is entered by a jump, "
+            + "a branch, or a return through an address its caller pushed.");
 
     internal static DiagnosticDescriptor HandlerReturnsNotRti { get; } = Entry(
         Area.ControlFlow,
@@ -3308,9 +3345,9 @@ public static class Catalogue
         Severity.Error,
         "`{0}` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`",
         "A `.state` declares the processor state at one line: register widths, mode, D and B. Items that describe "
-            + "the routine as a whole, such as `near`, `far`, `args`, `inline`, `interrupt`, `noreturn`, `reads`, a "
-            + "signature set, or a `*` item meaning unchanged since entry, belong in the signature after the "
-            + "routine's name.");
+            + "the routine as a whole, such as `near`, `far`, `pushed`, `pulls`, `inline`, `interrupt`, `noreturn`, "
+            + "`reads`, a signature set, or a `*` item meaning unchanged since entry, belong in the signature after "
+            + "the routine's name.");
 
     internal static DiagnosticDescriptor StateOutsideARoutine { get; } = Entry(
         Area.ProcessorState,
@@ -3502,12 +3539,12 @@ public static class Catalogue
         "A near routine returns with `rts`, which pulls only the two-byte return address that `per` pushed. The "
             + "byte `phk` pushed would be left on the stack. Remove the `phk`, or make the routine `far`.");
 
-    internal static DiagnosticDescriptor ArgsNotPushed { get; } = Entry(
+    internal static DiagnosticDescriptor PushedTooFew { get; } = Entry(
         Area.ProcessorState,
-        "args-not-pushed",
+        "pushed-too-few",
         Severity.Error,
-        "`{0}` declares `args {1}`, bytes the caller pushes before the call, but {2}",
-        "`args n` in a routine's signature states that the caller pushes n bytes of arguments before calling it, and the "
+        "`{0}` declares `pushed {1}`, bytes the caller pushes before the call, but {2}",
+        "`pushed n` in a routine's signature states that the caller pushes n bytes of arguments before calling it, and the "
             + "routine reads or pulls exactly that many. At this call fewer bytes are on the stack than that, "
             + "counting what the calling routine has pushed since its entry. Push the arguments before the call.");
 
@@ -3944,21 +3981,33 @@ public static class Catalogue
             + "declares something different from the routine would check the same code two different ways. Give it "
             + "the routine's signature, or leave its signature out to take the routine's.");
 
-    internal static DiagnosticDescriptor ArgsNotConstant { get; } = Entry(
+    internal static DiagnosticDescriptor StackCountNotConstant { get; } = Entry(
         Area.Signatures,
-        "args-not-constant",
+        "stack-count-not-constant",
         Severity.Error,
         "`{0}` needs a constant byte count",
-        "`args n` states how many bytes the caller pushes before the call. The analysis uses it to check every call "
-            + "and to work out where the routine finds its arguments on the stack, so n has to be a constant "
-            + "expression that nt65 can evaluate while it builds.");
+        "`pushed n` states how many bytes the caller pushes before the call, and `pulls n` how many bytes the "
+            + "routine is entered with above its return address. The analysis uses the count to check every call or "
+            + "every return and to work out what the stack holds at entry, so n has to be a constant expression that "
+            + "nt65 can evaluate while it builds.");
 
-    internal static DiagnosticDescriptor ArgsOutOfRange { get; } = Entry(
+    internal static DiagnosticDescriptor StackCountOutOfRange { get; } = Entry(
         Area.Signatures,
-        "args-out-of-range",
+        "stack-count-out-of-range",
         Severity.Error,
         "`{0}` is out of range: the byte count must be from 0 to $ffff",
-        "`args n` counts bytes on the stack, so n has to be from 0 to $ffff, the largest amount the 65816's stack can hold.");
+        "`pushed n` and `pulls n` count bytes on the stack, so n has to be from 0 to $ffff, the largest amount the "
+            + "65816's stack can hold.");
+
+    internal static DiagnosticDescriptor PullsWithInline { get; } = Entry(
+        Area.Signatures,
+        "pulls-with-inline",
+        Severity.Error,
+        "`{0}` cannot be declared with `{1}`: a routine that reads data after its call is entered by that call, "
+            + "which puts nothing above its return address",
+        "`inline n` states that each call to a routine is followed by data the routine reads through its return "
+            + "address, so the routine is entered by a call. `pulls n` states that a routine is entered with bytes "
+            + "above its return address, which a call never leaves. The two cannot both hold. Remove one of them.");
 
     internal static DiagnosticDescriptor NoreturnDeclaresAnExit { get; } = Entry(
         Area.Signatures,
@@ -4012,9 +4061,9 @@ public static class Catalogue
         Severity.Error,
         "`{0}` describes how a routine is called, and an interrupt handler is never called: the processor enters "
             + "it and `rti` leaves it",
-        "`near`, `far`, `inline` and `args` describe how a caller calls a routine and how it returns. An interrupt "
-            + "handler has no caller: the processor enters it through a vector, and `rti` leaves it. Remove the "
-            + "item.");
+        "`near`, `far`, `inline`, `pushed` and `pulls` describe how a routine is called or entered and how it "
+            + "returns. An interrupt handler has no caller: the processor enters it through a vector, and `rti` "
+            + "leaves it. Remove the item.");
 
     internal static DiagnosticDescriptor HandlerNoreturn { get; } = Entry(
         Area.Signatures,
@@ -4117,8 +4166,8 @@ public static class Catalogue
         Severity.Error,
         "`{0}` does not apply to a macro: it describes how a routine is called, and a macro is expanded in place",
         "A macro is not called and does not return: its body is expanded where it is used. `near`, `far`, "
-            + "`inline`, `args` and `interrupt` describe how a routine is called, entered or left, so they do not "
-            + "apply to it. Remove the item.");
+            + "`inline`, `pushed`, `pulls` and `interrupt` describe how a routine is called, entered or left, so "
+            + "they do not apply to it. Remove the item.");
 
     internal static DiagnosticDescriptor DistanceDisagrees { get; } = Entry(
         Area.Signatures,

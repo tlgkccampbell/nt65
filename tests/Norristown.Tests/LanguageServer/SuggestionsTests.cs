@@ -70,7 +70,7 @@ public sealed class SuggestionsTests
     [InlineData(".proc helper {\n    pla\n    pla\n    rts\n}\n")]
     [InlineData(".proc helper {\n    beq popper::out\n    rts\n}\n.proc popper {\n    nop\nout:\n    .state ?\n    pla\n    pla\n    rts\n}\n")]
     [InlineData(".proc helper {\n    tsx\n    rts\n}\n")]
-    [InlineData(".proc helper: args 2 {\n    rts\n}\n")]
+    [InlineData(".proc helper: pushed 2 {\n    rts\n}\n")]
     public void NoTailCallIsSuggestedToARoutineThatReadsItsCallersStack(string helper)
     {
         var (analysis, path) = Analyzed(helper + ".export .proc main {\n    jsr helper\n    rts\n}\n");

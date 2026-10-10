@@ -9,7 +9,7 @@ namespace Norristown.Flow;
 /// routine pulls what its caller pushed, reads the stack pointer, or addresses the stack by
 /// offset, as a routine that pops its own return address to leave two levels at once does. A
 /// routine that passes control to such a routine, by calling it, jumping or branching into it,
-/// or running into it, depends on the depth too. A call to a routine that takes <c>args</c> is
+/// or running into it, depends on the depth too. A call to a routine that declares <c>pushed n</c> is
 /// the exception, because what that routine reads is what its caller pushed for it.
 /// <para>
 /// A tail call leaves the stack one return address shallower than a call does, so it is safe
@@ -86,19 +86,21 @@ internal static class CallerStack
         IReadOnlyDictionary<RoutineKey, (RoutineKey Owner, bool Pulls)> labels)
     {
         var model = file.Model;
-        var reads = false;
+
+        // A routine that declares `pulls n` pulls bytes it did not push, whatever its code shows.
+        var reads = region.Routine.Signature is { Pulls: > 0 };
         foreach (var block in region.Blocks)
         {
             if (!block.IsReached)
                 continue;
             if (block.CallsUnknown)
                 reads = true;
-            // A routine that takes `args` reads its arguments where its caller pushed them, which
+            // A routine that declares `pushed n` reads its arguments where its caller pushed them, which
             // is within the caller's own part of the stack. A tail call to the caller leaves them
             // where they were.
             foreach (var called in block.Calls)
             {
-                if (!block.EndsInCall || called.Signature is not { Arguments: > 0 })
+                if (!block.EndsInCall || called.Signature is not { Pushed: > 0 })
                     Add(called);
             }
             if (block.RunsInto is { } runsInto)
@@ -128,7 +130,7 @@ internal static class CallerStack
             }
 
             // The branch of a relative call names the routine it calls, which is added as the
-            // branch's target, whether or not that routine takes `args`. An indirect call with no
+            // branch's target, whether or not that routine declares `pushed n`. An indirect call with no
             // `.next` calls somewhere unknown, which has already counted above.
             if (block.End is BlockEnd.Branch or BlockEnd.Jump or BlockEnd.TailCall
                 || file.Flow.RelativeCallAt(last) is not null)

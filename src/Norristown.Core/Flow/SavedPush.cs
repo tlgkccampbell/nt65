@@ -21,10 +21,17 @@ public readonly record struct SavedPush(RegisterValue Value, PushSize Size, Widt
     public PushedFlags? Flags { get; init; }
 
     /// <summary>
-    /// Gets a value indicating whether this is one byte a called routine left on the stack. Such a
-    /// byte has no push of its own to match, so a pull of any size takes it, one byte at a time.
+    /// Gets a value indicating whether this is one byte a called routine left on the stack, or one
+    /// the routine was handed above its return address (see <see cref="IsHanded"/>). Such a byte
+    /// has no push of its own to match, so a pull of any size takes it, one byte at a time.
     /// </summary>
     public bool IsLeft { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether this is one byte the routine was entered with above its
+    /// return address, which <c>pulls n</c> declares. Such a byte is also <see cref="IsLeft"/>.
+    /// </summary>
+    public bool IsHanded { get; init; }
 
     /// <summary>Gets the registers whose entry values the push may hold.</summary>
     public Registers Entries =>

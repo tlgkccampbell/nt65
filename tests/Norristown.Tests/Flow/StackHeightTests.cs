@@ -28,12 +28,12 @@ public sealed class StackHeightTests
 
     /// <summary>
     /// The height starts at the return address, which is three bytes for a far routine. The
-    /// arguments of a routine that takes <c>args</c> are its caller's, so they leave it there.
+    /// arguments of a routine that declares <c>pushed n</c> are its caller's, so they leave it there.
     /// </summary>
     [Theory]
     [InlineData(".proc p: a8, i8 {\n    nop\n    rts\n}\n", 2)]
     [InlineData(".proc p: a8, i8, far {\n    nop\n    rtl\n}\n", 3)]
-    [InlineData(".proc p: a8, i8, args 2 {\n    nop\n    rts\n}\n", 2)]
+    [InlineData(".proc p: a8, i8, pushed 2 {\n    nop\n    rts\n}\n", 2)]
     public void TheHeightStartsAtTheReturnAddress(string text, int height)
     {
         Assert.Equal(height, FlowFragment.StateAt(FlowFragment.Analyze("65816", text), "nop").Stack?.Height);
@@ -73,7 +73,7 @@ public sealed class StackHeightTests
     [Fact]
     public void TheSourceStackKeepsTheHeight()
     {
-        var entered = SourceStack.Entered(2);
+        var entered = SourceStack.Entered(2, 0);
         var pulled = entered.Pull(PushSize.OneByte, Width.Eight);
 
         Assert.Equal(1, pulled?.Height);

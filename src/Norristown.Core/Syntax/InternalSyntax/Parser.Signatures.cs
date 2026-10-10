@@ -99,9 +99,10 @@ internal sealed partial class Parser
             Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
             return Own(new StateFlagItemSyntax(name, suffix));
         }
-        else if (name.Text.Equals("args", StringComparison.OrdinalIgnoreCase))
+        else if (name.Text.ToLowerInvariant() is "pushed" or "pulls")
         {
-            // `args n` gives how many bytes the caller pushes before the call.
+            // `pushed n` gives how many bytes the caller pushes before the call, and `pulls n`
+            // how many the routine is entered with above its return address.
             return new StateValueItemSyntax(name, null, ParseExpression());
         }
         else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))

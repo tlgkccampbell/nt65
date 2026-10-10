@@ -33,7 +33,7 @@
     halfway:
     .state a8, i8, native
     pla
-    rts                     ;! error[keeps-broken]: `saves_across_a_label` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across_a_label`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; `args n` on `saves_across_a_label` declares what the caller of a second entry point pushed
+    rts                     ;! error[keeps-broken]: `saves_across_a_label` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across_a_label`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; on `saves_across_a_label`, `pushed n` declares what the caller pushed beneath the return address, and `pulls n` the bytes handed above it ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address when the routine is entered at `halfway`, having pulled more than the routine pushed: keep each push and its pull on one side of `halfway`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
 
 .proc jumps_in: a8, i8, native {

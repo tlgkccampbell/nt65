@@ -186,6 +186,53 @@ public sealed class ProcessorRequestsTests
     }
 
     /// <summary>
+    /// On the 65816 a routine that declares <c>pushed n</c> is entered with its return address and
+    /// the caller's bytes on the analysis stack. Through a chosen call, the call supplies the return
+    /// address and the caller's stack supplies its pushes, so each shows once.
+    /// </summary>
+    [Fact]
+    public async Task AChosenCallerShowsTheReturnAddressOnceForARoutineWithEntryBytes()
+    {
+        var timeout = TestTimeout.Token();
+        var (text, position) = Caret.In("""
+            .module main
+            .cpu 65816
+            .segment CODE
+            .export .proc main: a8, i8, native {
+                pea $1234
+                jsr takes
+                pla
+                pla
+                rts
+            }
+
+            .proc takes: a8, i8, native, pushed 2 {
+                pha
+                n|op
+                pla
+                rts
+            }
+            """);
+        await using var client = await TestClient.OpenedCleanlyAsync(timeout, (Uri, text));
+
+        var any = await ProcessorAsync(client, position, [], timeout);
+        Assert.NotNull(any);
+        var caller = Assert.Single(any.Callers);
+        var chosen = await ProcessorAsync(client, position, [caller.At], timeout);
+        Assert.NotNull(chosen);
+        var stack = chosen.Rows[^1];
+        Assert.Equal(
+            [
+                ("1,s", "A as entered, 8-bit", "1 byte"),
+                ("2,s", "return address", "2 bytes"),
+                ("4,s", "$1234", "2 bytes, pushed by main"),
+                ("entry", "the stack main was entered with", null),
+            ],
+            stack.Rows!.Select(row => (row.Key, row.Value, row.Detail)));
+        Assert.Equal(5, stack.Rows![1].Target?.Range.Start.Line);
+    }
+
+    /// <summary>
     /// A line in a repetition or a macro body runs once per expansion. Where the expansions reach
     /// it in different states, the state row shows what they agree on, and the rows under it list
     /// each state with how many expansions it reaches, as the hover does. The first pass through

@@ -379,6 +379,36 @@ public sealed class HoverTests
     }
 
     /// <summary>
+    /// The bytes a routine that declares <c>pulls n</c> is handed are one row beneath its own
+    /// pushes. On the 65816 the return address beneath them is a row of its own too.
+    /// </summary>
+    [Theory]
+    [InlineData("65816", ": a8, i8, native, pulls 2", "stack   A as entered, 8-bit\n        handed above the return address\n        return address\n```")]
+    [InlineData("6502", ": pulls 2", "stack   A as entered\n        handed above the return address\n```")]
+    public async Task HoverNamesTheBytesARoutineIsHanded(string cpu, string signature, string expected)
+    {
+        var timeout = TestTimeout.Token();
+        var source = $$"""
+            .module main
+            .cpu {{cpu}}
+            .segment CODE
+            .proc p{{signature}} {
+                pha
+                sta $10
+                pla
+                pla
+                pla
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, source.ReplaceLineEndings("\n")));
+
+        var hover = await client.HoverAsync(MainUri, Locate.At(source, "sta $10"), timeout);
+
+        Assert.Contains(expected, hover?.Contents.Value, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// On the 65816 an instruction's hover says that its counts are processor cycles, because a
     /// board such as the SNES stretches a cycle by the memory it reaches. Other CPUs need no such
     /// line.

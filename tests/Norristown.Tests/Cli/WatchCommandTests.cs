@@ -131,7 +131,7 @@ public sealed class WatchCommandTests : IDisposable
             CancellationToken.None);
 
         Assert.Equal(ExitCode.UsageError, code);
-        Assert.Equal("nt65: no input files, and no nt65.json", await printed.NextAsync(timeout));
+        Assert.StartsWith("nt65: error: no nt65.json was found in ", await printed.NextAsync(timeout), StringComparison.Ordinal);
     }
 
     /// <summary>

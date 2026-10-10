@@ -104,7 +104,7 @@
     lda TXTPTR
     pha
     jsr DATA
-    jmp L31F3::L3250
+    jmp L3250
 }
 .proc FNC {
     lda #Token::FN
@@ -180,7 +180,9 @@
     sta TXTPTR
     pla
     sta TXTPTR+1
-    L3250:
+    .fallthrough L3250
+}
+.proc L3250: pulls BYTES_FP {
     ldy #$00
     pla
     sta (FNCNAM),y

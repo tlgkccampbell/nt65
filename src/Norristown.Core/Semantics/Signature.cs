@@ -25,7 +25,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
     // The syntax the signature was read from, and whether it was read as a macro's. These let it
     // be read again once the signature sets it names are resolved and the values of its
-    // `dp = e`, `dbr = e` and `args n` items are known.
+    // `dp = e`, `dbr = e`, `pushed n` and `pulls n` items are known.
     private SyntaxNode? syntax;
     private bool forMacro;
 
@@ -87,10 +87,18 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     public bool NeverReturns { get; init; }
 
     /// <summary>
-    /// Gets the number of bytes the caller pushes before a call (<c>args n</c>), or 0 for a
+    /// Gets the number of bytes the caller pushes before a call (<c>pushed n</c>), or 0 for a
     /// routine that declares none.
     /// </summary>
-    public int Arguments { get; init; }
+    public int Pushed { get; init; }
+
+    /// <summary>
+    /// Gets the number of bytes the routine is entered with above its return address, and pulls
+    /// before it returns (<c>pulls n</c>), or 0 for a routine that declares none. Such bytes are
+    /// handed bytes. A call puts nothing above the return address, so a routine that declares
+    /// them is entered by a jump, a branch or a return through a pushed address.
+    /// </summary>
+    public int Pulls { get; init; }
 
     /// <summary>
     /// Gets the registers the routine returns with the values they had at entry
@@ -177,8 +185,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
     /// <summary>
     /// Reads the signature a macro declares. A macro's items default to <c>*</c>, because a macro
     /// assumes and changes nothing it does not declare. <c>near</c>, <c>far</c>, <c>inline</c>,
-    /// <c>args</c>, <c>interrupt</c> and <c>noreturn</c> are not allowed, because they describe
-    /// how a routine is called, entered or left, and a macro is none of these.
+    /// <c>pushed</c>, <c>pulls</c>, <c>interrupt</c> and <c>noreturn</c> are not allowed, because
+    /// they describe how a routine is called, entered or left, and a macro is none of these.
     /// </summary>
     public static Signature ReadMacro(SyntaxNode? syntax) => Read(syntax, forMacro: true, null, null, (_, _, _) => { });
 
@@ -209,8 +217,10 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         var entry = IsInterrupt ? $"interrupt, {ProcessorState.Format(Entry.E)}" : $"{Entry}, {Distance}";
         if (ProgramBank.Kind != StateValueKind.Unchanged)
             entry += $", {ProgramBank.Format(StateRegister.ProgramBank)}";
-        if (Arguments > 0)
-            entry += $", args {Arguments}";
+        if (Pushed > 0)
+            entry += $", pushed {Pushed}";
+        if (Pulls > 0)
+            entry += $", pulls {Pulls}";
         if (NeverReturns)
             entry += ", noreturn";
         if (Reads is { } reads)
@@ -240,21 +250,22 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         other is not null
         && Entry == other.Entry && Exit == other.Exit && IsFar == other.IsFar
         && Inline?.Text == other.Inline?.Text && IsInterrupt == other.IsInterrupt
-        && NeverReturns == other.NeverReturns && Arguments == other.Arguments && Keeps == other.Keeps
+        && NeverReturns == other.NeverReturns && Pushed == other.Pushed && Pulls == other.Pulls
+        && Keeps == other.Keeps
         && Reads == other.Reads && EntryFlags == other.EntryFlags && ExitFlags == other.ExitFlags
         && Results == other.Results && Declared == other.Declared && ProgramBank == other.ProgramBank;
 
     /// <summary>Returns a hash code over the same parts that <see cref="Equals(Signature?)"/> compares.</summary>
     public override int GetHashCode() =>
         HashCode.Combine(
-            HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Arguments, Keeps),
-            Reads, EntryFlags, ExitFlags, Results, Declared, ProgramBank);
+            HashCode.Combine(Entry, Exit, IsFar, Inline?.Text, IsInterrupt, NeverReturns, Pushed, Keeps),
+            Pulls, Reads, EntryFlags, ExitFlags, Results, Declared, ProgramBank);
 
     /// <summary>
     /// Returns the signature read again with the signature sets it names and the values of its
-    /// <c>dp = e</c>, <c>dbr = e</c> and <c>args n</c> items. Those items are expressions, so they
-    /// can be evaluated only once the program's constants have been. Problems are reported to
-    /// <paramref name="report"/>.
+    /// <c>dp = e</c>, <c>dbr = e</c>, <c>pushed n</c> and <c>pulls n</c> items. Those items are
+    /// expressions, so they can be evaluated only once the program's constants have been. Problems
+    /// are reported to <paramref name="report"/>.
     /// </summary>
     public Signature Resolved(
         Func<ExpressionSyntax, long?> valueOf, Func<NameExpressionSyntax, Symbol?> setOf, Action<TextSpan, DiagnosticMessage, DiagnosticFix?> report) =>
@@ -295,7 +306,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         public StateItem? K;
         public StateItem? Far;
         public StateItem? Inline;
-        public StateItem? Arguments;
+        public StateItem? Pushed;
+        public StateItem? Pulls;
         public StateItem? Interrupt;
         public StateItem? NoReturn;
         public StateItemSyntax? SetReference;
@@ -343,8 +355,9 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         // The list after `->`, or null when the signature declares no exit.
         private StateListSyntax? exitList;
 
-        // The value of the `args n` item, or 0 until it is known.
-        private int arguments;
+        // The values of the `pushed n` and `pulls n` items, or 0 until each is known.
+        private int pushed;
+        private int pulls;
 
         /// <summary>Returns the signature the syntax declares.</summary>
         public Signature Read()
@@ -362,18 +375,16 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
             Take(entry, entryList, isExit: false);
             Take(exit, exitList, isExit: true);
 
-            if (entry.Arguments is { Expression: { } count } args && valueOf is not null && Here(args))
-            {
-                if (valueOf(count) is not { } bytes)
-                    Report(count.Span, Catalogue.ArgsNotConstant.Message(args.Text));
-                else if (bytes < 0 || bytes > 0xffff)
-                    Report(count.Span, Catalogue.ArgsOutOfRange.Message(args.Text));
-                else
-                    arguments = (int)bytes;
-            }
+            pushed = Count(entry.Pushed);
+            pulls = Count(entry.Pulls);
 
             if (entry.Interrupt is not null)
                 return Interrupt();
+
+            // A routine that reads data after its call is entered by that call, which puts nothing
+            // above the return address for it to pull.
+            if (entry.Pulls is { } handed && entry.Inline is { } inline)
+                Report(At(entry, handed), Catalogue.PullsWithInline.Message(handed.Text, inline.Text));
 
             var entryState = new ProcessorState(
                 entry.A?.Width ?? defaults.A, entry.Index?.Width ?? defaults.Index, entry.E?.Mode ?? defaults.E,
@@ -478,7 +489,8 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 Declared = forMacro ? StateParts.All : DeclaredParts(),
                 Written = DeclaredParts(),
                 ProgramBank = ProgramBankOf(entry),
-                Arguments = arguments,
+                Pushed = pushed,
+                Pulls = pulls,
                 Keeps = keeps,
                 Reads = Declared(entry),
                 EntryFlags = entryFlags,
@@ -530,7 +542,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                     Report(At(entry, given), Catalogue.HandlerAssumesState.Message(given.Text));
                 }
             }
-            foreach (var other in new[] { entry.Far, entry.Inline, entry.Arguments })
+            foreach (var other in new[] { entry.Far, entry.Inline, entry.Pushed, entry.Pulls })
             {
                 if (other is { } given)
                 {
@@ -568,6 +580,28 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
         // gives it.
         private static DiagnosticFix? ToEntry(bool fromSet) =>
             fromSet ? null : new DiagnosticFix(FixKind.ToEntry);
+
+        // The byte count a `pushed n` or `pulls n` gives, or 0 where the item is missing or its
+        // count is not yet known or is wrong. A wrong count a set gives is reported where the set
+        // is declared.
+        private int Count(StateItem? item)
+        {
+            if (item is not { Expression: { } count } given || valueOf is null)
+                return 0;
+            if (valueOf(count) is not { } bytes)
+            {
+                if (Here(given))
+                    Report(count.Span, Catalogue.StackCountNotConstant.Message(given.Text));
+                return 0;
+            }
+            if (bytes < 0 || bytes > 0xffff)
+            {
+                if (Here(given))
+                    Report(count.Span, Catalogue.StackCountOutOfRange.Message(given.Text));
+                return 0;
+            }
+            return (int)bytes;
+        }
 
         // Whether an item appears in the signature itself rather than coming from a set it names.
         private bool Here(StateItem item) => !fromSets.Contains((item.Node.Tree, item.Node.Position));
@@ -665,7 +699,7 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
 
                     // An exit, and a macro, take a set's state and not how a routine is called or entered.
                     if ((isExit || forMacro) && setItem.Part is StatePart.Distance or StatePart.Inline
-                        or StatePart.Arguments or StatePart.Interrupt or StatePart.NoReturn or StatePart.Keeps
+                        or StatePart.Pushed or StatePart.Pulls or StatePart.Interrupt or StatePart.NoReturn or StatePart.Keeps
                         or StatePart.Reads || forMacro && setItem.Part == StatePart.Flag)
                     {
                         continue;
@@ -776,10 +810,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 case StatePart.NoReturn when forMacro:
                     Report(item.Node.Span, Catalogue.MacroNoreturn);
                     break;
-                case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt when forMacro:
+                case StatePart.Distance or StatePart.Inline or StatePart.Pushed or StatePart.Pulls or StatePart.Interrupt
+                    when forMacro:
                     Report(item.Node.Span, Catalogue.MacroDistance.Message(item.Text));
                     break;
-                case StatePart.Distance or StatePart.Inline or StatePart.Arguments or StatePart.Interrupt
+                case StatePart.Distance or StatePart.Inline or StatePart.Pushed or StatePart.Pulls or StatePart.Interrupt
                     or StatePart.NoReturn when isExit:
                     Report(item.Node.Span,
                         Catalogue.ItemBelongsAtEntry.Message(item.Text),
@@ -791,8 +826,11 @@ public sealed record Signature(ProcessorState Entry, ProcessorState Exit, bool I
                 case StatePart.Inline:
                     parts.Inline = Once(parts, parts.Inline, item, fromSet);
                     break;
-                case StatePart.Arguments:
-                    parts.Arguments = Once(parts, parts.Arguments, item, fromSet);
+                case StatePart.Pushed:
+                    parts.Pushed = Once(parts, parts.Pushed, item, fromSet);
+                    break;
+                case StatePart.Pulls:
+                    parts.Pulls = Once(parts, parts.Pulls, item, fromSet);
                     break;
                 case StatePart.Interrupt:
                     parts.Interrupt = Once(parts, parts.Interrupt, item, fromSet);

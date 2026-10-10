@@ -187,7 +187,9 @@ public sealed class StateAnalysisTests
 
         Assert.Equal(["main.nt65:7: `lda #` needs the width of A, and it is not known here, because two paths meet above "
             + "it having pushed different amounts: pulling on each path what it pushed before they meet keeps the stack "
-            + "known"], Problems(Text));
+            + "known",
+            "main.nt65:9: `rts` returns through up to 1 byte this routine pushed rather than through its return address: "
+            + "pull them first, or add a `.next` naming where it goes"], Problems(Text));
     }
 
     /// <summary>

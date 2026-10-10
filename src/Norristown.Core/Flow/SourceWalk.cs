@@ -85,7 +85,8 @@ internal sealed class SourceWalk
             blocks, Through, SourceState.Merge, block => ControlFlow.Onward(blocks, block));
         if (blocks.Count == 0)
             return solver.Reached;
-        var called = SourceStack.Entered((region.Routine.Signature ?? Signature.Default).ReturnSize);
+        var signature = region.Routine.Signature ?? Signature.Default;
+        var called = SourceStack.Entered(signature.ReturnSize, signature.Pulls);
         solver.Enter(0, SourceState.Entered.WithStack(called));
         foreach (var block in blocks)
         {

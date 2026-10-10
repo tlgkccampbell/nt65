@@ -68,6 +68,15 @@ public static class CallCosts
         return found;
     }
 
+    /// <summary>
+    /// Returns whether <paramref name="callee"/> is declared never to return. That is so where it
+    /// declares <c>noreturn</c>, or where it is a label inside a routine that does. A label is
+    /// judged only by its routine's declaration, as the flow graph judges it.
+    /// </summary>
+    private static bool DeclaredNeverReturns(Symbol callee) =>
+        callee.Signature is { NeverReturns: true }
+        || callee is { Kind: SymbolKind.Label, Signature: null, Routine.Signature.NeverReturns: true };
+
     /// <summary>Returns whether any exit from a routine is one through which control returns.</summary>
     private static bool ComesBack(
         FlowRegion region,
@@ -83,7 +92,7 @@ public static class CallCosts
             var onward = Onward(block).ToList();
             var handsOff = onward.Count > 0 && onward.All(callee => regions.ContainsKey(RoutineKey.Of(callee))
                 ? !found.Contains(RoutineKey.Of(callee))
-                : callee.Signature is { NeverReturns: true });
+                : DeclaredNeverReturns(callee));
             if (!handsOff)
                 return true;
         }
@@ -160,8 +169,9 @@ public static class CallCosts
             var name = RoutineKey.Of(callee);
             if (!regions.TryGetValue(name, out var called))
             {
-                // A callee declared never to return ends the pass like any other.
-                if (callee.Signature is { NeverReturns: true })
+                // A callee declared never to return ends the pass like any other, and so does a
+                // label inside a routine declared so.
+                if (DeclaredNeverReturns(callee))
                     return 0;
                 if (!forLowerBound)
                     return null;

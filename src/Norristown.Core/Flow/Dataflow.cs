@@ -61,13 +61,13 @@ internal sealed class Dataflow<TState>
     /// fixed point. A label is an entry point where a <c>.state</c> declares it, or, unless
     /// <paramref name="declaredOnly"/> is true, where <paramref name="outside"/> finds it can be
     /// entered from outside the routine. Such a label
-    /// that no path reaches starts from <paramref name="unreached"/>, or is left unreached where
-    /// that is null. One that some path reaches and that can be entered from outside starts from
+    /// that no path reaches starts from what <paramref name="unreached"/> returns for it, or is
+    /// left unreached where that is null. One that some path reaches and that can be entered from outside starts from
     /// what <paramref name="entered"/> makes of the state the path brings. Any other label keeps
     /// what reaches it.
     /// </summary>
     public void EnterEntries(
-        OutsideEntries outside, bool declaredOnly, TState? unreached, Func<BasicBlock, TState, TState> entered)
+        OutsideEntries outside, bool declaredOnly, Func<BasicBlock, TState>? unreached, Func<BasicBlock, TState, TState> entered)
     {
         foreach (var block in blocks)
         {
@@ -79,7 +79,7 @@ internal sealed class Dataflow<TState>
             {
                 if (unreached is null)
                     continue;
-                state = unreached;
+                state = unreached(block);
             }
             else if (outside.Reaches(block))
                 state = entered(block, here);

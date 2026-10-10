@@ -30,6 +30,9 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
     /// <summary>Gets why D is unknown, when it is unknown and the analysis can tell why.</summary>
     public Cause? WhyD { get; init; }
 
+    /// <summary>Gets why the mode is unknown, when it is unknown and the analysis can tell why.</summary>
+    public Cause? WhyE { get; init; }
+
     /// <summary>
     /// Gets the registers among A, X and Y that hold the stack pointer here, as X does after
     /// <c>tsx</c>. A store indexed by one of them writes into the bytes on the stack, as
@@ -67,6 +70,12 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
             WhyA = Why(a.A, b.A, known.WhyA, arriving.WhyA, StateRegister.A),
             WhyIndex = Why(a.Index, b.Index, known.WhyIndex, arriving.WhyIndex, StateRegister.Index),
             WhyD = merged.Processor.D.Kind == StateValueKind.Unknown ? known.WhyD ?? arriving.WhyD : null,
+
+            // Two paths in different known modes leave it unknown for no cause the analysis
+            // can name. Otherwise the cause is the one the unknown side had.
+            WhyE = a.E == ProcessorMode.Unknown ? known.WhyE ?? (b.E == ProcessorMode.Unknown ? arriving.WhyE : null)
+                : b.E == ProcessorMode.Unknown ? arriving.WhyE
+                : null,
             WhyStack = stack is not null ? null
                 : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
                 : Cause.StacksDiffer(known.Stack.Depth != arriving.Stack.Depth),

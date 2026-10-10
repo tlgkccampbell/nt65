@@ -644,13 +644,27 @@ operators, the built-in functions that measure nothing, settings, and the consta
 functions built only from those at file level, outside every block. That is what lets nt65
 know which declarations exist before it reads any of them. Nothing marks such a constant:
 nt65 works it out, and the editor says so on hover. A constant declared under an `.if`, or
-built from a size or an offset, is known only once the declarations are read, and a
-condition that uses one is an error that says why. A check that depends on the program, such
-as a table's size, is an `.assert`:
+built from the size of data or an offset into it, is known only once the declarations are
+read, and a condition that uses one is an error that says why.
+
+A struct, union or enum declared at file level, outside every block, has a shape that its
+text fixes, so a condition may take its `.sizeof` or `.countof` when its members are sized
+from numbers and settings:
 
 ```nt65
-.assert .sizeof(Actor) <= 8, "Actor must fit an 8-byte slot"
+.if .sizeof(Actor) > 8 {
+    .error "Actor must fit an 8-byte slot"
+}
 ```
+
+A check that depends on the program, such as a table's size, is an `.assert`:
+
+```nt65
+.assert .sizeof(actors) <= 64, "the actors must fit a 64-byte page"
+```
+
+A `.repeat` count may measure anything constant, data included, because the names a turn
+declares are its own and cannot change which declarations exist.
 
 nt65 checks an `.assert` as you type when it can. When it depends on addresses only the
 linker knows, nt65 writes it into the output for ld65 to check. `.assert` takes no level: a
@@ -1458,7 +1472,8 @@ The signature items are:
 | `keeps a, x, y, c, z, n, v` | registers and flags handed back unchanged (see [What a routine preserves](#what-a-routine-preserves)) |
 | `reads a, x, y, c, z, n, v`, `reads none` | registers and flags whose values from the caller it uses (see [What a routine preserves](#what-a-routine-preserves)) |
 | `inline n`, `inline .strz` | returns past data after each call |
-| `args n` | the caller pushes n bytes before the call |
+| `pushed n` | the caller pushes n bytes before the call |
+| `pulls n` | the routine is entered with n bytes above its return address, and pulls them before it returns |
 | `interrupt`, `noreturn` | an interrupt handler; a routine that never returns |
 
 **What a routine leaves out is inferred.** The state has five parts: A's width, the index
@@ -1702,9 +1717,36 @@ the `.frame` stands. Where paths that pushed different amounts meet, the frame i
 because on one of them it would name the return address. After `tcs` or `txs` the program has
 placed the stack itself, and a frame may cover bytes nt65 knows nothing about.
 
-`args n` says the caller pushes n bytes before the call. A frame can then reach the
+`pushed n` says the caller pushes n bytes before the call. A frame can then reach the
 arguments above the return address, and every call is checked for having pushed enough, on
 every CPU.
+
+`pulls n` says the routine is entered with n bytes above its return address, and pulls them
+before it returns. Such a routine is entered by a jump. The routine that pushed the bytes jumps
+to it, and it returns to that routine's caller:
+
+```nt65
+.proc switch_bank: a8, i8, native {
+    phb
+    lda #$7e
+    pha
+    plb
+    jmp restore_bank
+}
+
+.proc restore_bank: a8, i8, native, pulls 1 {
+    plb
+    rts
+}
+```
+
+Every entry of the routine, its name and any label another routine jumps to, holds those n
+bytes, and nt65 knows nothing of their values. A call to the routine is an error, because a
+call puts nothing above the return address. Every return, in any routine, must find its return
+address on top of the stack, with nothing the routine pushed or was handed above it and nothing
+beneath it pulled. Where only a jump enters a label with bytes above the return address, and
+the path above the label pushes them itself, the label starts a routine of its own that
+declares `pulls n`, and the path above runs into it with `.fallthrough`.
 
 ### Direct page and data bank
 
@@ -2229,7 +2271,10 @@ nt65 lsp
 ```
 
 `nt65 build` builds the program the nearest `nt65.json` describes. Naming files builds the
-whole program and writes only those files' output. Its options are:
+whole program and writes only those files' output. With no `nt65.json` in the directory it
+runs in or any above it, it writes nothing and says so: run `nt65 init` to make a project, or
+name one with `--project`. `--check` and `--stdout` write nothing either way, so they work on a
+lone file with no project. Its options are:
 
 | option | |
 |---|---|

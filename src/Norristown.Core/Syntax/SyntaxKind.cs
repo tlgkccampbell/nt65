@@ -475,7 +475,7 @@ public enum SyntaxKind : byte
     StateFlagItem,
 
     /// <summary>
-    /// A state word and the value it is given, such as <c>dp = $2100</c> or <c>args 2</c>.
+    /// A state word and the value it is given, such as <c>dp = $2100</c> or <c>pushed 2</c>.
     /// </summary>
     StateValueItem,
 

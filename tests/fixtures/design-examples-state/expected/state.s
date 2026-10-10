@@ -89,7 +89,7 @@ state__copy:
     rts
 ; end of copy
 
-; .proc div16: a16, i16, args 4  state.nt65:88
+; .proc div16: a16, i16, pushed 4  state.nt65:88
 state__div16:
     pea 0
     lda 7,s                         ; f::dividend

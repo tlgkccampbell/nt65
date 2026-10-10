@@ -207,6 +207,43 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
+    /// A call to a label inside a routine that declares <c>noreturn</c> ends the pass, as a call
+    /// to the routine itself does, so the caller never returns and the call is not left out of
+    /// the count.
+    /// </summary>
+    [Fact]
+    public async Task ALensEndsThePassAtACallIntoARoutineThatNeverReturns()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc stop: noreturn {
+                lda #0
+                resume:
+                jmp resume
+            }
+            .proc caller {
+                lda $10
+                jsr stop::resume
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                (2, "never returns"),
+
+                // A zero-page `lda` costs 3 and the `jsr` 6, and nothing after the call is counted.
+                (7, "9 cycles, then never returns"),
+            ],
+            Costs(lenses).Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+    }
+
+    /// <summary>
     /// The routines a <c>.next</c> names under a call through a pointer are alternatives, and one
     /// pass runs only one of them. So the cost with calls adds the cheapest of them at least and
     /// the dearest at most, never their sum. A tail jump through a pointer with a <c>.next</c>

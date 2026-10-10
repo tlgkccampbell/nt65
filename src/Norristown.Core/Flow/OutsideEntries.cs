@@ -44,8 +44,9 @@ public sealed class OutsideEntries
     public static Cause UnknownStack(Symbol label, Symbol routine) => new(
         $"`{label.DisplayName}` can be entered from outside `{routine.DisplayName}`, and a jump to it has not "
             + "pushed what the path above the label pushes",
-        $"move the pushes above `{label.DisplayName}` to the same side of it as the code that reads them; `args n` "
-            + $"on `{routine.DisplayName}` declares what the caller of a second entry point pushed");
+        $"move the pushes above `{label.DisplayName}` to the same side of it as the code that reads them; on "
+            + $"`{routine.DisplayName}`, `pushed n` declares what the caller pushed beneath the return address, and "
+            + "`pulls n` the bytes handed above it");
 
     /// <summary>
     /// Returns whether control may reach <paramref name="block"/>'s label other than along its

@@ -76,7 +76,7 @@ data__lo: .lobytes data__cmd_move, data__cmd_fire, data__cmd_quit  ; handlers
 data__hi: .hibytes data__cmd_move, data__cmd_fire, data__cmd_quit  ; handlers
 
 .segment "CODE": absolute
-; .proc read_hp  data.nt65:60
+; .proc read_hp  data.nt65:64
 data__read_hp:
     lda a:data__player+4            ; player::hp
     lda a:data__actors+4,x          ; actors::hp
@@ -88,17 +88,17 @@ data__read_hp:
     rts
 ; end of read_hp
 
-; .proc cmd_move  data.nt65:71
+; .proc cmd_move  data.nt65:75
 data__cmd_move:
     rts
 ; end of cmd_move
 
-; .proc cmd_fire  data.nt65:75
+; .proc cmd_fire  data.nt65:79
 data__cmd_fire:
     rts
 ; end of cmd_fire
 
-; .proc cmd_quit  data.nt65:79
+; .proc cmd_quit  data.nt65:83
 data__cmd_quit:
     rts
 ; end of cmd_quit

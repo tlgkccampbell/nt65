@@ -21,7 +21,7 @@
 @x:
     .frame f: Word          ;! error[frame-stack-unknown]: frame `f` names the top 2 bytes of the stack, but how many bytes are pushed here is not known, because two paths meet above it having pushed different amounts: pulling on each path what it pushed before they meet keeps the stack known
     lda f::v,s
-    rts
+    rts                     ;! error[return-past-pushes]: `rts` returns through up to 2 bytes this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
 }
 
 ; A jump to `inside` has pushed nothing, so the frame below it has nothing to name.
@@ -29,10 +29,10 @@
     pea 0
     inside:
     .state a16, i16, native
-    .frame g: Word          ;! error[frame-stack-unknown]: frame `g` names the top 2 bytes of the stack, but how many bytes are pushed here is not known, because `inside` can be entered from outside `entered`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `inside` to the same side of it as the code that reads them; `args n` on `entered` declares what the caller of a second entry point pushed
+    .frame g: Word          ;! error[frame-stack-unknown]: frame `g` names the top 2 bytes of the stack, but how many bytes are pushed here is not known, because `inside` can be entered from outside `entered`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `inside` to the same side of it as the code that reads them; on `entered`, `pushed n` declares what the caller pushed beneath the return address, and `pulls n` the bytes handed above it
     lda g::v,s
     pla
-    rts
+    rts                     ;! error[return-beneath-entry]: `rts` returns 2 bytes beneath its return address when the routine is entered at `inside`, having pulled more than the routine pushed: keep each push and its pull on one side of `inside`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
 
 .proc enters: a16, i16, native {

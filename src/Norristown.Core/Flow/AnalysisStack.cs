@@ -76,14 +76,22 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     public IReadOnlyList<StackEntry> Entries => entries;
 
     /// <summary>
-    /// Returns the stack of a routine entered by a call, which holds the caller's
-    /// <paramref name="arguments"/> bytes and the <paramref name="returnSize"/> bytes of the return
-    /// address. The arguments are the caller's, so they sit below the caller's stack as the
-    /// <see cref="Height"/> counts it.
+    /// Returns the stack of a routine when it is entered. It holds the caller's
+    /// <paramref name="arguments"/> bytes, the <paramref name="returnSize"/> bytes of the return
+    /// address, and the <paramref name="handed"/> bytes above it, or nothing where both counts are 0.
+    /// The arguments are the caller's, so they sit below the caller's stack as the
+    /// <see cref="Height"/> counts it. The handed bytes are below it too, because the routine's
+    /// height starts at the top of the stack it is entered with, as a jump in hands it over.
     /// </summary>
-    public static AnalysisStack Entered(int returnSize, int arguments) => arguments > 0
-        ? new AnalysisStack([.. Enumerable.Repeat(StackEntry.Opaque, arguments + returnSize)], true, -arguments)
-        : new AnalysisStack([], true, returnSize);
+    public static AnalysisStack Entered(int returnSize, int arguments, int handed)
+    {
+        if (arguments == 0 && handed == 0)
+            return new AnalysisStack([], true, returnSize);
+        var entries = Enumerable.Repeat(StackEntry.Opaque with { Entered = EnteredByte.Argument }, arguments)
+            .Concat(Enumerable.Repeat(StackEntry.Opaque with { Entered = EnteredByte.ReturnAddress }, returnSize))
+            .Concat(Enumerable.Repeat(StackEntry.Opaque with { Entered = EnteredByte.Handed }, handed));
+        return new AnalysisStack([.. entries], true, -arguments - handed);
+    }
 
     /// <summary>
     /// Returns what two paths arriving at one place agree the stack holds, or null when they do
