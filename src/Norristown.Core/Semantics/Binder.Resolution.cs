@@ -156,14 +156,15 @@ internal sealed partial class Binder
                 Report(token.Span, Catalogue.CheapLocalInAPath.Message(token.Text));
                 return null;
             }
-            var local = at.LookupCheapLocal(token.Text[1..]);
-            if (local is null && InACalledBody(token.Text[1..], cheap: true) is { } macro)
+            var bare = token.Text[1..];
+            var local = at.LookupCheapLocal(bare);
+            if (local is null && InACalledBody(bare, cheap: true) is { } macro)
             {
                 Report(token.Span, Catalogue.NotDeclared.Message(token.Text, InTheBody(macro)));
             }
             else if (local is null)
             {
-                var near = NearestName(at, token.Text[1..], cheap: true);
+                var near = NearestName(at, bare, cheap: true);
                 Report(token.Span, Catalogue.NotDeclared.Message(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
                 if (near is not null)
                     Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));

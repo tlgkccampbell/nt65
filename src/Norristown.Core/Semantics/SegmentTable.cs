@@ -80,7 +80,6 @@ public sealed class SegmentTable
     {
         var segments = Predeclared();
         var table = new SegmentTable(segments) { IsLinked = linked };
-        var ordered = trees.ToList();
 
         // The spaces come first, because a segment names the space it is in. Only the project
         // declares spaces, because a program that links another processor's image has a project.
@@ -108,7 +107,7 @@ public sealed class SegmentTable
 
         // A declaration under an `.if` branch the build does not take is not a declaration, so
         // two branches may declare the same segment differently.
-        var declarations = ordered
+        var declarations = trees
             .SelectMany(Declarations)
             .Where(d => configuration.Includes(d.Node))
             .OrderBy(d => d.Node.Tree.Path, StringComparer.Ordinal)
@@ -231,9 +230,9 @@ public sealed class SegmentTable
     /// Returns whether code in segment <paramref name="from"/> can reach an address in segment
     /// <paramref name="to"/>. Another address space is never reached. A segment that a linked
     /// configuration runs in another memory area covering the same addresses as the code's own is
-    /// never mapped at the same moment, so nothing reaches it either. A segment in another home bank is reached only by a
-    /// long jump or call. What nt65 cannot tell, such as a bank or an area that nothing gives, is
-    /// taken to be seen, so that nothing unknown is reported.
+    /// never mapped at the same moment, so nothing reaches it either. A segment in another home
+    /// bank is reached only by a long jump or call. What nt65 cannot tell, such as a bank or an
+    /// area that nothing gives, is taken to be seen, so that nothing unknown is reported.
     /// </summary>
     public SegmentReach Reach(string? from, string? to)
     {
@@ -272,8 +271,7 @@ public sealed class SegmentTable
             if (start is not { } first || end is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
                 || first > last)
             {
-                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span),
-                    Catalogue.SegmentMirrorInvalid));
+                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span), Catalogue.SegmentMirrorInvalid));
                 continue;
             }
             banks.Add((first, last));

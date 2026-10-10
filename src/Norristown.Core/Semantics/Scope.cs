@@ -149,13 +149,12 @@ public sealed class Scope
     /// </summary>
     internal Symbol? Declare(Symbol symbol)
     {
-        var table = symbol.IsCheapLocal ? cheapLocals : members;
+        var table = Table(symbol.IsCheapLocal);
         if (table.TryGetValue(symbol.Name, out var existing))
             return existing;
         for (var branch = this; branch.Kind == ScopeKind.Branch && branch.Parent is { } around; branch = around)
         {
-            var outer = symbol.IsCheapLocal ? around.cheapLocals : around.members;
-            if (!outer.TryGetValue(symbol.Name, out var seen))
+            if (!around.Table(symbol.IsCheapLocal).TryGetValue(symbol.Name, out var seen))
                 continue;
             if (!Exclusive(seen.Scope, branch))
                 return seen;
@@ -164,7 +163,7 @@ public sealed class Scope
         table.Add(symbol.Name, symbol);
         order.Add(symbol);
         for (var branch = this; branch.Kind == ScopeKind.Branch && branch.Parent is { } around; branch = around)
-            (symbol.IsCheapLocal ? around.cheapLocals : around.members).TryAdd(symbol.Name, symbol);
+            around.Table(symbol.IsCheapLocal).TryAdd(symbol.Name, symbol);
         return null;
 
         // Two scopes are exclusive where each is inside a different branch of one chain.
@@ -178,4 +177,10 @@ public sealed class Scope
             return false;
         }
     }
+
+    /// <summary>
+    /// Returns the table that holds the scope's cheap locals when <paramref name="cheapLocal"/>
+    /// is true, and otherwise the one that holds its other members.
+    /// </summary>
+    private Dictionary<string, Symbol> Table(bool cheapLocal) => cheapLocal ? cheapLocals : members;
 }

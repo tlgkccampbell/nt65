@@ -22,4 +22,11 @@ public readonly record struct BroughtName(Symbol? Symbol, string? Module, TextSp
     /// <see cref="Resolution.Reported"/>.
     /// </summary>
     internal Resolution Resolved => new(Symbol, Module);
+
+    /// <summary>
+    /// Returns what the name resolves to when it is written as <paramref name="name"/>, which is
+    /// an alias when the item brought a symbol in under a name other than its own.
+    /// </summary>
+    internal Resolution ResolvedAs(string name) =>
+        Resolved with { IsAlias = Symbol is { } target && target.Name != name };
 }

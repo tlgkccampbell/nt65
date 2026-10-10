@@ -30,7 +30,7 @@ internal static class Lookup
         Action<DiagnosticMessage, DiagnosticFix?>? report = null)
     {
         if (brought.TryGetValue(name, out var found))
-            return found.Resolved with { IsAlias = found.Symbol is { } target && target.Name != name };
+            return found.ResolvedAs(name);
         if (!last && program.IsModulePath(name))
             return new Resolution(null, name);
 
@@ -145,13 +145,21 @@ internal static class Lookup
     {
         var place = start;
         for (var i = 1; i < parts.Count && place is { IsReported: false } before; i++)
-        {
-            place = before.Module is { } prefix ? InModule(parts[i], prefix, program, touched)
-                : (bodyOf ?? BodyOf)(before.Symbol!)?.FindMember(parts[i]) is { } member ? new Resolution(member)
-                : null;
-        }
+            place = Step(before, parts[i], program, bodyOf ?? BodyOf, touched);
         return place;
     }
+
+    /// <summary>
+    /// Returns the place that one more part of a path, <paramref name="name"/>, reaches after
+    /// <paramref name="before"/>, or null when it reaches nothing. A module leads to what it
+    /// declares, and a symbol to what is declared in the scope that <paramref name="bodyOf"/>
+    /// returns for it.
+    /// </summary>
+    public static Resolution? Step(
+        Resolution before, string name, ProgramSymbols program, Func<Symbol, Scope?> bodyOf, Action<string?, string>? touched) =>
+        before.Module is { } prefix ? InModule(name, prefix, program, touched)
+            : bodyOf(before.Symbol!)?.FindMember(name) is { } member ? new Resolution(member)
+            : null;
 
     /// <summary>
     /// Returns the names a path may contain after a scope's <c>::</c>, which are the names a
@@ -186,8 +194,9 @@ internal static class Lookup
     /// <summary>
     /// Returns every name that may appear alone in <paramref name="at"/>, in the order a lookup
     /// tries them. The order is what the scopes from here out to the file declare, nearest
-    /// first, then what <c>.use</c> brought in, and then what a <c>.use module::*</c> brings in. Where two entries share a name, the first is what the
-    /// name means, which is the same rule <see cref="Outside"/> follows.
+    /// first, then what <c>.use</c> brought in, and then what a <c>.use module::*</c> brings in.
+    /// Where two entries share a name, the first is what the name means, which is the same rule
+    /// <see cref="Outside"/> follows.
     /// <para>
     /// Modules are not included. A module is the start of a path, not a name that refers to
     /// something, and the program lists the modules a path may start with.
@@ -205,7 +214,7 @@ internal static class Lookup
                 yield return (symbol.DisplayName, new Resolution(symbol));
         }
         foreach (var (name, place) in brought)
-            yield return (name, place.Resolved with { IsAlias = place.Symbol is { } target && target.Name != name });
+            yield return (name, place.ResolvedAs(name));
         foreach (var module in globs)
         {
             foreach (var symbol in module.FileScope.Symbols)

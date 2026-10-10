@@ -27,9 +27,11 @@ public sealed class Configuration
     private static readonly ConditionalWeakTable<SyntaxTree, StrongBox<bool>> conditionsByTree = new();
 
     // The positions a tree with no conditions answered has.
-    private static readonly HashSet<int> NoPositions = [];
+    private static readonly HashSet<int> noPositions = [];
 
+    // The branches this build leaves out, by tree.
     private readonly Dictionary<SyntaxTree, List<TextSpan>> omitted;
+
     // The positions of the conditions this pass evaluated, by tree.
     private readonly Dictionary<SyntaxTree, HashSet<int>> answered;
     private readonly Table table;
@@ -271,7 +273,7 @@ public sealed class Configuration
     /// evaluated, which is an empty set for a tree with none.
     /// </summary>
     private HashSet<int> AnsweredIn(SyntaxTree tree) =>
-        answered.TryGetValue(tree, out var positions) ? positions : NoPositions;
+        answered.TryGetValue(tree, out var positions) ? positions : noPositions;
 
     /// <summary>
     /// Reads one file's conditions. A chain is a run of sibling blocks, made up of the
@@ -377,9 +379,9 @@ public sealed class Configuration
     /// <summary>
     /// Represents what the configuration alone decides in a program: its settings, the constants,
     /// functions and enum members declared at file level, outside every block, from them, and the
-    /// shapes of the structs, unions and enums declared there. It holds a symbol for every name at file level, so that a name a condition uses is
-    /// looked up as the binder would look it up, and one the configuration does not decide is
-    /// reported with the reason.
+    /// shapes of the structs, unions and enums declared there. It holds a symbol for every name
+    /// at file level, so that a name a condition uses is looked up as the binder would look it
+    /// up, and one the configuration does not decide is reported with the reason.
     /// <para>
     /// A setting is declared with <c>?=</c> at file level, outside every block, so that which
     /// settings a program has depends on no condition. The build sets it by the path of the
@@ -1180,8 +1182,7 @@ public sealed class Configuration
 
         private static Entry.Marker Where(UndecidedCause under) =>
             under == UndecidedCause.Conditional
-                ? new Entry.Marker(
-                    UndecidedCause.Conditional, "is declared under an `.if`")
+                ? new Entry.Marker(UndecidedCause.Conditional, "is declared under an `.if`")
                 : new Entry.Marker(UndecidedCause.InBlock, "is declared inside a block");
 
         private static SyntaxToken? Named(StatementSyntax opener) => opener switch

@@ -52,9 +52,7 @@ internal sealed class NamePaths(
     /// null. A module leads to what it declares, and a symbol to what its body declares.
     /// </summary>
     public Resolution? Step(Resolution before, string name) =>
-        before.Module is { } prefix ? Lookup.InModule(name, prefix, program, touched)
-            : BodyOf(before.Symbol!)?.FindMember(name) is { } member ? new Resolution(member)
-            : null;
+        Lookup.Step(before, name, program, BodyOf, touched);
 
     /// <summary>
     /// Returns the scope that a path can look into after <paramref name="symbol"/>. This is the
