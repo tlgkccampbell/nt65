@@ -237,9 +237,9 @@ public sealed class RewriteTests
     }
 
     /// <summary>
-    /// A normalized file reads back as the tokens it was made of, each of the same kind. The spacing is not the
-    /// file's own — <see cref="Formatter"/> is what lays a line out — but nothing runs together
-    /// and nothing is lost.
+    /// A normalized file reads back as the tokens it was made of, each of the same kind. The
+    /// spacing is not the file's own, since <see cref="Formatter"/> is what lays a line out, but
+    /// nothing runs together and nothing is lost.
     /// </summary>
     [Fact]
     public void NormalizingAFileKeepsEveryTokenItHolds()
@@ -266,14 +266,6 @@ public sealed class RewriteTests
         [.. node.DescendantTokens()
             .Where(token => !token.IsMissing && token.Kind != SyntaxKind.EndOfLine)
             .Select(token => $"{token.Kind} {token.Text}")];
-
-    /// <summary>
-    /// Represents a rewrite that overrides nothing, which is the one rewrite that must change
-    /// nothing.
-    /// </summary>
-    private sealed class Untouched : SyntaxRewriter
-    {
-    }
 
     /// <summary>Records the line each block it is shown opens on, and changes nothing.</summary>
     private sealed class BlocksSeen : SyntaxRewriter

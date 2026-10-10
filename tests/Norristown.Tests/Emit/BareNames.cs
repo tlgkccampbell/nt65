@@ -57,8 +57,13 @@ internal static partial class BareNames
         {
             if (SetCpu().Match(line) is { Success: true } header)
             {
-                return CpuNames.All.Cast<Cpu?>()
-                    .FirstOrDefault(cpu => CpuNames.FormatForCa65(cpu!.Value) == header.Groups["cpu"].Value);
+                var named = header.Groups["cpu"].Value;
+                foreach (var cpu in CpuNames.All)
+                {
+                    if (CpuNames.FormatForCa65(cpu) == named)
+                        return cpu;
+                }
+                return null;
             }
         }
         return null;

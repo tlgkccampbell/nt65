@@ -3,6 +3,10 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks the typed red node classes over what the parser builds: every property reads on every
+/// line, and each node is the class of its kind.
+/// </summary>
 public sealed class TypedNodeTests
 {
     /// <summary>

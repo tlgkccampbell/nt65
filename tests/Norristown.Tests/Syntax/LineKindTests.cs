@@ -1,8 +1,9 @@
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>Checks the kind the lexer gives a line from its first tokens, before the line is parsed.</summary>
 public sealed class LineKindTests
 {
     [Theory]

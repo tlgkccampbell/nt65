@@ -2,6 +2,7 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>Checks which token the whitespace and comments of a line belong to, and where each piece of trivia is.</summary>
 public sealed class TriviaTests
 {
     [Fact]

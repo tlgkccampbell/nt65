@@ -15,13 +15,13 @@ namespace Norristown.Tests.Layout;
 /// </summary>
 public sealed class RegisterEffectsTests
 {
-    // The flags these tests leave to the tests of FlagEffects.
+    /// <summary>The flags these tests leave to the tests of <see cref="FlagEffects"/>.</summary>
     private const Registers OtherFlags = Registers.Z | Registers.N | Registers.V;
 
     /// <summary>
-    /// What each mnemonic writes, where that does not depend on the operand. The mnemonics
-    /// whose answer does — the four shifts, `inc`, `dec`, `rep` and `sep` — are tested
-    /// separately below.
+    /// What each mnemonic writes, where that does not depend on the operand. The four shifts,
+    /// <c>inc</c>, <c>dec</c>, <c>rep</c> and <c>sep</c> depend on it, and are tested separately
+    /// below.
     /// </summary>
     private static readonly Dictionary<string, Registers> Writes = Table();
 

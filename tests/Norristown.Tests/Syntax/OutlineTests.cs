@@ -2,6 +2,7 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>Checks the outline an editor shows for a file, and the ranges it folds.</summary>
 public sealed class OutlineTests
 {
     /// <summary>Every declaration the outline names, nested three deep and with a broken line in it.</summary>
@@ -101,8 +102,8 @@ public sealed class OutlineTests
     }
 
     /// <summary>
-    /// A block the outline does not name — an `.if`, a macro body — is not a level of the
-    /// outline, so what it declares stands where the block does rather than disappearing.
+    /// A block the outline does not name, such as an <c>.if</c> or a macro body, is not a level of
+    /// the outline, so what it declares stands where the block does rather than disappearing.
     /// </summary>
     [Fact]
     public void ABlockWithNoNameOfItsOwnGivesUpItsContents()

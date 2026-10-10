@@ -6,6 +6,10 @@ using GreenSeparatedList = Norristown.Syntax.InternalSyntax.GreenSeparatedList;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks the three list types a slot can hold, built by hand: a list of nodes, a separated list
+/// of nodes and their separators, and a list of tokens.
+/// </summary>
 public sealed class SyntaxListTests
 {
     [Fact]

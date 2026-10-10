@@ -15,7 +15,7 @@ public sealed class GeneratorDriverTests
     [Fact]
     public void TheTableMakesAFilePerTypeAndNoDiagnostic()
     {
-        var table = Repo.ReadText(Repo.Path(NodeTable.File.Split('/')));
+        var table = SyntaxTable.Text();
         var run = Run(table);
         Assert.Empty(run.Diagnostics);
         Assert.Equal(
@@ -107,7 +107,7 @@ public sealed class GeneratorDriverTests
     [Fact]
     public void AnEditThatIsNotToTheTableRegeneratesNothing()
     {
-        var table = new Table(Repo.Path(NodeTable.File.Split('/')), Repo.ReadText(Repo.Path(NodeTable.File.Split('/'))));
+        var table = new Table(SyntaxTable.Path, SyntaxTable.Text());
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new SyntaxSourceGenerator().AsSourceGenerator()],
             additionalTexts: [table],
@@ -133,11 +133,12 @@ public sealed class GeneratorDriverTests
     {
         var driver = CSharpGeneratorDriver
             .Create(new SyntaxSourceGenerator())
-            .AddAdditionalTexts([new Table(Repo.Path(NodeTable.File.Split('/')), table)]);
+            .AddAdditionalTexts([new Table(SyntaxTable.Path, table)]);
         var compilation = CSharpCompilation.Create("Norristown.Core.Table");
         return driver.RunGenerators(compilation).GetRunResult().Results.Single();
     }
 
+    /// <summary>Represents a node table handed to the generator as one of the project's additional files.</summary>
     private sealed class Table(string path, string text) : AdditionalText
     {
         public override string Path { get; } = path;

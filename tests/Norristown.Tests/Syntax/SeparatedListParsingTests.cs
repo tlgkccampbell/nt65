@@ -103,10 +103,7 @@ public sealed class SeparatedListParsingTests
         Assert.Equal(1, kind.Words.SeparatorCount);
     }
 
-    private static CallExpressionSyntax Call(string call) =>
-        Assert.Single(Assert.IsType<InlineDataSyntax>(
-            Assert.IsType<DataDirectiveSyntax>(Line(".word " + call).Statement).Tail).Values)
-            as CallExpressionSyntax ?? throw new InvalidOperationException($"`{call}` is no call");
+    private static CallExpressionSyntax Call(string call) => Assert.IsType<CallExpressionSyntax>(Expressions.Parse(call));
 
     private static LineSyntax Line(string source) =>
         SyntaxTree.Parse("test.nt65", source).Root.DescendantNodes().OfType<LineSyntax>().First();

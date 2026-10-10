@@ -5,6 +5,7 @@ using GreenSeparatedList = Norristown.Syntax.InternalSyntax.GreenSeparatedList;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>Checks a node's children read together, as nodes and tokens in source order.</summary>
 public sealed class ChildSyntaxListTests
 {
     /// <summary>

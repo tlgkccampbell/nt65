@@ -1,8 +1,9 @@
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>Checks the lexer: the kind of each token, the errors it reports and how it shares tokens.</summary>
 public sealed class LexerTests
 {
     [Theory]
