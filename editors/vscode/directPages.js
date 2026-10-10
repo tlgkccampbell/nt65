@@ -446,9 +446,7 @@ function routineTip(location, node, hazards) {
   if (node.unknown) {
     const tip = new Tip(node.name, `${location.name} · D unknown`);
     tip.row('?', COLOR.dim, 'names it while D is not known · see `D = ?`', lineLinks(node.accesses.map(access => access.place)));
-    if (hazards) {
-      hazardRows(tip, node.hazards);
-    }
+    if (hazards) hazardRows(tip, node.hazards);
     return tip.build();
   }
   const tip = new Tip(node.name, `${location.name}${role ? ` · ${role.word}` : ''}`);
@@ -468,9 +466,7 @@ function routineTip(location, node, hazards) {
   for (const child of node.children || []) {
     if (child.via.length > 0) tip.row('↳', COLOR.dim, `\`${child.name}\``, lineLinks(child.via));
   }
-  if (hazards) {
-    hazardRows(tip, node.hazards);
-  }
+  if (hazards) hazardRows(tip, node.hazards);
   return tip.build();
 }
 
