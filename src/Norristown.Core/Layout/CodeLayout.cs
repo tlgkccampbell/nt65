@@ -53,18 +53,21 @@ public sealed partial class CodeLayout
     // next walk answers with. Only what the file actually measures is tracked.
     private readonly Dictionary<Symbol, long> spans;
 
-    // The steps of the previous walk, once the lengths have reached a fixed point. A cycle span
-    // is counted over these steps, because a span may appear before the code it measures and so
-    // cannot be counted from a walk that is still in progress. It is null on every walk before
-    // the lengths stop changing.
+    // The finished layout of the previous walk, once the lengths have reached a fixed point, and
+    // its steps. A cycle span is counted over these steps, because a span may appear before the
+    // code it measures and so cannot be counted from a walk that is still in progress. The
+    // finished layout holds the hidden paths too, which are decoded only once a walk is over.
+    // Both are null on every walk before the lengths stop changing.
+    private readonly CodeLayout? settled;
     private readonly IReadOnlyList<Step>? counted;
 
-    private CodeLayout(SemanticModel model, Cpu cpu, Dictionary<Symbol, long> spans, IReadOnlyList<Step>? counted = null)
+    private CodeLayout(SemanticModel model, Cpu cpu, Dictionary<Symbol, long> spans, CodeLayout? settled = null)
     {
         this.model = model;
         this.cpu = cpu;
         this.spans = spans;
-        this.counted = counted;
+        this.settled = settled;
+        counted = settled?.steps;
     }
 
     /// <summary>Gets the CPU this file was laid out for.</summary>
@@ -109,10 +112,11 @@ public sealed partial class CodeLayout
     /// are laid out a byte wide and every <c>.ensure</c> emits every instruction it could. That
     /// is enough to find where control goes, since no edge depends on a length. On any CPU,
     /// <paramref name="flags"/> gives the flags known before each statement, so that an
-    /// <c>.ensure</c> emits nothing for a flag already so.
+    /// <c>.ensure</c> emits nothing for a flag already so. It also gives the accumulator's
+    /// constant, which is how many bytes a block move moves.
     /// </summary>
     public static CodeLayout Create(
-        SemanticModel model, Cpu cpu, IProcessorStates? states = null, Func<SyntaxNode, Expansion?, FlagValues?>? flags = null)
+        SemanticModel model, Cpu cpu, IProcessorStates? states = null, IKnownFlags? flags = null)
     {
         // Every long branch starts short, and those found out of reach are lengthened until none
         // changes. This terminates because a branch only ever grows. Only the last walk is kept,
@@ -137,10 +141,11 @@ public sealed partial class CodeLayout
 
         // A cycle span is counted over a walk that has finished, because the code it measures
         // may appear after the expression that measures it. Only a file that asks for a span is
-        // laid out again, so no other file pays for it.
+        // laid out again, so no other file pays for it. The walk is finished first, which decodes
+        // the paths from the positions a `.label` names, so that a span can follow them.
         if (walker.WantsCycles)
         {
-            walker = new Walker(new CodeLayout(model, cpu, spans, walker.Layout.steps), states, flags, lengthened, measured);
+            walker = new Walker(new CodeLayout(model, cpu, spans, walker.Finish()), states, flags, lengthened, measured);
             walker.Walk();
         }
         return walker.Finish();

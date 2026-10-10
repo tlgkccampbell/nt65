@@ -341,11 +341,16 @@ internal static class Hovers
         Routine(card, analysis, symbol);
 
         // A position inside an instruction runs the bytes there as other instructions, which the
-        // source does not show.
+        // source does not show, and neither does it show what they cost. Each instruction is
+        // shown with its own cycles, and the run with its total.
         if (symbol.Kind == SymbolKind.Label
             && analysis.LayoutFor(symbol.Tree.Path)?.HiddenInstructionsOf(symbol) is { Count: > 0 } hidden)
         {
-            card.Row("runs", string.Join("; ", hidden));
+            card.Row("runs", string.Join("; ", hidden.Select(each => $"{each} ({each.Cycles?.ToString() ?? "no count"})")));
+            CycleCount? total = new CycleCount(0);
+            foreach (var each in hidden)
+                total = total is { } sum && each.Cycles is { } cycles ? sum + cycles : null;
+            card.Row("cycles", total is { } known ? $"{known} in all" : null);
         }
         var expansion = MacroCallHover.At(analysis, model, reference);
         card.Row("expands to", expansion?.Becomes());

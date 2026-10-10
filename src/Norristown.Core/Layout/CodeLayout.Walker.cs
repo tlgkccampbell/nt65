@@ -36,9 +36,10 @@ public sealed partial class CodeLayout
         // has run.
         private readonly IProcessorStates? states;
 
-        // What the flag analysis found known about the flags before each statement, or null
-        // before it has run. An `.ensure` that names a flag emits nothing where it is known.
-        private readonly Func<SyntaxNode, Expansion?, FlagValues?>? flags;
+        // What the flag analysis found known about the flags and the accumulator before each
+        // statement, or null before it has run. An `.ensure` that names a flag emits nothing where
+        // it is known, and a block move from a known accumulator has a count.
+        private readonly IKnownFlags? flags;
         private readonly List<Diagnostic> diagnostics = [];
 
         // These record how far each run of bytes is filled, and the branches whose reach depends
@@ -107,11 +108,11 @@ public sealed partial class CodeLayout
         /// </summary>
         /// <param name="layout">The layout to fill in.</param>
         /// <param name="states">The processor state reaching each statement, or null before any analysis.</param>
-        /// <param name="flags">The flags known before each statement, or null before the flag analysis.</param>
+        /// <param name="flags">What is known before each statement, or null before the flag analysis.</param>
         /// <param name="lengthened">The long branches earlier walks found out of reach.</param>
         /// <param name="measured">The routines and data declarations the file measures.</param>
         public Walker(
-            CodeLayout layout, IProcessorStates? states, Func<SyntaxNode, Expansion?, FlagValues?>? flags,
+            CodeLayout layout, IProcessorStates? states, IKnownFlags? flags,
             HashSet<StepKey> lengthened, IReadOnlySet<Symbol> measured)
         {
             this.layout = layout;
@@ -535,7 +536,8 @@ public sealed partial class CodeLayout
                 CheckDirectPageSymbols(mnemonic, operand, mode);
             CheckReach(mnemonic, operand, mode);
             CheckIndirectJumpWrap(statement, operand, mode);
-            var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state, DecimalBefore(statement));
+            var timing = Cycles.Of(cpu, statement.MnemonicKind, mode, state, DecimalBefore(statement))
+                ?? BlockMove(statement, state);
             IReadOnlyList<string>? causes = timing is { } counted ? counted.Causes : null;
             BranchCycles? edges = timing is { } branch && Transfers.Of(statement, mode) == Transfer.Branch
                 ? Cycles.EdgesOf(branch.Count)
@@ -559,6 +561,18 @@ public sealed partial class CodeLayout
         }
 
         /// <summary>
+        /// Returns what a block move costs where the flag analysis knows the accumulator before
+        /// it, or null for any other instruction and wherever the accumulator is not known. The
+        /// count is in all 16 bits of C, so it is known only where A is 16 bits wide, because an
+        /// 8-bit load leaves the high byte as it was.
+        /// </summary>
+        private Timing? BlockMove(InstructionStatementSyntax statement, ProcessorState? state) =>
+            statement.MnemonicKind is MnemonicKind.Mvn or MnemonicKind.Mvp && state?.A == Width.Sixteen
+                && flags?.Accumulator(statement, expansion) is { } count
+                ? new Timing(Cycles.OfBlockMove(count))
+                : null;
+
+        /// <summary>
         /// Returns whether the flag analysis found the decimal flag set before
         /// <paramref name="statement"/>, or null where it does not know or has not run.
         /// </summary>
@@ -570,7 +584,7 @@ public sealed partial class CodeLayout
         /// does not know or has not run.
         /// </summary>
         private bool? DecimalBefore(StatementSyntax statement, Expansion? on) =>
-            flags?.Invoke(statement, on) is { } known && known.Known.HasFlag(StatusFlags.Decimal)
+            flags?.Known(statement, on) is { } known && known.Known.HasFlag(StatusFlags.Decimal)
                 ? known.Set.HasFlag(StatusFlags.Decimal)
                 : null;
 
@@ -685,7 +699,7 @@ public sealed partial class CodeLayout
             // that the 65816 folds it into a `rep` or a `sep` the widths need anyway.
             var widths = cpu == Cpu.Wdc65816 ? Ensured.Of(directive, state) : default;
             var ensured = widths.WithFlags(
-                directive, flags?.Invoke(directive, expansion), item => model.ValueOf(item, expansion).AsNumber());
+                directive, flags?.Known(directive, expansion), item => model.ValueOf(item, expansion).AsNumber());
             var cycles = new CycleCount(0);
             foreach (var mask in new[] { ensured.Reset, ensured.Set }.Where(mask => mask != StatusFlags.None))
                 cycles += Cycles.Of(cpu, MnemonicKind.Rep, AddressingMode.Immediate, state)?.Count ?? new CycleCount(3);

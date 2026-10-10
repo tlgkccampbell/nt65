@@ -1,0 +1,54 @@
+; A label that a table names is entered with every flag unknown, unless only this routine's
+; `.next` annotations name the table. Then only the jumps those annotations are under reach the
+; label, and the flags each jump leaves flow into it as a branch's do.
+.module main
+
+.cpu 6502
+
+.export by_return, by_vector, needs_carry, vector
+
+.segment BSS
+.data vector: .word
+
+.segment CODE
+
+; An RTS dispatch table. `sec` sets C, and neither `lda` nor `pha` changes it, so the `rts` hands
+; both entries C = 1, which is what `needs_carry` asks of a jump into it.
+.proc by_return {
+    sec
+    lda returns+1,x
+    pha
+    lda returns,x
+    pha
+    rts
+    .next returns
+    first:
+    jmp needs_carry
+    second:
+    lda #1
+    jmp needs_carry
+}
+
+; A table of addresses an indirect jump goes through. The `.next` names the table, and the store
+; that fills the vector only reads it, so the carry `sec` sets reaches both entries here too.
+.proc by_vector {
+    sec
+    lda jumps,x
+    sta vector
+    lda jumps+1,x
+    sta vector+1
+    jmp (vector)
+    .next jumps
+    first:
+    jmp needs_carry
+    second:
+    jmp needs_carry
+}
+
+.proc needs_carry: c = 1 {
+    rts
+}
+
+.segment RODATA
+.data returns: .addr by_return::first - 1, by_return::second - 1
+.data jumps:   .addr by_vector::first, by_vector::second

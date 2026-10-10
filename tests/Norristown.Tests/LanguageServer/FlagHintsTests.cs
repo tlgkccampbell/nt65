@@ -18,6 +18,13 @@ public sealed class FlagHintsTests
     /// <summary>The words a jump-as-branch message ends with where a taken branch may cross a page.</summary>
     private const string Page = "; a taken branch may cost one more cycle across a page";
 
+    /// <summary>
+    /// The body of a routine that sets the carry and then dispatches through an RTS dispatch
+    /// table, whose two entries are <c>add</c> and <c>sub</c>. The table itself is left to each test.
+    /// </summary>
+    private const string Dispatch = ".export .proc main {\n    sec\n    lda table+1,x\n    pha\n    lda table,x\n    pha\n"
+        + "    rts\n    .next table\nadd:\n    sec\n    sbc #1\n    sta $10\n    rts\nsub:\n    lda $11\n    sta $10\n    rts\n}\n";
+
     private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     /// <summary>
@@ -134,6 +141,42 @@ public sealed class FlagHintsTests
         Applied(Body, "carry-already-set", "Remove it", out var suggestion);
 
         Assert.Equal("`sec` changes nothing: C is already 1 here", suggestion.Message);
+    }
+
+    /// <summary>
+    /// An entry of an RTS dispatch table that only this routine's <c>.next</c> names is reached
+    /// only by the <c>rts</c> the <c>.next</c> is under. The carry the dispatch sets flows into
+    /// the entry as it would along a branch, so a <c>sec</c> there changes nothing.
+    /// </summary>
+    [Fact]
+    public void ACarryFlowsIntoAnEntryOfADispatchTable()
+    {
+        const string Body = Dispatch + ".segment RODATA\n.data table: .addr main::add - 1, main::sub - 1\n";
+
+        var text = Applied(Body, "carry-already-set", "Remove it", out var suggestion);
+
+        Assert.Equal("`sec` changes nothing: C is already 1 here", suggestion.Message);
+        Assert.Equal(Body.Replace("add:\n    sec\n", "add:\n", StringComparison.Ordinal), text);
+    }
+
+    /// <summary>
+    /// Where something other than this routine's <c>.next</c> may hand control to a table's
+    /// labels, nothing says which jump reaches them, so each is entered with every flag unknown.
+    /// An exported table may be jumped through from another module, a table another routine's
+    /// <c>.next</c> names may be jumped through from there, and data that names a label with no
+    /// <c>.next</c> naming the data says nothing about who jumps there.
+    /// </summary>
+    [Theory]
+    [InlineData(".segment RODATA\n.export .data table: .addr main::add - 1, main::sub - 1\n")]
+    [InlineData(".export .proc other {\n    jmp ($12)\n    .next table\n}\n"
+        + ".segment RODATA\n.data table: .addr main::add - 1, main::sub - 1\n")]
+    [InlineData(".segment RODATA\n.data table: .addr main::add - 1, main::sub - 1\n.data other: .addr main::add - 1\n")]
+    public void ACarryDoesNotFlowIntoATableEntryOthersMayReach(string tables)
+    {
+        var (analysis, path) = Analyzed(Dispatch + tables);
+
+        Assert.Empty(analysis.Diagnostics);
+        Assert.DoesNotContain(analysis.SuggestionsFor(path), found => found.Id == "carry-already-set");
     }
 
     /// <summary>

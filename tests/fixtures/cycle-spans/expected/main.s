@@ -19,6 +19,10 @@
 .export main__handing
 .export main__returning
 .export main__always
+.export main__tabled
+.export main__listed
+.export main__skipped
+.export main__long_run
 .export main__budget
 
 .segment "ZEROPAGE": zeropage
@@ -148,5 +152,59 @@ always__done:
     rts
 ; end of always
 
+; .proc tabled  main.nt65:191
+main__tabled:
+tabled__start:
+    lda z:color
+    jmp (vector)
+tabled__first:
+    nop
+tabled__second:
+    nop
+tabled__done:
+    rts
+; end of tabled
+
+; .proc listed  main.nt65:209
+main__listed:
+listed__start:
+    lda z:color
+    jmp (vector)
+listed__first:
+    nop
+listed__second:
+    nop
+listed__done:
+    rts
+; end of listed
+
+; .proc skipped  main.nt65:234
+main__skipped:
+skipped__hidden := (skipped__op + $01)
+skipped__from:
+    lda z:color
+    bne skipped__hidden
+skipped__op:
+    lda #$ea
+skipped__done:
+    rts
+; end of skipped
+
+; .proc long_run  main.nt65:260
+main__long_run:
+    lda z:color
+    bne long_run__in
+long_run__top:
+    .repeat 15
+        lda #$a9
+    .endrepeat
+long_run__in := (long_run__top + $01)
+    lda a:$eaa5
+long_run__done:
+    rts
+; end of long_run
+
 .segment "RODATA": absolute
+handlers: .addr tabled__first, tabled__second
+
 main__budget: .byte $11

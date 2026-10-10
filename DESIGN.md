@@ -1804,11 +1804,13 @@ label:
   a block of their own that goes on there. No code runs into that block. Every byte has to be
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
-  control goes, move the stack or change the widths; a run of more than 32 bytes, or one that
-  runs into data or past the routine's bytes, is an error too (hidden-path-unfollowed). Each
+  control goes, move the stack or change the widths; a run whose last instruction starts 32 bytes
+  or more from the position, or one that runs into data or past the routine's bytes, is an error
+  too (hidden-path-unfollowed). Each
   decoded instruction is counted as a written one is, in the processor state and with the
   decimal flag that reach the position, and a decoded `cld`, `sed` or `tcd` is followed. The
-  output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there.
+  output defines the name as ca65's `name := @op + 2`. Hover on the name lists what runs there,
+  each instruction with its cycles, and what the run costs in all.
 - `.patch @op as dex, iny` also lists the instructions the store can turn the one at `@op`
   into. A variant replaces the opcode, so it keeps the instruction's addressing mode and
   operand, and the CPU must have it in that form. A variant may not move the stack, change the
@@ -1935,6 +1937,17 @@ Examples. A jump table inside a proc: the targets need no declarations because t
 Every item of `table` is a code label, so `.next table` says the same. A table is read only
 from data declared as addresses: a label on a line of `.addr` directives is a position, and
 names no targets.
+
+Data that names a label says nothing about which jump reaches it, so the flag analysis enters a
+label that data names with every flag unknown. A table that only this routine's `.next`
+annotations name is the exception, where every item names a label or a routine, the table is not
+exported, and every other name of it is in a jump of this routine, as `jmp (table,x)` is, or in an
+instruction that only reads its bytes, as `lda table,x` is. Then only the
+jumps those annotations are under reach its labels, and the flags each jump leaves flow in as
+they do along a branch, so `sec` before an RTS dispatch leaves C known to be 1 in every entry. A
+`.next` under a call is not such a jump, since the call comes back with other flags. The register
+and processor-state analyses enter such a label only along the flow graph's edges, as they do
+any label that data outside every routine, or in the label's own routine, names.
 
 An interrupt handler, and a `plp` that restores a status byte saved elsewhere, so the
 analysis stack holds no saved P for it:
@@ -2241,7 +2254,12 @@ extra cycle is always paid and the count is exact); a branch costs 2 not taken a
 taken, plus 1 when a taken branch crosses a page on the 6502, its CMOS variants and in
 emulation mode. On the 65816 a direct operand costs one more when the low byte of D is
 nonzero, which is known when D is known (§7.5). On the 65C02 `adc` and `sbc` cost one more in
-decimal mode, which is known where the flag analysis knows the decimal flag. Cycles are processor
+decimal mode, which is known where the flag analysis knows the decimal flag. A block move, `mvn`
+or `mvp`, moves one byte more than the 16-bit accumulator C holds, at 7 cycles a byte, so it has
+a count only where the flag analysis knows C: where A is 16 bits wide and an immediate load gave
+it its constant, as `lda #$00ff` before `mvn` does, which is 7 × 256 = 1792 cycles. An 8-bit load
+leaves the high byte as it was, so it gives no count, and a routine with a move nt65 cannot count
+says why on its lens. Cycles are processor
 cycles; memory speed is the board's. Tooling shows the interval per
 instruction and per basic block on hover, and beside an interval what its top would be paid
 for — a page crossed, a branch taken, a register 16 bits wide — since an interval a reader
@@ -2257,9 +2275,13 @@ or more `dex` or `dey` written in a row before the `bne` or `bpl` that takes the
 again, with one way into the loop, one way out of it, and nothing else in it, nor any routine
 called between the load and the loop, touching that register. On the 65816 a change to the index
 width touches it too, since it clears the high byte. The loop is found from the back edge and the blocks that dominate it, so a turn may
-branch and may call; a loop inside one is counted first, and the turns multiply. `bne` needs
+branch and may call; a loop inside one is counted first, and the turns multiply. The test may
+end the loop, or begin it where a jump enters the loop at the test, as `jmp test` over the body
+does; there the test runs as many times as the count says and the body one time fewer. `bne` needs
 the stride to divide the count, and `bpl` a count with the sign bit clear, or it is not
-counting down from that immediate at all. Every other loop keeps the `+`, because a loop
+counting down from that immediate at all. A count of 0 under `bne` wraps round before the first
+test, so the loop runs the register's whole range: 256 times, or 65536 with a 16-bit index on
+the 65816. Every other loop keeps the `+`, because a loop
 counted wrongly is worse than one not counted.
 
 A routine holding an instruction the CPU does not have, or does not take that operand for,
@@ -2319,15 +2341,18 @@ as it turns. A jump nt65 cannot follow could go anywhere, `to` included, so one 
 
 A `.next` says where control goes from the statement above it, in place of the operand, as it
 does for the flow analysis: `jmp (vector)` / `.next done` goes on to `done`, a `.next .return`
-ends the path, a `.next` naming a routine leaves, and a `.next ?` is a jump nt65 cannot follow.
+ends the path, a `.next` naming a routine leaves, a `.next` naming a list or a table goes to every
+label it holds, and a `.next ?` is a jump nt65 cannot follow.
 A `.next` under a conditional branch says the branch is always taken, so each target it names is
 charged the taken edge alone, by the same rule as a branch without one: `sec` / `bcs done` /
 `.next done` / `done:` is 5 to 6 cycles, never the 4 of a branch not taken.
 **Flow does not run through data**, so nt65 does not count what bytes would cost if they ran: a
 path that arrives through data, padding included, is an error naming the data. Control leaves
 data only where its `.next` says, and data with no `.next` has no way on. A position a `.label`
-names inside an instruction runs as instructions a span does not count, so a pass that can reach
-one is an error, and such a position is not an end.
+names inside an instruction runs the instructions its bytes decode as, each counted as above, and
+goes on where they reach the start of an instruction, so a pass that reaches it pays for them,
+and such a position may be either end of a span. A pass that can reach one whose bytes nt65
+cannot follow is an error.
 
 Like `.endof` and `.spanof`, a cycle span describes layout rather than a shape: it is usable in
 operands, data and `.assert`, and not where a constant is required (`.res`, `.repeat`, an
@@ -5060,7 +5085,9 @@ Recorded so the reasoning survives. None is open.
   before `->`. A call returns with what the callee returns with, declared or inferred (above);
   every other flag is unknown, and so is every flag at a
   label anything but the routine's own transfers names, a `.state` label, or an instruction the
-  program patches. A branch whose flag is known is then
+  program patches. A table that only the routine's own `.next` annotations name counts among its
+  transfers, so the jumps those annotations are under carry their flags into its labels (§7.4).
+  A branch whose flag is known is then
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
   nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
   flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and

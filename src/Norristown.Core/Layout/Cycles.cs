@@ -151,6 +151,13 @@ public static class Cycles
     }
 
     /// <summary>
+    /// Returns what an <c>mvn</c> or <c>mvp</c> costs when the 16-bit accumulator C holds
+    /// <paramref name="accumulator"/> as it starts. The move runs once for each byte, 7 cycles
+    /// each time, and counts C down past zero, so it moves C + 1 bytes.
+    /// </summary>
+    public static CycleCount OfBlockMove(long accumulator) => new((int)(7 * ((accumulator & 0xffff) + 1)));
+
+    /// <summary>
     /// Returns what each way out of a short conditional branch whose whole count is
     /// <paramref name="branch"/> costs. Not taken, it costs its least. Taken, it costs at least
     /// one cycle more, and its most where it crosses a page. An exact count costs the same either
@@ -257,8 +264,8 @@ public static class Cycles
             (Rep or Sep or Stp or Wai or Xba, _) => new Timing(3),
             (Wdm, _) => new Timing(2),
 
-            // A block move takes seven cycles for every byte it moves, and the number of bytes
-            // is in A when it runs.
+            // A block move takes 7 cycles for every byte it moves, and how many it moves depends on
+            // the accumulator, which OfBlockMove counts from where it is known.
             (Mvn or Mvp, _) => null,
             (_, AddressingMode.Implied) => new Timing(2),
             _ => null,
