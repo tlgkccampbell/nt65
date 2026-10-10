@@ -112,6 +112,13 @@ public enum FixKind
     AlwaysTaken,
 
     /// <summary>
+    /// The target of the branch reported, replaced with the label the fix's
+    /// <see cref="DiagnosticFix.Text"/> names. Where the fix has an <see cref="DiagnosticFix.At"/>,
+    /// that label is new and goes on a line of its own before the instruction there.
+    /// </summary>
+    LandingLabel,
+
+    /// <summary>
     /// The decimal address reported, given the <c>#</c> that makes it a number, or written in
     /// hexadecimal as the address the fix's <see cref="DiagnosticFix.Text"/> spells. Both fixes
     /// are offered.

@@ -1083,6 +1083,12 @@ assumes the code it reaches may do anything: no register survives it, nothing is
 the state after it, and its cost is unknown. A routine that promises `keeps` cannot keep that
 promise across a `.next ?`, so where a promise matters, name the places control goes.
 
+A branch is different: it always goes to its operand or on, so its target is code the program
+holds, and nt65 asks for the label there rather than a `.next`. That includes ca65's
+`beq *+4`, an offset from the branch. Where the offset lands on an instruction of the same
+routine, the editor's fix labels that instruction `@skip` and branches to it; where it lands
+inside an instruction, the message says so, and a `.label` names that position.
+
 Most targets can be named. A jump to a ROM entry point names an extern proc declared at its
 address, and a jump through a vector that the program itself, or the system at startup, fills
 with one routine names that routine. `.next ?` is for code the program cannot know, such as a

@@ -2971,10 +2971,14 @@ public static class Catalogue
         Area.ControlFlow,
         "computed-branch-unchecked",
         Severity.Error,
-        "{0} branches to a computed address, which nt65 cannot follow: write the label it goes to as its operand",
+        "{0} branches to {1}, which nt65 cannot follow: {2}",
         "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
             + "branch can only reach a place within its range, which is code the program holds, so the label at "
-            + "that address can be named. Where nothing there has a label, add one.");
+            + "that address can be named. Where nothing there has a label, add one. A target written as an offset "
+            + "from the branch, such as `*+4`, is placed against the routine's bytes: where it lands on an "
+            + "instruction of the same routine, the fix labels that instruction and branches to the label. Where "
+            + "it lands inside an instruction, a `.label` names that position, and the bytes there are checked as "
+            + "the instructions they run as.");
 
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
         Area.ControlFlow,
