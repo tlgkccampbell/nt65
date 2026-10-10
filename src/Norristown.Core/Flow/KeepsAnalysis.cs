@@ -1,5 +1,6 @@
 using Norristown.Processor;
 using Norristown.Semantics;
+using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
@@ -67,7 +68,7 @@ internal static class KeepsAnalysis
                 kept &= onExit.Kept;
                 backed &= onExit.Backed;
                 if (report is not null)
-                    Check(region, block, onExit, into, handed.Kept, report);
+                    Check(walk.Model.Tree, region, block, onExit, into, handed.Kept, report);
             }
             // `stp` and `jam` stop the processor, so nothing ever reads what they left. `rti`
             // goes back to the code the interrupt broke into, which is exactly where the
@@ -83,7 +84,7 @@ internal static class KeepsAnalysis
             // a register it loses has to be kept.
             var handedTo = block.End == BlockEnd.TailCall && !block.CallsUnknown && block.Calls is [var only] ? only : null;
             if (report is not null)
-                Check(region, block, after, handedTo, handedTo is null ? Registers.None : of(handedTo).Kept, report);
+                Check(walk.Model.Tree, region, block, after, handedTo, handedTo is null ? Registers.None : of(handedTo).Kept, report);
         }
 
         // A routine no path leaves never returns anything to a caller, so there is nothing
@@ -95,21 +96,20 @@ internal static class KeepsAnalysis
     /// Reports a diagnostic where a routine's <c>keeps</c> promise does not hold at a point a
     /// path leaves it, saying what to change. <paramref name="into"/> is the routine or
     /// label the path passes control to, if any, and <paramref name="kept"/> the registers
-    /// that routine returns unchanged.
+    /// that routine returns unchanged. A path that leaves on a line of a macro body is reported
+    /// at the call in <paramref name="file"/>, as <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+    /// describes.
     /// </summary>
     private static void Check(
-        FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
+        SyntaxTree file, FlowRegion region, BasicBlock block, RegisterState state, Symbol? into, Registers kept,
         List<Diagnostic> report)
     {
-        Results(region, block, state, report);
+        Results(file, region, block, state, report);
         if (region.Routine.Signature?.Keeps is not { } promised || promised == Registers.None)
             return;
         var broken = promised & ~state.Kept;
         if (broken == Registers.None)
             return;
-        var at = block.Steps.Count > 0
-            ? block.Steps[^1].Statement.Tree.GetSpan(block.Steps[^1].Statement.Span)
-            : region.Routine.DeclarationSpan;
         var names = RegisterEffects.Format(broken);
         var items = names.ToLowerInvariant();
         var one = RegisterEffects.Each(broken).Count() == 1;
@@ -139,32 +139,32 @@ internal static class KeepsAnalysis
         // missing.
         var unkeep = missing != Registers.None && RegisterWalk.Owner(into!) != into
             && RegisterEffects.Each(missing).Count() == 1;
-        report.Add(new Diagnostic(at,
-            Catalogue.KeepsBroken.Message(
-                region.Routine.DisplayName, items, names, one ? "is" : "are", fix))
-        {
-            Fix = unkeep
-                ? new DiagnosticFix(FixKind.Unkeep, RegisterEffects.Format(missing).ToLowerInvariant(), region.Routine.DeclarationSpan)
-                : null,
-        });
+        var message = Catalogue.KeepsBroken.Message(region.Routine.DisplayName, items, names, one ? "is" : "are", fix);
+        var unkeeping = unkeep
+            ? new DiagnosticFix(FixKind.Unkeep, RegisterEffects.Format(missing).ToLowerInvariant(), region.Routine.DeclarationSpan)
+            : null;
+        report.Add(block.Steps.Count > 0
+            ? Expansion.Problem(file, block.Steps[^1].Statement, block.Steps[^1].On, null, message, unkeeping)
+            : new Diagnostic(region.Routine.DeclarationSpan, message) { Fix = unkeeping });
     }
 
     /// <summary>
     /// Reports each flag a routine's signature names as a result, as <c>-&gt; c</c> does, that a path
-    /// leaves the routine with while it may still hold what the caller left in it.
+    /// leaves the routine with while it may still hold what the caller left in it. A path that
+    /// leaves on a line of a macro body is reported at the call in <paramref name="file"/>.
     /// </summary>
-    private static void Results(FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
+    private static void Results(SyntaxTree file, FlowRegion region, BasicBlock block, RegisterState state, List<Diagnostic> report)
     {
         if (region.Routine.Signature is not { Results: not StatusFlags.None and var results } || block.Steps.Count == 0)
             return;
-        var end = block.Steps[^1].Statement;
+        var end = block.Steps[^1];
         foreach (var flag in FlagValues.Named)
         {
             var register = RegisterEffects.Of(flag & results);
             if (register == Registers.None || (state.Of(register).Entry & register) == Registers.None)
                 continue;
-            report.Add(new Diagnostic(
-                end.Tree.GetSpan(end.Span),
+            report.Add(Expansion.Problem(
+                file, end.Statement, end.On, null,
                 Catalogue.ReturnFlagNotSet.Message(region.Routine.DisplayName, RegisterEffects.Format(register), FlagValues.NameOf(flag))));
         }
     }

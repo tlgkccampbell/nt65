@@ -557,13 +557,11 @@ internal sealed class FlagAnalysis : IKnownFlags
         var why = declared.Length > 0
             ? $"which its `-> {declared}` does not promise"
             : $"which `{origin.DisplayName}` does not promise";
-        var at = step.Statement;
-        report.Add(new Diagnostic(at.Tree.GetSpan(at.Span), Catalogue.UnpromisedFlag.Message(what, origin.DisplayName, item, why))
-        {
-            // The fix promises the value only where the routine returns the flag with it on every
-            // path, and not where it merely passes on what this caller set.
-            Fix = exits.Of(origin).Values.ValueOf(flag) == value ? new DiagnosticFix(FixKind.Exit, item, origin.DeclarationSpan) : null,
-        });
+        // The fix promises the value only where the routine returns the flag with it on every
+        // path, and not where it merely passes on what this caller set.
+        report.Add(Expansion.Problem(
+            model.Tree, step.Statement, step.On, null, Catalogue.UnpromisedFlag.Message(what, origin.DisplayName, item, why),
+            exits.Of(origin).Values.ValueOf(flag) == value ? new DiagnosticFix(FixKind.Exit, item, origin.DeclarationSpan) : null));
     }
 
     /// <summary>Reports where a call reaches <paramref name="callee"/> without the flags it needs.</summary>
@@ -686,23 +684,13 @@ internal sealed class FlagAnalysis : IKnownFlags
             : null;
 
     /// <summary>
-    /// Adds an error at <paramref name="node"/>, or, where the statement comes from a macro's
-    /// expansion, at the call in this file that expanded it. A fix is offered only where the
-    /// statement is this file's own.
+    /// Adds an error at <paramref name="node"/>, or, where it is a line of a macro body, at the
+    /// call in this file that expanded it, as
+    /// <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+    /// describes. A fix is offered only where the node is reported.
     /// </summary>
-    private void Report(List<Diagnostic> report, Step step, SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix)
-    {
-        var at = node;
-        for (var level = step.On; level is not null; level = level.Outer)
-        {
-            if (level.Call is { } call && call.Tree == model.Tree)
-                at = call;
-        }
-        report.Add(new Diagnostic(at.Tree.GetSpan(at.Span), Severity.Error, message)
-        {
-            Fix = ReferenceEquals(at, node) && node.Tree == model.Tree ? fix : null,
-        });
-    }
+    private void Report(List<Diagnostic> report, Step step, SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix) =>
+        report.Add(Expansion.Problem(model.Tree, node, step.On, Severity.Error, message, fix));
 
     /// <summary>
     /// Returns the routine or the label that the conditional branch at <paramref name="end"/>

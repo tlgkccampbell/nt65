@@ -280,16 +280,14 @@ public sealed class StackEffects
                 return height is { } h ? StackEffect.Leaving(h) : StackEffect.Unknown;
             if (walk.Model.ValueOf(count, step.On).AsNumber() is not { } promised)
             {
-                report?.Add(new Diagnostic(count.Tree.GetSpan(count.Span), Severity.Error, Catalogue.ReturnCountNotConstant.Message()));
+                report?.Add(Expansion.Problem(walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountNotConstant.Message()));
                 return StackEffect.Unknown;
             }
             if (height is { } counted && counted != promised)
             {
-                report?.Add(new Diagnostic(count.Tree.GetSpan(count.Span), Severity.Error,
-                    Catalogue.ReturnCountMismatch.Message(promised, counted))
-                {
-                    Fix = new DiagnosticFix(FixKind.Spelling, counted.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                });
+                report?.Add(Expansion.Problem(
+                    walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountMismatch.Message(promised, counted),
+                    new DiagnosticFix(FixKind.Spelling, counted.ToString(System.Globalization.CultureInfo.InvariantCulture))));
             }
             return StackEffect.Leaving((int)promised);
         }
@@ -316,7 +314,7 @@ public sealed class StackEffects
             if (walk.Layout.HiddenPathAt(step)?.Return is { } hidden)
             {
                 if (report is not null)
-                    CheckReturn(step.Statement, hidden.Mnemonic, height, entry, report);
+                    CheckReturn(walk.Model.Tree, step, hidden.Mnemonic, height, entry, report);
                 continue;
             }
             if (step.Statement is not InstructionStatementSyntax statement)
@@ -326,7 +324,7 @@ public sealed class StackEffects
             // effect accounts for, and a return or an interrupt is where the path leaves.
             var mnemonic = statement.MnemonicKind;
             if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is null && report is not null)
-                CheckReturn(statement, mnemonic, height, entry, report);
+                CheckReturn(walk.Model.Tree, step, mnemonic, height, entry, report);
 
             // A return used as a jump pulls the address it jumps to before control arrives there,
             // whether that is a label of this routine or another routine.
@@ -355,7 +353,7 @@ public sealed class StackEffects
         // the routine's return pulls.
         var relative = block.Steps.Count > 0 ? walk.Flow.RelativeCallAt(block.Steps[^1]) : null;
         if (report is not null)
-            CheckPushed(block, relative, height, report);
+            CheckPushed(walk.Model.Tree, block, relative, height, report);
         if (relative is { } call)
             height = height with { Whole = height.Whole - call.Pushed };
         var effect = effects.OfCallIn(block);
@@ -388,11 +386,12 @@ public sealed class StackEffects
     /// paths that hold different amounts meet, a return is reported if any of them returns through
     /// bytes, and the count says "up to" or "at least".
     /// <paramref name="entry"/> is the label the routine was entered at, or null for its own name.
-    /// <paramref name="statement"/> is where the return is reported, and <paramref name="mnemonic"/>
-    /// is the return, which a <c>.label</c> may name inside another instruction's bytes.
+    /// <paramref name="step"/> is where the return is reported, in <paramref name="file"/>'s
+    /// analysis, and <paramref name="mnemonic"/> is the return, which a <c>.label</c> may name
+    /// inside another instruction's bytes.
     /// </summary>
     private static void CheckReturn(
-        SyntaxNode statement, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
+        SyntaxTree file, Layout.Step step, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
     {
         if (height.Least is not { } least)
             return;
@@ -440,7 +439,7 @@ public sealed class StackEffects
             };
             message = Catalogue.ReturnBeneathEntry.Message(returned, Bytes(height.Floor - least), at, beyond, fix);
         }
-        report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error, message));
+        report.Add(Expansion.Problem(file, step.Statement, step.On, Severity.Error, message));
     }
 
     /// <summary>
@@ -449,11 +448,13 @@ public sealed class StackEffects
     /// pushed since it was entered and what it was handed and has not pulled. That holds only
     /// while the stack has never been lower than its return address, because after that its own
     /// bytes cannot be told apart from its caller's. A relative call's own pushes are not arguments.
+    /// The call is reported in <paramref name="file"/>'s analysis.
     /// </summary>
-    private static void CheckPushed(BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
+    private static void CheckPushed(
+        SyntaxTree file, BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
     {
         if (height is not { Bytes: { } bytes, KeepsTheReturn: true, Floor: var floor } || block.Steps.Count == 0
-            || block.Steps[^1].Statement is not InstructionStatementSyntax statement)
+            || block.Steps[^1] is not { Statement: InstructionStatementSyntax statement } last)
         {
             return;
         }
@@ -464,8 +465,8 @@ public sealed class StackEffects
             if (callee.Signature is not { Pushed: > 0 and var needed } || have >= needed)
                 continue;
             var pushed = have <= 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here";
-            report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
-                Catalogue.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
+            report.Add(Expansion.Problem(
+                file, statement, last.On, Severity.Error, Catalogue.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
         }
     }
 
