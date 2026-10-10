@@ -226,7 +226,7 @@ internal sealed class FlowChecks
                 if (flow.IsDataWithoutCodeLabels(target.Symbol, annotation.On))
                 {
                     diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
-                        ControlFlow.IsAddressData(target.Symbol)
+                        NextTargets.IsAddressData(target.Symbol)
                             ? Catalogue.NextTableHasNoLabels.Message(target.Symbol.DisplayName)
                             : Catalogue.NextTargetNotATable.Message(target.Symbol.DisplayName)));
                     continue;

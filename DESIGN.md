@@ -2318,15 +2318,18 @@ as it turns. A jump nt65 cannot follow could go anywhere, `to` included, so one 
 
 A `.next` says where control goes from the statement above it, in place of the operand, as it
 does for the flow analysis: `jmp (vector)` / `.next done` goes on to `done`, a `.next .return`
-ends the path, a `.next` naming a routine leaves, and a `.next ?` is a jump nt65 cannot follow.
+ends the path, a `.next` naming a routine leaves, a `.next` naming a list or a table goes to every
+label it holds, and a `.next ?` is a jump nt65 cannot follow.
 A `.next` under a conditional branch says the branch is always taken, so each target it names is
 charged the taken edge alone, by the same rule as a branch without one: `sec` / `bcs done` /
 `.next done` / `done:` is 5 to 6 cycles, never the 4 of a branch not taken.
 **Flow does not run through data**, so nt65 does not count what bytes would cost if they ran: a
 path that arrives through data, padding included, is an error naming the data. Control leaves
 data only where its `.next` says, and data with no `.next` has no way on. A position a `.label`
-names inside an instruction runs as instructions a span does not count, so a pass that can reach
-one is an error, and such a position is not an end.
+names inside an instruction runs the instructions its bytes decode as, each counted as above, and
+goes on where they reach the start of an instruction, so a pass that reaches it pays for them,
+and such a position may be either end of a span. A pass that can reach one whose bytes nt65
+cannot follow is an error.
 
 Like `.endof` and `.spanof`, a cycle span describes layout rather than a shape: it is usable in
 operands, data and `.assert`, and not where a constant is required (`.res`, `.repeat`, an
