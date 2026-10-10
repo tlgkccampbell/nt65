@@ -2,10 +2,15 @@
 ; config, and are bounded by the memory areas it puts the segment in. ca65 refuses an absolute
 ; symbol in a one-byte slot whatever its value, so a value that always fits a byte is written as
 ; its low byte, which loses nothing. ld65 defines every such symbol as absolute, so a run address
-; in the zero page is written as its low byte wherever it fills a one-byte slot.
+; in the zero page is written as its low byte wherever it fills a one-byte slot. An operand
+; given whole to a macro is written the same way as one written in place.
 .module main
 
-.export main, pages
+.export main, pages, given
+
+.macro load(source: operand) {
+    lda source
+}
 
 .segment TABLES
 .data squares: .byte 0, 1, 4, 9
@@ -39,5 +44,13 @@
     lda (.runof(FAST),x)
     stx .runof(FAST),y                  ; zero-page modes with no absolute form
     sty .runof(FAST),x
+    rts
+}
+
+.proc given {
+    load!({#.spanof(FAST)})                 ; an immediate
+    load!(.runof(FAST))                     ; a zero-page operand
+    ldy #0
+    load!({(.runof(FAST)),y})               ; a zero-page pointer
     rts
 }
