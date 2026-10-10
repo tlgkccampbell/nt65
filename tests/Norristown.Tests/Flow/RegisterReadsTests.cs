@@ -62,6 +62,22 @@ public sealed class RegisterReadsTests
     }
 
     /// <summary>
+    /// A routine that reads the stack through an instruction the bytes from a <c>.label</c> inside
+    /// an instruction decode as may read what its caller pushed, as one that reads it through a
+    /// written instruction may. From the second byte of <c>lda $BA</c> the processor runs
+    /// <c>tsx</c>, and from that of <c>lda $EA</c> it runs <c>nop</c>.
+    /// </summary>
+    [Theory]
+    [InlineData("lda $BA", Registers.A | Registers.C)]
+    [InlineData("lda $EA", Registers.C)]
+    public void AHiddenReadOfTheStackReadsWhatTheCallerPushed(string instruction, Registers read)
+    {
+        var callee = ".proc q {\n    bcc inside\n@op:\n    " + instruction + "\n    .label inside = @op + 1\n    rts\n}\n";
+
+        Assert.Equal(read, Read("6502", callee + ".proc p {\n    pha\n    jsr q\n    pla\n    rts\n}\n", "p"));
+    }
+
+    /// <summary>
     /// A call passes on what the routine it calls reads, of whatever the registers hold at the
     /// call, and a register the callee keeps still holds the caller's entry value after it.
     /// </summary>
