@@ -537,43 +537,36 @@ internal sealed partial class Parser
         var named = AtName;
         var path = ParsePath(Catalogue.ExpectedName.Message("what to use: `.use module::name`"));
         if (!named)
-        {
-            return new UseDirectiveSyntax(
-                keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, inlineItems: null,
-                closeBraceToken: null, asKeyword: null, alias: null);
-        }
+            return Use();
 
         if (Kind == SyntaxKind.ColonColon && Next is SyntaxKind.Star or SyntaxKind.OpenBrace)
         {
             var colonColon = Advance();
             if (Kind == SyntaxKind.Star)
-            {
-                return new UseDirectiveSyntax(
-                    keyword, path, colonColon, starToken: Advance(), openBraceToken: null, inlineItems: null,
-                    closeBraceToken: null, asKeyword: null, alias: null);
-            }
+                return Use(colonColon, star: Advance());
 
             // `a::{` at the end of a line opens an item block, which holds the names on its
             // lines rather than between braces on this one.
             var openBrace = Advance();
             if (opensBlock && AtEnd)
-            {
-                return new UseDirectiveSyntax(
-                    keyword, path, colonColon, starToken: null, openBrace, inlineItems: null, closeBraceToken: null,
-                    asKeyword: null, alias: null);
-            }
+                return Use(colonColon, openBrace: openBrace);
             var items = ParseSeparatedList(ParseUseItem);
 
             // The `{` is present, so the closing `}` gets a slot whether or not the source contains
             // it. If the source does not, a missing token fills the slot.
             var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Message("`}`"));
-            return new UseDirectiveSyntax(
-                keyword, path, colonColon, starToken: null, openBrace, items, closeBrace, asKeyword: null, alias: null);
+            return Use(colonColon, openBrace: openBrace, items: items, closeBrace: closeBrace);
         }
         var (asKeyword, alias) = ParseUseAlias();
-        return new UseDirectiveSyntax(
-            keyword, path, colonColonToken: null, starToken: null, openBraceToken: null, inlineItems: null,
-            closeBraceToken: null, asKeyword, alias);
+        return Use(asKeyword: asKeyword, alias: alias);
+
+        // Every form of the directive has the keyword and the path; the rest of its slots are
+        // empty unless given here.
+        UseDirectiveSyntax Use(
+            GreenToken? colonColon = null, GreenToken? star = null, GreenToken? openBrace = null,
+            GreenSeparatedList? items = null, GreenToken? closeBrace = null, GreenToken? asKeyword = null,
+            GreenToken? alias = null) =>
+            new(keyword, path, colonColon, star, openBrace, items, closeBrace, asKeyword, alias);
     }
 
     /// <summary>

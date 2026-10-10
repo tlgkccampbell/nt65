@@ -55,7 +55,7 @@ public static class Outline
             // is the enum it iterates over and the signature the routines share.
             case MultiProcDeclarationSyntax { Name: { IsMissing: false } bound } multiproc:
                 return new OutlineItem(OutlineKind.Proc, bound.Text,
-                    multiproc.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
+                    TextAfter(opener, multiproc.Keyword)?.TrimEnd('{').TrimEnd() ?? "",
                     block.Span, bound.Span, children);
 
             case ScopeDeclarationSyntax scope:
