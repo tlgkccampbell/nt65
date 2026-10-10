@@ -635,11 +635,13 @@ sides use.
 - **A segment's addresses are the linker's, and nt65 names them.** `.loadof(S)`, `.runof(S)`
   and `.spanof(S)` stand for the `__S_LOAD__`, `__S_RUN__` and `__S_SIZE__` that ld65 defines
   for a segment its configuration gives `define=yes`: where the image was loaded, where it
-  runs and how many bytes it is. The output imports each as wide as its placement: `.runof(S)`
-  as a label in `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page
-  zero, far for a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the
-  image in another bank therefore writes `f:`, as it would for a label there. Each is also
-  bounded by the memory areas the linked configs put `S` in, so in a one-byte slot it follows
+  runs and how many bytes it is. Each is as wide as its placement: `.runof(S)` as a label in
+  `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page zero, far for
+  a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the image in
+  another bank therefore writes `f:`, as it would for a label there. ld65 exports all three as
+  absolute, so the output imports a far one as absolute, which changes nothing it assembles to.
+  Each is also bounded by the memory areas the linked configs put `S` in, and `.runof(S)` by
+  the banks `S` declares where no linked config places it, so in a one-byte slot it follows
   the rule for any value that names an address (§8): `.loadof(CODE) / 256` is written inside
   `.lobyte()` where CODE's area shows it fits, and is an error that asks for `<` where it may
   not. `.runof(S)` is an address in `S`'s space and is checked as one; the other two are the
@@ -2722,14 +2724,16 @@ or `'0' + main .mod 10`, has a value only ld65 knows. ca65 refuses it there what
 to, unless `<`, `>`, `^`, `.lobyte`, `.hibyte` or `.bankbyte` takes one byte of the address. nt65
 bounds the value from its operators and from where the addresses in it may be: a label is inside
 the memory areas the linked configs run its segment in, within the bank each area starts in for
-an absolute label, and otherwise anywhere its address size reaches. Where the value always
+an absolute label. Where no linked config places the segment, a label is in the bank the segment
+declares or one of its mirrors, and otherwise anywhere its address size reaches. Where the value always
 fits a byte, the output writes it inside `.lobyte()`, which loses nothing. Where nt65 cannot show
 that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. A two-byte
 slot is held to the same rule with a 16-bit bound: a value there that names a far address, or an
-absolute one the linked configs place past $FFFF, which ld65 would refuse, is written inside
+absolute one placed past $FFFF, which ld65 would refuse, is written inside
 `.loword()` where it always fits and is otherwise an error that asks for `.loword`. An `.addr`
 holds the address within its bank, as ca65 keeps it on the 65816, so only a far address counts
-there. The bound
+there. ca65 range-checks an `.addr` and an absolute operand on the other CPUs, so the output
+writes `.loword()` around one that names an address placed past $FFFF. The bound
 respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
 bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
 is an error, since the shift can leave 32 bits before the `.mod` brings it back.
