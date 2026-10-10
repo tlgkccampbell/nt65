@@ -41,7 +41,7 @@ internal static class InlineMacro
         if (macro.Tree != tree)
         {
             yield return Refused(title,
-                $"`{macro.Name}!` is declared in {Named(macro.Tree.Path)}: its body's names are looked up in that file, "
+                $"`{macro.Name}!` is declared in {Paths.FileName(macro.Tree.Path)}: its body's names are looked up in that file, "
                 + "and once inlined here they would be looked up in this one, where they may mean something else");
             yield break;
         }
@@ -104,7 +104,4 @@ internal static class InlineMacro
         }
         return false;
     }
-
-    /// <summary>Returns a file's name without its folders, as a message shows it.</summary>
-    private static string Named(string path) => path[(path.LastIndexOf('/') + 1)..];
 }

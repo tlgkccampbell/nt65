@@ -61,7 +61,7 @@ public static class FormatCommand
             if (errors.Count > 0)
             {
                 foreach (var d in errors)
-                    error.WriteLine(Reported.Line(d, ProjectRoot.Shown(directory, projectFile), colour: false));
+                    error.WriteLine(Reported.Line(d, ProjectRoot.Shown(directory, projectFile), color: false));
                 return ExitCode.InputError;
             }
             files = [.. globs

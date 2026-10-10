@@ -69,8 +69,8 @@ public sealed class ProtocolLifeTests
             {"textDocument":{"uri":"file:///c%3A/work/main.nt65"}}
             """), timeout);
         await server.SendAsync("""{"jsonrpc":"2.0","method":"$/cancelRequest","params":{"id":5}}""", timeout);
-        var cancelled = await server.AnswerToAsync(5, timeout);
-        Assert.True(cancelled.TryGetProperty("result", out _) || cancelled.TryGetProperty("error", out _));
+        var canceled = await server.AnswerToAsync(5, timeout);
+        Assert.True(canceled.TryGetProperty("result", out _) || canceled.TryGetProperty("error", out _));
 
         // Every answer names the file exactly as the client did, percent-escape included.
         await server.SendAsync(Request(6, "textDocument/definition", """

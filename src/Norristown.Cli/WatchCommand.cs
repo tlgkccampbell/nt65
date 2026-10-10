@@ -32,7 +32,7 @@ internal static class WatchCommand
     private const int QuietMilliseconds = 120;
 
     /// <summary>
-    /// Builds until <paramref name="cancellation"/> is cancelled, and returns
+    /// Builds until <paramref name="cancellation"/> is canceled, and returns
     /// <see cref="ExitCode.Success"/>. A <see cref="ExitCode.UsageError"/> is returned at once,
     /// since no change to a file can fix it.
     /// </summary>

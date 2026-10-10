@@ -18,6 +18,11 @@ public static class Paths
     }
 
     /// <summary>
+    /// Returns the last segment of a path, which is the whole path when it has no directory part.
+    /// </summary>
+    public static string FileName(string path) => path[(path.LastIndexOf('/') + 1)..];
+
+    /// <summary>
     /// Returns <paramref name="path"/> with its <c>.</c> segments removed, along with every
     /// <c>..</c> that follows a directory. For example, <c>nt65/../data/x.bin</c> becomes
     /// <c>data/x.bin</c>. A path that starts above the root keeps the <c>..</c> segments that

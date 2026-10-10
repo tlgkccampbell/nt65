@@ -126,7 +126,7 @@ public sealed class StateAnalysis : IProcessorStates
             analysis.checks.Found
                 .Concat(analysis.UndeclaredExports())
                 .Concat(analysis.UndeclaredEntries())
-                .DistinctBy(d => (d.Span, d.Id, d.Message)));
+                .Unrepeated());
         return analysis;
     }
 

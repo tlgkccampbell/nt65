@@ -76,6 +76,13 @@ internal static class Analysis
             .Outputs.ToDictionary(output => output.Path, output => output.Text, StringComparer.Ordinal);
 
     /// <summary>
+    /// Compiles <paramref name="text"/> as the code segment of a one-file program and returns the
+    /// ca65 that file becomes, whether or not it compiled cleanly.
+    /// </summary>
+    public static string InCode(string text) =>
+        Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
+
+    /// <summary>
     /// Compiles <paramref name="text"/> as the one file of a program, which must compile cleanly,
     /// and returns the ca65 it becomes.
     /// </summary>

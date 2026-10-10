@@ -60,4 +60,13 @@ public static class Diagnostics
             .ThenBy(d => d.Span.StartColumn)
             .ThenBy(d => d.Message, StringComparer.Ordinal)
             .ThenBy(d => d.Id, StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Returns the diagnostics without repeats: a diagnostic reported again at the same span with
+    /// the same name and message is the same mistake found again, and is kept once. An analysis
+    /// that visits a routine from each of its callers uses this before it hands its findings on.
+    /// </summary>
+    /// <param name="diagnostics">The diagnostics the analysis found.</param>
+    public static IEnumerable<Diagnostic> Unrepeated(this IEnumerable<Diagnostic> diagnostics) =>
+        diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message));
 }

@@ -71,15 +71,15 @@ public sealed partial class CodeLayout
         // A transfer reaches the step of the label it names, or the step of the path from a
         // position inside an instruction. A label outside this routine's part of the stream is
         // somewhere a pass leaves for, and never arrives back from.
-        var labelled = new Dictionary<(Symbol Symbol, Expansion? At), int>();
+        var labeled = new Dictionary<(Symbol Symbol, Expansion? At), int>();
         for (var i = 0; i < counted.Count; i++)
         {
             if (counted[i].Routine != routine || StreamOf(i, hidden) != stream)
                 continue;
             if (counted[i].Label is { } label)
-                labelled.TryAdd((label, Expansion.Owning(counted[i].On, label)), i);
+                labeled.TryAdd((label, Expansion.Owning(counted[i].On, label)), i);
             else if (hidden.TryGetValue(i, out var path))
-                labelled.TryAdd((path.Path.Label, Expansion.Owning(counted[i].On, path.Path.Label)), i);
+                labeled.TryAdd((path.Path.Label, Expansion.Owning(counted[i].On, path.Path.Label)), i);
         }
 
         // Every step a pass can run is found from the start, without going past the end.
@@ -95,7 +95,7 @@ public sealed partial class CodeLayout
             var at = pending.Dequeue();
             if (at == end)
                 continue;
-            var onward = Onward(at, routine, stream, labelled, hidden, targets);
+            var onward = Onward(at, routine, stream, labeled, hidden, targets);
             edges[at] = onward.Edges;
             if (onward.Lost is { } why)
                 lost[at] = why;
@@ -282,7 +282,7 @@ public sealed partial class CodeLayout
     /// count, where either applies.
     /// </summary>
     private (List<SpanEdge> Edges, string? Lost, string? Unbounded) Onward(
-        int i, Symbol routine, int stream, Dictionary<(Symbol Symbol, Expansion? At), int> labelled,
+        int i, Symbol routine, int stream, Dictionary<(Symbol Symbol, Expansion? At), int> labeled,
         Dictionary<int, (HiddenPath Path, int? Landing)> hidden, NextTargets targets)
     {
         var step = counted![i];
@@ -384,7 +384,7 @@ public sealed partial class CodeLayout
         // could not follow has no count. Any other target is somewhere the pass leaves for.
         void Reach((Symbol Symbol, Expansion? At) target, CycleCount cost)
         {
-            if (labelled.TryGetValue(target, out var to))
+            if (labeled.TryGetValue(target, out var to))
                 edges.Add(new SpanEdge(to, cost));
             else if (IsInsideLabel(target.Symbol))
                 lost ??= $"a pass can reach `{target.Symbol.DisplayName}`, a position inside an instruction whose bytes nt65 could not follow";

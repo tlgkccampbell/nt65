@@ -298,7 +298,7 @@
       return { key: `f:${at}`, edge: 'transparent' };
     };
 
-    // Returns the shadows that cut a cell's outer sides away from its neighbours and draw its
+    // Returns the shadows that cut a cell's outer sides away from its neighbors and draw its
     // block's edge there, `width` pixels wide. The cuts go first and the edges after, so each cut
     // covers all but the inner pixels of its edge.
     const sides = (at, column, width) => {

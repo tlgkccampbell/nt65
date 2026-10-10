@@ -44,8 +44,10 @@ finally {
     Remove-Item "$held.out", "$held.err" -ErrorAction SilentlyContinue
 }
 Step 'vscode client' {
-    foreach ($file in @('extension.js', 'views.js', 'sources.js', 'margin.js')) {
-        node --check (Join-Path $root "editors/vscode/$file")
+    # Every script the extension ships, including the one the web view loads.
+    $client = Join-Path $root 'editors/vscode'
+    foreach ($file in Get-ChildItem $client, (Join-Path $client 'media') -Filter '*.js' -File) {
+        node --check $file.FullName
         if ($LASTEXITCODE -ne 0) { return }
     }
 }

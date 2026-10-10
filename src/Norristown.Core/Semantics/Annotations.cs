@@ -23,7 +23,7 @@ public static class Annotations
     {
         InstructionStatementSyntax or DataDirectiveSyntax
             or MacroCallSyntax or BlockSpliceSyntax => true,
-        LabeledLineSyntax { Statement: { } labelled } => IsAnnotatable(labelled),
+        LabeledLineSyntax { Statement: { } labeled } => IsAnnotatable(labeled),
         _ => false,
     };
 

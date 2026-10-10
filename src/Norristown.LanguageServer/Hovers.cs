@@ -317,7 +317,7 @@ internal static class Hovers
         // For a name from another module, show that module's file: it holds the declaration and
         // the `.export` that makes the name visible here.
         if (symbol.Tree != model.Tree)
-            card.Row("from", symbol.Tree.Path[(symbol.Tree.Path.LastIndexOf('/') + 1)..]);
+            card.Row("from", Paths.FileName(symbol.Tree.Path));
 
         // A name that no qualified path can reach is shown unqualified, so the hover names the
         // routine or scope it is private to instead.

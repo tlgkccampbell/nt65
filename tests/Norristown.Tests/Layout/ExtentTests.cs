@@ -13,7 +13,7 @@ public sealed class ExtentTests
     [Fact]
     public void AnEndIsALabelJustPastTheLastByte()
     {
-        var written = Written("""
+        var written = Analysis.InCode("""
             .proc reloc {
                 nop
                 rts
@@ -34,7 +34,7 @@ public sealed class ExtentTests
     [Fact]
     public void TheEndLabelComesAfterTheLastByte()
     {
-        var written = Written(".proc f {\n    nop\n    .fallthrough g\n}\n\n.proc g {\n    rts\n}\n\n.data n: .word .spanof(f)\n");
+        var written = Analysis.InCode(".proc f {\n    nop\n    .fallthrough g\n}\n\n.proc g {\n    rts\n}\n\n.data n: .word .spanof(f)\n");
 
         Assert.Contains("    nop\nf__end:\n; end of f\n", written, StringComparison.Ordinal);
         Assert.Contains("; .proc g  main.nt65:8\ng:\n", written, StringComparison.Ordinal);
@@ -49,7 +49,7 @@ public sealed class ExtentTests
     [InlineData(".data blob {\n    .byte 1\n    .data inner: .word 2\n}\n\n.data n: .word .spanof(blob)\n", "blob__end", 3)]
     public void DataIsMeasuredToo(string text, string end, int span)
     {
-        var written = Written(text);
+        var written = Analysis.InCode(text);
 
         Assert.Contains(end + ":", written, StringComparison.Ordinal);
         Assert.Contains($".word ({end} - ", written, StringComparison.Ordinal);
@@ -104,7 +104,7 @@ public sealed class ExtentTests
     [Fact]
     public void ASpanWithAnAlignInItIsLeftToTheLinker()
     {
-        var written = Written("""
+        var written = Analysis.InCode("""
             .proc f {
                 jmp @aligned
                 .align 256
@@ -152,12 +152,6 @@ public sealed class ExtentTests
         Assert.Contains(program.Problems(), problem => problem.StartsWith(
             "main.nt65:4: `N` is a constant and takes no bytes of its own", StringComparison.Ordinal));
     }
-
-    /// <summary>
-    /// Returns the ca65 source written for <paramref name="text"/>, which is put in the code
-    /// segment.
-    /// </summary>
-    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     /// <summary>Returns how many bytes layout worked out for the one thing the file measures.</summary>
     private static long? SpanOf(string text)

@@ -910,8 +910,8 @@ public sealed partial class CodeLayout
             public override void VisitLabeledLine(LabeledLineSyntax node)
             {
                 walker.Mark(node.Label);
-                if (node.Statement is { } labelled)
-                    walker.Statement(labelled);
+                if (node.Statement is { } labeled)
+                    walker.Statement(labeled);
             }
 
             /// <summary>

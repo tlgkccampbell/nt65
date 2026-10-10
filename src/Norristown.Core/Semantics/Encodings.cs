@@ -49,8 +49,8 @@ public static class Encodings
             {
                 case InstructionStatementSyntax instruction:
                     return instruction;
-                case LabeledLineSyntax { Statement: InstructionStatementSyntax labelled }:
-                    return labelled;
+                case LabeledLineSyntax { Statement: InstructionStatementSyntax labeled }:
+                    return labeled;
             }
             if (!Passes(statement))
                 return null;

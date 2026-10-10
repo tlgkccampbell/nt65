@@ -23,7 +23,7 @@ internal sealed class Requirements
 
     // Every label that starts a block in some routine, with where it is and whether what it
     // labels is code rather than data.
-    private readonly Dictionary<Symbol, Labelled> labels = [];
+    private readonly Dictionary<Symbol, Labeled> labels = [];
 
     // The labels a `.next` names, keyed by the routine the `.next` is in.
     private readonly HashSet<(Symbol Routine, Symbol Label)> named = [];
@@ -59,7 +59,7 @@ internal sealed class Requirements
         }
         requirements.CheckUses();
         requirements.CheckPadding();
-        diagnostics.AddRange(requirements.diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message)));
+        diagnostics.AddRange(requirements.diagnostics.Unrepeated());
     }
 
     /// <summary>Returns the statement's source text in backticks, for a message that quotes it.</summary>
@@ -110,9 +110,9 @@ internal sealed class Requirements
     }
 
     /// <summary>Returns the first data statement a data label labels, or null when it labels none.</summary>
-    private static Step? DataAt(Labelled labelled)
+    private static Step? DataAt(Labeled labeled)
     {
-        var first = labelled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
+        var first = labeled.Block.Steps.FirstOrDefault(step => step.Statement is not StateDirectiveSyntax);
         return first.Statement is DataDirectiveSyntax or DataValuesSyntax ? first : null;
     }
 
@@ -198,7 +198,7 @@ internal sealed class Requirements
             foreach (var block in blocks)
             {
                 if (block.Label is { Kind: SymbolKind.Label } label && !labels.ContainsKey(label))
-                    labels[label] = new Labelled(region, block, IsCode(blocks, block.Index));
+                    labels[label] = new Labeled(region, block, IsCode(blocks, block.Index));
             }
         }
         foreach (var step in layout.Steps)
@@ -333,8 +333,8 @@ internal sealed class Requirements
                 continue;
             if (step.Label is { Kind: SymbolKind.Label } label)
             {
-                if (step.On is null && layout.PositionOf(label) is { } labelled
-                    && labelled.Stream == from.Stream && labelled.Offset == at)
+                if (step.On is null && layout.PositionOf(label) is { } labeled
+                    && labeled.Stream == from.Stream && labeled.Offset == at)
                 {
                     landing = landing with { Label = label };
                 }
@@ -415,10 +415,10 @@ internal sealed class Requirements
         }
         if (calls)
             return;
-        if (!labels.TryGetValue(symbol, out var labelled))
+        if (!labels.TryGetValue(symbol, out var labeled))
             return;
-        if (!labelled.IsCode && DataAt(labelled) is { } data
-            && (!labelled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
+        if (!labeled.IsCode && DataAt(labeled) is { } data
+            && (!labeled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
         {
             Report(statement, step.On, Catalogue.JumpIntoData.Message(symbol.DisplayName));
         }
@@ -445,7 +445,7 @@ internal sealed class Requirements
             foreach (var name in operand.DescendantNodes().OfType<NameExpressionSyntax>())
             {
                 if (Targets.Of(model, name, step.On)?.Symbol is { } symbol
-                    && (symbol.Signature is not null || labels.TryGetValue(symbol, out var labelled) && labelled.IsCode))
+                    && (symbol.Signature is not null || labels.TryGetValue(symbol, out var labeled) && labeled.IsCode))
                 {
                     names = true;
                 }
@@ -559,7 +559,7 @@ internal sealed class Requirements
             {
                 if (name == direct || Measured(name, statement)
                     || Targets.Of(model, name, step.On)?.Symbol is not { } symbol
-                    || !labels.TryGetValue(symbol, out var labelled) || !labelled.IsCode)
+                    || !labels.TryGetValue(symbol, out var labeled) || !labeled.IsCode)
                 {
                     continue;
                 }
@@ -582,13 +582,13 @@ internal sealed class Requirements
                 // address, gives nothing a way to jump there.
                 if (Accesses(statement, mode))
                     continue;
-                if (labelled.Block.IsDeclared || named.Contains((labelled.Region.Routine, symbol)))
+                if (labeled.Block.IsDeclared || named.Contains((labeled.Region.Routine, symbol)))
                     continue;
 
                 // The path from a `.label` inside an instruction starts inside the instruction's
                 // bytes, where no `.state` can stand, so only a `.next` is offered for it.
-                var routine = labelled.Region.Routine.DisplayName;
-                if (labelled.Block.Steps is [var first, ..] && layout.HiddenPathAt(first) is not null)
+                var routine = labeled.Region.Routine.DisplayName;
+                if (labeled.Block.Steps is [var first, ..] && layout.HiddenPathAt(first) is not null)
                 {
                     Report(name, step.On, Catalogue.CodeLabelAsData.Message(
                         symbol.DisplayName, $"name it in a `.next` in `{routine}`"));
@@ -651,5 +651,5 @@ internal sealed class Requirements
     /// Represents a label that starts a block, with the region and block it starts and whether it
     /// labels code.
     /// </summary>
-    private readonly record struct Labelled(FlowRegion Region, BasicBlock Block, bool IsCode);
+    private readonly record struct Labeled(FlowRegion Region, BasicBlock Block, bool IsCode);
 }

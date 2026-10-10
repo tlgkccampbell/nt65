@@ -103,7 +103,7 @@ internal static class MovedFiles
                     {
                         if (!SourceGlobs.Matches(root, glob, to))
                         {
-                            messages.Add($"nt65: `{glob}` in {Shown(project.File)} does not match {Shown(to)}, the file's new path. "
+                            messages.Add($"nt65: `{glob}` in {Paths.FileName(project.File)} does not match {Paths.FileName(to)}, the file's new path. "
                                 + "The glob was left unchanged: edit `files` by hand if the moved file should still be built.");
                             break;
                         }
@@ -190,7 +190,4 @@ internal static class MovedFiles
     /// <summary>Returns the path of a file relative to a directory, with <c>/</c> separators.</summary>
     private static string Relative(string directory, string path) =>
         Paths.Normalized(Path.GetRelativePath(directory, path));
-
-    /// <summary>Returns a file's name without its folders, as a message shows it.</summary>
-    private static string Shown(string path) => path[(path.LastIndexOf('/') + 1)..];
 }

@@ -93,7 +93,7 @@ public sealed class ProgramSymbols
             if (byName.TryGetValue(name, out var other))
             {
                 diagnostics.Add(new Diagnostic(module.Tree.GetSpan(module.NameSpan),
-                    Catalogue.ModuleNameTaken.Message(name, FileName(other.Tree)),
+                    Catalogue.ModuleNameTaken.Message(name, Paths.FileName(other.Tree.Path)),
                     [new RelatedSpan(other.Tree.GetSpan(other.NameSpan), "declared here")]));
                 continue;
             }
@@ -157,7 +157,6 @@ public sealed class ProgramSymbols
         or SymbolKind.Binding or SymbolKind.MacroParameter or SymbolKind.SignatureSet)
         && !symbol.IsSetting && !symbol.Value.IsString;
 
-    private static string FileName(SyntaxTree tree) => tree.Path[(tree.Path.LastIndexOf('/') + 1)..];
 
     private Symbol? Member(Module module, string name, Action<string?, string>? touched, HashSet<(string, string)> visiting)
     {

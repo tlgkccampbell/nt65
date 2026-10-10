@@ -166,7 +166,7 @@ public static class RegisterKeeps
             flow.ReadsOf = ReadsOf;
             flow.Effects = effects;
         }
-        return (Norristown.Diagnostics.Ordered(diagnostics.DistinctBy(d => (d.Span, d.Id, d.Message))), readers, effects);
+        return (Norristown.Diagnostics.Ordered(diagnostics.Unrepeated()), readers, effects);
 
         // Reports each register a routine reads that its `reads` does not list, at the first place
         // on each path where its entry value is used. A register whose entry value only code nt65

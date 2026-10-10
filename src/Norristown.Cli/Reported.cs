@@ -29,16 +29,16 @@ internal static class Reported
     };
 
     /// <summary>
-    /// Formats the diagnostic as one line. <paramref name="colour"/> marks its severity when the
-    /// terminal can show colour. Everything else on the line is left plain, so the position stays
+    /// Formats the diagnostic as one line. <paramref name="color"/> marks its severity when the
+    /// terminal can show color. Everything else on the line is left plain, so the position stays
     /// selectable and the message does not compete with it. The catalogue name goes last, in
     /// brackets, where compilers put it. It is the name a project file uses to change the
     /// diagnostic's severity and the name CI matches on, and nobody needs to read it first.
     /// </summary>
-    public static string Line(Diagnostic diagnostic, string file, bool colour)
+    public static string Line(Diagnostic diagnostic, string file, bool color)
     {
         var severity = diagnostic.Severity.ToString().ToLowerInvariant();
-        var marked = !colour ? $"{severity}:"
+        var marked = !color ? $"{severity}:"
             : diagnostic.Severity switch
             {
                 Severity.Error => $"{Red}{severity}:{Plain}",

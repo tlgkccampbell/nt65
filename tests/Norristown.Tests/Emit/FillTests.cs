@@ -20,7 +20,7 @@ public sealed class FillTests
     [InlineData(".data d: .BYTE[] {\n7\n7\n7\n}\n")]
     public void ARowOfOneByteFoldsHoweverItIsSpelled(string text)
     {
-        var main = Output(text);
+        var main = Analysis.InCode(text);
 
         Assert.Contains("    .res 3, 7\n", main, StringComparison.Ordinal);
         Assert.DoesNotContain("7\n    .", main, StringComparison.Ordinal);
@@ -33,7 +33,7 @@ public sealed class FillTests
     [Fact]
     public void ARowOfEmptyTextIsNotAFill()
     {
-        var main = Output(".data d {\n.byte \"\"\n.byte \"\"\n.byte \"\"\n}\n");
+        var main = Analysis.InCode(".data d {\n.byte \"\"\n.byte \"\"\n.byte \"\"\n}\n");
 
         Assert.DoesNotContain(".res", main, StringComparison.Ordinal);
         Assert.Equal(3, main.Split('\n').Count(line => line.Trim() == ".byte \"\""));
@@ -46,12 +46,8 @@ public sealed class FillTests
     [Fact]
     public void ARowInACountedRepeatFoldsToTheCounter()
     {
-        var main = Output(".data t: .byte[] {\n.repeat 4, i {\n i\n i\n i\n}\n}\n");
+        var main = Analysis.InCode(".data t: .byte[] {\n.repeat 4, i {\n i\n i\n i\n}\n}\n");
 
         Assert.Contains(".repeat 4, i\n        .res 3, i\n    .endrepeat\n", main, StringComparison.Ordinal);
     }
-
-    /// <summary>Returns the output for <paramref name="text"/>, which is put in the code segment.</summary>
-    private static string Output(string text) =>
-        Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 }

@@ -14,7 +14,7 @@ public sealed class RepetitionTests
     [Fact]
     public void RepeatCountsFromZero()
     {
-        var main = Output(".data bits: .byte[] {\n.repeat 8, i {\n    1 << i\n}\n}\n");
+        var main = Analysis.InCode(".data bits: .byte[] {\n.repeat 8, i {\n    1 << i\n}\n}\n");
 
         Assert.Contains(".repeat 8, i\n", main);
         Assert.Equal([".byte 1 << i"], Lines(main, ".byte"));
@@ -25,7 +25,7 @@ public sealed class RepetitionTests
     [Fact]
     public void RepetitionsNest()
     {
-        var main = Output(".data grid: .byte[] {\n.repeat 3, row {\n.repeat 3, col {\n    row * 3 + col\n}\n}\n}\n");
+        var main = Analysis.InCode(".data grid: .byte[] {\n.repeat 3, row {\n.repeat 3, col {\n    row * 3 + col\n}\n}\n}\n");
 
         Assert.Contains(".repeat 3, row\n", main);
         Assert.Contains(".repeat 3, col\n", main);
@@ -39,7 +39,7 @@ public sealed class RepetitionTests
     [Fact]
     public void EachWalksAListOfLabels()
     {
-        var main = Output("""
+        var main = Analysis.InCode("""
             .list handlers {
                 move, fire
             }
@@ -66,7 +66,7 @@ public sealed class RepetitionTests
     [Fact]
     public void ABoundLabelKeepsItsAddressSize()
     {
-        var main = Output("""
+        var main = Analysis.InCode("""
             .list pointers {
                 ptr
             }
@@ -90,7 +90,7 @@ public sealed class RepetitionTests
     [Fact]
     public void EachWalksAnEnum()
     {
-        var main = Output(".enum Cmd {\nmove\nfire\nwait\n}\n\n.data values: .byte[] {\n.each Cmd, c {\n    c\n}\n}\n");
+        var main = Analysis.InCode(".enum Cmd {\nmove\nfire\nwait\n}\n\n.data values: .byte[] {\n.each Cmd, c {\n    c\n}\n}\n");
 
         Assert.Equal([".byte $00", ".byte $01", ".byte $02"],
             Lines(main, ".byte").Select(line => line.Split(';')[0].Trim()));
@@ -103,7 +103,7 @@ public sealed class RepetitionTests
     [Fact]
     public void EachIterationDecidesHowMuchRoomALineTakes()
     {
-        var main = Output(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
+        var main = Analysis.InCode(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
 
         Assert.Equal(3, Lines(main, ".res").Count);
         Assert.Equal(["$00 + 1", "$01 + 1", "$02 + 1"],
@@ -143,7 +143,7 @@ public sealed class RepetitionTests
     [Fact]
     public void ANameDeclaredInsideARepetitionIsOneNamePerIteration()
     {
-        var main = Output(".proc p {\n.repeat 2, i {\n@wait:\n    dex\n    bne @wait\n}\n    rts\n}\n");
+        var main = Analysis.InCode(".proc p {\n.repeat 2, i {\n@wait:\n    dex\n    bne @wait\n}\n    rts\n}\n");
 
         Assert.Contains("p__wait:", main);
         Assert.Contains("bne p__wait\n", main);
@@ -158,7 +158,7 @@ public sealed class RepetitionTests
     [Fact]
     public void ARepetitionEmittedOnceIsThreeLinesHoweverManyIterationsItRuns()
     {
-        var main = Output(".data ramp: .byte[] {\n.repeat 256, i {\n    i\n}\n}\n");
+        var main = Analysis.InCode(".data ramp: .byte[] {\n.repeat 256, i {\n    i\n}\n}\n");
 
         Assert.Contains(".repeat 256, i\n", main);
         Assert.Equal([".byte i"], Lines(main, ".byte"));
@@ -172,7 +172,7 @@ public sealed class RepetitionTests
     [Fact]
     public void IterationsThatCameOutDifferentlyAreAllWrittenOut()
     {
-        var main = Output(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
+        var main = Analysis.InCode(".data room {\n.repeat 3, n {\n    .res n + 1\n}\n}\n");
 
         Assert.DoesNotContain(".repeat", main);
         Assert.DoesNotContain(".endrep", main);
@@ -185,14 +185,11 @@ public sealed class RepetitionTests
     [Fact]
     public void TwoIterationsAreWrittenOut()
     {
-        var main = Output(".proc p {\n.repeat 2 {\n    nop\n}\n    rts\n}\n");
+        var main = Analysis.InCode(".proc p {\n.repeat 2 {\n    nop\n}\n    rts\n}\n");
 
         Assert.DoesNotContain(".repeat", main);
         Assert.Equal(["nop", "nop"], Lines(main, "nop"));
     }
-
-    /// <summary>Returns the output for <paramref name="text"/>, which is put in the code segment.</summary>
-    private static string Output(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 
     private static IReadOnlyList<string> Lines(string output, string directive) =>
         [.. output.Split('\n').Select(line => line.Trim()).Where(line => line.StartsWith(directive, StringComparison.Ordinal))];

@@ -1282,8 +1282,8 @@ public sealed class ControlFlow
             var landingLabel = namedAs ?? (index is { } found && !elsewhere ? LabelOf(found, store.On) : null);
             var fix = namedAs is not null
                 ? new DiagnosticFix(FixKind.Redundant)
-                : landingLabel is not null && landing is { Statement: InstructionStatementSyntax } labelled
-                    && labelled.Routine == store.Routine
+                : landingLabel is not null && landing is { Statement: InstructionStatementSyntax } labeled
+                    && labeled.Routine == store.Routine
                     ? TargetFix(patch, landingLabel, outside)
                     : null;
             return new MissedPatch(

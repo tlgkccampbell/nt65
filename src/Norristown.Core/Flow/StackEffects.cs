@@ -149,7 +149,7 @@ public sealed class StackEffects
         var report = new List<Diagnostic>();
         foreach (var (owner, start) in entries.Values)
             Exits(walks[owner], regions[owner], start, effects, report);
-        effects.Diagnostics = Norristown.Diagnostics.Ordered(report.DistinctBy(d => (d.Span, d.Id, d.Message)));
+        effects.Diagnostics = Norristown.Diagnostics.Ordered(report.Unrepeated());
         return effects;
     }
 

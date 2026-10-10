@@ -13,7 +13,7 @@ public sealed class BranchTests
     [Fact]
     public void AForwardLongBranchWithinRangeIsTheShortBranch()
     {
-        var written = Written($".proc p {{\n    jeq @out\n    {Nops(127)}@out:\n    rts\n}}\n");
+        var written = Analysis.InCode($".proc p {{\n    jeq @out\n    {Nops(127)}@out:\n    rts\n}}\n");
 
         Assert.Contains("    beq p__out", written, StringComparison.Ordinal);
         Assert.DoesNotContain("    jmp", written, StringComparison.Ordinal);
@@ -22,7 +22,7 @@ public sealed class BranchTests
     [Fact]
     public void AForwardLongBranchOutOfRangeIsTheInvertedBranchOverAJump()
     {
-        var written = Written($".proc p {{\n    jeq @out\n    {Nops(128)}@out:\n    rts\n}}\n");
+        var written = Analysis.InCode($".proc p {{\n    jeq @out\n    {Nops(128)}@out:\n    rts\n}}\n");
 
         Assert.Contains("    bne p__over\n    jmp p__out\np__over:\n", written, StringComparison.Ordinal);
     }
@@ -35,7 +35,7 @@ public sealed class BranchTests
     [Fact]
     public void LengtheningOneBranchCanPutAnotherOutOfReach()
     {
-        var written = Written(
+        var written = Analysis.InCode(
             $".proc p {{\n    jeq @out\n    jeq @far\n    {Nops(123)}@out:\n    rts\n    {Nops(130)}@far:\n    rts\n}}\n");
 
         // On its own the first reaches 125 bytes and is in range. Once the second has grown by
@@ -48,7 +48,7 @@ public sealed class BranchTests
     [Fact]
     public void ATargetAtAnUnknownDistanceIsLong()
     {
-        var written = Written(".proc p {\n    jeq @out\n    rts\n    .align 256\n@out:\n    rts\n}\n");
+        var written = Analysis.InCode(".proc p {\n    jeq @out\n    rts\n    .align 256\n@out:\n    rts\n}\n");
 
         Assert.Contains("    bne p__over\n    jmp p__out\n", written, StringComparison.Ordinal);
     }
@@ -61,7 +61,7 @@ public sealed class BranchTests
     [Fact]
     public void ABackwardLongBranchWithinRangeIsTheShortBranch()
     {
-        var written = Written(".proc p {\n@top:\n    nop\n    jne @top\n    rts\n}\n");
+        var written = Analysis.InCode(".proc p {\n@top:\n    nop\n    jne @top\n    rts\n}\n");
 
         Assert.Contains("    bne p__top", written, StringComparison.Ordinal);
     }
@@ -105,10 +105,4 @@ public sealed class BranchTests
 
     /// <summary>Returns filler of <paramref name="bytes"/> bytes, one <c>nop</c> each.</summary>
     private static string Nops(int bytes) => $".repeat {bytes}, i {{\n        nop\n    }}\n";
-
-    /// <summary>
-    /// Returns the ca65 source written for <paramref name="text"/>, which is put in the code
-    /// segment.
-    /// </summary>
-    private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
 }

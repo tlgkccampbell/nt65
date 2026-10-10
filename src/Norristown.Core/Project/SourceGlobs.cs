@@ -44,7 +44,7 @@ public static class SourceGlobs
         if (!within)
             return false;
 
-        var leaf = full[(full.LastIndexOf('/') + 1)..];
+        var leaf = Paths.FileName(full);
         var expression = "^" + Regex.Escape(pattern).Replace(@"\*", ".*", StringComparison.Ordinal)
             .Replace(@"\?", ".", StringComparison.Ordinal) + "$";
         return Regex.IsMatch(leaf, expression,

@@ -177,7 +177,7 @@ public static class Compiler
     /// </param>
     /// <param name="previous">The analysis from before an edit, or null to analyze from scratch.</param>
     /// <param name="cancellation">
-    /// The token checked between files and between the stages of the analysis. A cancelled
+    /// The token checked between files and between the stages of the analysis. A canceled
     /// analysis throws <see cref="OperationCanceledException"/>.
     /// </param>
     public static ProgramAnalysis Analyze(
@@ -202,7 +202,7 @@ public static class Compiler
     /// </param>
     /// <param name="previous">The analysis from before an edit, or null to analyze from scratch.</param>
     /// <param name="cancellation">
-    /// The token checked between files and between the stages of the analysis. A cancelled
+    /// The token checked between files and between the stages of the analysis. A canceled
     /// analysis throws <see cref="OperationCanceledException"/>.
     /// </param>
     public static ProgramAnalysis AnalyzeUnsettled(
@@ -509,7 +509,7 @@ public static class Compiler
     /// diagnostics of each file analyzed. Each file analyzed takes <paramref name="signatures"/>
     /// for the routines it reaches, or else what <paramref name="previous"/> inferred.
     /// <paramref name="cancellation"/> is checked before each file, and after the last, so that a
-    /// cancelled analysis stops before the program is composed.
+    /// canceled analysis stops before the program is composed.
     /// </summary>
     private static List<FileAnalysis> AnalyzeFiles(
         ProgramModel program, Cpu target, ProjectSettings project, Dictionary<string, IReadOnlyList<Diagnostic>> analyzed,
@@ -548,7 +548,7 @@ public static class Compiler
 
         // Composing the program sets its answers on this analysis's regions, which for a file kept
         // from before are the copies made above, so the previous analysis keeps its own answers.
-        // Composing cannot be cancelled once it starts, so a cancelled analysis stops here.
+        // Composing cannot be canceled once it starts, so a canceled analysis stops here.
         cancellation.ThrowIfCancellationRequested();
         return [.. files];
     }
