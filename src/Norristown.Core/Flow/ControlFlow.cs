@@ -10,7 +10,7 @@ namespace Norristown.Flow;
 /// them. The blocks are built from the order in which layout emitted the bytes, so the macros
 /// are expanded and the repetitions unrolled before anything is asked about the path.
 /// <para>
-/// Every assembly-language trick is allowed, and each can be recognised from its syntax. Where
+/// Every assembly-language trick is allowed, and each can be recognized from its syntax. Where
 /// the operand does not say where flow goes, as with an indirect jump or a computed target, the
 /// edge comes from a <c>.next</c> instead. Where there is no <c>.next</c>, the path simply ends,
 /// and <see cref="Requirements"/> reports the missing annotation on every CPU.
@@ -131,15 +131,7 @@ public sealed class ControlFlow
     /// is laid out in. The program rewrites such an instruction's operand as it runs, so the
     /// operand as written says only where the program starts from.
     /// </summary>
-    internal IReadOnlySet<StepKey> Patched
-    {
-        get
-        {
-            if (patched is null)
-                FindPatched();
-            return patched!;
-        }
-    }
+    internal IReadOnlySet<StepKey> Patched => Patches(ref patched);
 
     /// <summary>
     /// Gets the instructions a <c>.patch … as</c> says each patched instruction can be turned
@@ -147,26 +139,10 @@ public sealed class ControlFlow
     /// rejects is left out, and an instruction with none is not listed. Neither is one in
     /// <see cref="RewrittenOpcodes"/>, which may become anything.
     /// </summary>
-    internal IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> Variants
-    {
-        get
-        {
-            if (variants is null)
-                FindPatched();
-            return variants!;
-        }
-    }
+    internal IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> Variants => Patches(ref variants);
 
     /// <summary>Gets every variant a <c>.patch … as</c> lists, with the instruction it stands in for.</summary>
-    internal IReadOnlyList<PatchVariant> ListedVariants
-    {
-        get
-        {
-            if (listedVariants is null)
-                FindPatched();
-            return listedVariants!;
-        }
-    }
+    internal IReadOnlyList<PatchVariant> ListedVariants => Patches(ref listedVariants);
 
     /// <summary>
     /// Gets each patched instruction whose opcode a store may write with something no
@@ -179,73 +155,33 @@ public sealed class ControlFlow
     /// here. The set is the floor the register and reads analyses stand on for such a program.
     /// The width, stack and flow analyses still take the instruction as written.
     /// </remarks>
-    internal IReadOnlySet<StepKey> RewrittenOpcodes
-    {
-        get
-        {
-            if (rewrittenOpcodes is null)
-                FindPatched();
-            return rewrittenOpcodes!;
-        }
-    }
+    internal IReadOnlySet<StepKey> RewrittenOpcodes => Patches(ref rewrittenOpcodes);
 
     /// <summary>
     /// Gets each store that may write the opcode of a patched instruction under a <c>.patch</c>
     /// that lists no variants. Each store is listed once, with the first instruction it may write.
     /// </summary>
-    internal IReadOnlyList<UnlistedPatch> UnlistedPatches
-    {
-        get
-        {
-            if (unlisted is null)
-                FindPatched();
-            return unlisted!;
-        }
-    }
+    internal IReadOnlyList<UnlistedPatch> UnlistedPatches => Patches(ref unlisted);
 
     /// <summary>
     /// Gets each store whose bytes reach outside the instruction its <c>.patch</c> names, into
     /// something that no other <c>.patch</c> under the store names. Each is listed once for each
     /// <c>.patch</c>.
     /// </summary>
-    internal IReadOnlyList<MissedPatch> MissedPatches
-    {
-        get
-        {
-            if (missedPatches is null)
-                FindPatched();
-            return missedPatches!;
-        }
-    }
+    internal IReadOnlyList<MissedPatch> MissedPatches => Patches(ref missedPatches);
 
     /// <summary>
     /// Gets each store whose bytes are known to lie inside instructions that the <c>.patch</c>
     /// directives under it name. Such a store is acknowledged whatever label its operand names,
     /// so <c>sta @op+3</c> may be followed by <c>.patch @next</c> alone.
     /// </summary>
-    internal IReadOnlySet<StepKey> CoveredStores
-    {
-        get
-        {
-            if (coveredStores is null)
-                FindPatched();
-            return coveredStores!;
-        }
-    }
+    internal IReadOnlySet<StepKey> CoveredStores => Patches(ref coveredStores);
 
     /// <summary>
     /// Gets each patched instruction whose operand a store may write. Its operand as written says
     /// only where the program starts from, so nothing may be concluded from its value.
     /// </summary>
-    internal IReadOnlySet<StepKey> RewrittenOperands
-    {
-        get
-        {
-            if (rewrittenOperands is null)
-                FindPatched();
-            return rewrittenOperands!;
-        }
-    }
+    internal IReadOnlySet<StepKey> RewrittenOperands => Patches(ref rewrittenOperands);
 
     /// <summary>
     /// Works out where control goes in <paramref name="layout"/>'s file. A call to a routine
@@ -619,6 +555,7 @@ public sealed class ControlFlow
     private static bool Calls(IReadOnlyList<BasicBlock> blocks) =>
         blocks.Any(block => CallCosts.Onward(block).Any() || block.CallsUnknown);
 
+    /// <summary>Returns whether a statement is an instruction with one of <paramref name="mnemonics"/>.</summary>
     private static bool IsInstruction(SyntaxNode statement, params ReadOnlySpan<MnemonicKind> mnemonics) =>
         statement is InstructionStatementSyntax instruction && mnemonics.Contains(instruction.MnemonicKind);
 
@@ -631,7 +568,7 @@ public sealed class ControlFlow
         step.Statement is StateDirectiveSyntax or FrameDirectiveSyntax or FallthroughDirectiveSyntax || step.IsMarker;
 
     /// <summary>
-    /// Returns why a statement nt65 recognises has no count, for the editor's code lens. Without
+    /// Returns why a statement nt65 recognizes has no count, for the editor's code lens. Without
     /// it the lens would show the routine without a count and give no reason. The step of a
     /// <c>.label</c> inside an instruction gives the reason of the first instruction its bytes
     /// decode as that has no count. It returns null for a line nt65 could not lay out, which has
@@ -672,21 +609,9 @@ public sealed class ControlFlow
     {
         if (blocks.Count == 0)
             return;
-        foreach (var block in blocks)
-            block.IsReached = false;
-        var pending = new Queue<int>();
-        pending.Enqueue(0);
-        blocks[0].IsReached = true;
-        while (pending.Count > 0)
-        {
-            foreach (var edge in blocks[pending.Dequeue()].Successors)
-            {
-                if (blocks[edge.To].IsReached)
-                    continue;
-                blocks[edge.To].IsReached = true;
-                pending.Enqueue(edge.To);
-            }
-        }
+        var reached = Reachability.From(blocks, 0, block => block.Successors.Select(edge => edge.To));
+        for (var i = 0; i < blocks.Count; i++)
+            blocks[i].IsReached = reached[i];
     }
 
     /// <summary>
@@ -1142,48 +1067,24 @@ public sealed class ControlFlow
             != Transfer.Through;
 
     /// <summary>
+    /// Returns the value of <paramref name="field"/>, one of the answers about patched instructions
+    /// that <see cref="FindPatched"/> fills in together the first time any of them is asked for.
+    /// </summary>
+    private T Patches<T>(ref T? field)
+        where T : class
+    {
+        if (field is null)
+            FindPatched();
+        return field!;
+    }
+
+    /// <summary>
     /// Finds each instruction that stands on a label a <c>.patch</c> names, the variants each
     /// <c>.patch … as</c> lists for it, and which of its bytes the stores may write.
     /// </summary>
     private void FindPatched()
     {
-        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store, int At)>>();
-        for (var at = 0; at < layout.Steps.Count; at++)
-        {
-            var step = layout.Steps[at];
-            foreach (var patch in AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
-            {
-                foreach (var target in Annotations.TargetsOf(patch))
-                {
-                    if (Targets.Of(model, target, step.On)?.Symbol is { } symbol)
-                    {
-                        if (!targets.TryGetValue(symbol, out var patches))
-                            targets[symbol] = patches = [];
-                        patches.Add((patch, step, at));
-                    }
-                }
-            }
-        }
-
-        // Each entry pairs a store with one instruction its `.patch` names, and the bytes the
-        // store may write as offsets from that instruction's first byte.
-        var entries = new List<PatchEntry>();
-        List<(PatchDirectiveSyntax Patch, Step Store, int At, Symbol Label)>? naming = null;
-        foreach (var step in layout.Steps)
-        {
-            if (step.Label is { } label)
-            {
-                if (targets.TryGetValue(label, out var patches))
-                    (naming ??= []).AddRange(patches.Select(patch => (patch.Patch, patch.Store, patch.At, label)));
-                continue;
-            }
-            if (naming is not null && step.Statement is InstructionStatementSyntax)
-            {
-                foreach (var (patch, store, at, named) in naming)
-                    entries.Add(new PatchEntry(patch, store, at, named, step, WrittenBytes(store, named, step)));
-            }
-            naming = null;
-        }
+        var entries = PatchEntries(PatchTargets());
 
         // A store's bytes may run from one instruction a `.patch` under it names into another
         // that a second `.patch` under it names. Each instruction is checked on its own entry, so
@@ -1270,6 +1171,59 @@ public sealed class ControlFlow
     }
 
     /// <summary>
+    /// Returns the <c>.patch</c> directives of the file by the label each names, with the store
+    /// each stands under and that store's position among the layout's steps.
+    /// </summary>
+    private Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store, int At)>> PatchTargets()
+    {
+        var targets = new Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store, int At)>>();
+        for (var at = 0; at < layout.Steps.Count; at++)
+        {
+            var step = layout.Steps[at];
+            foreach (var patch in AnnotationsOf(step).OfType<PatchDirectiveSyntax>())
+            {
+                foreach (var target in Annotations.TargetsOf(patch))
+                {
+                    if (Targets.Of(model, target, step.On)?.Symbol is { } symbol)
+                    {
+                        if (!targets.TryGetValue(symbol, out var patches))
+                            targets[symbol] = patches = [];
+                        patches.Add((patch, step, at));
+                    }
+                }
+            }
+        }
+        return targets;
+    }
+
+    /// <summary>
+    /// Returns an entry for each store and each instruction a <c>.patch</c> under it names, which
+    /// is the first instruction after the label, with the bytes the store may write as offsets from
+    /// that instruction's first byte.
+    /// </summary>
+    private List<PatchEntry> PatchEntries(Dictionary<Symbol, List<(PatchDirectiveSyntax Patch, Step Store, int At)>> targets)
+    {
+        var entries = new List<PatchEntry>();
+        List<(PatchDirectiveSyntax Patch, Step Store, int At, Symbol Label)>? naming = null;
+        foreach (var step in layout.Steps)
+        {
+            if (step.Label is { } label)
+            {
+                if (targets.TryGetValue(label, out var patches))
+                    (naming ??= []).AddRange(patches.Select(patch => (patch.Patch, patch.Store, patch.At, label)));
+                continue;
+            }
+            if (naming is not null && step.Statement is InstructionStatementSyntax)
+            {
+                foreach (var (patch, store, at, named) in naming)
+                    entries.Add(new PatchEntry(patch, store, at, named, step, WrittenBytes(store, named, step)));
+            }
+            naming = null;
+        }
+        return entries;
+    }
+
+    /// <summary>
     /// Returns a value indicating whether a store that may write <paramref name="bytes"/>, as
     /// offsets from a patched instruction's first byte, may write that instruction's opcode. A
     /// store whose bytes are not known may.
@@ -1322,9 +1276,8 @@ public sealed class ControlFlow
 
             // The `.patch` names nothing the store writes where the bytes land only in an
             // instruction another `.patch` already names, so the fix removes it rather than
-            // naming that instruction twice.
-            // A store into another routine's code is declared in that routine, so no label there
-            // is offered as a target here.
+            // naming that instruction twice. A store into another routine's code is declared in
+            // that routine, so no label there is offered as a target here.
             var elsewhere = landing is { } other && other.Routine != written.Routine;
             var landingLabel = namedAs ?? (index is { } found && !elsewhere ? LabelOf(found, store.On) : null);
             var fix = namedAs is not null

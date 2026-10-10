@@ -67,34 +67,15 @@ internal static class Paths
     public static CycleCount? Costing(BasicBlock block) => block.LoopCycles ?? block.Cycles;
 
     /// <summary>Returns which blocks a path from <paramref name="entry"/> can reach without leaving.</summary>
-    private static bool[] Reached(IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside)
-    {
-        var found = new bool[blocks.Count];
-        var pending = new Queue<int>();
-        found[entry] = true;
-        pending.Enqueue(entry);
-        while (pending.Count > 0)
-        {
-            foreach (var to in Onward(blocks[pending.Dequeue()], inside))
-            {
-                if (found[to])
-                    continue;
-                found[to] = true;
-                pending.Enqueue(to);
-            }
-        }
-        return found;
-    }
+    private static bool[] Reached(IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside) =>
+        Reachability.From(blocks, entry, block => Onward(block, inside));
 
     /// <summary>
-    /// Returns the blocks a path may run after this one, ignoring call edges, edges out of the
-    /// region, and the back edge of a counted loop.
+    /// Returns the blocks a path may run after this one, which are the blocks that
+    /// <see cref="Edges"/> reaches.
     /// </summary>
     private static IEnumerable<int> Onward(BasicBlock block, Func<int, bool> inside) =>
-        block.Successors
-            .Where(edge => edge.Kind != EdgeKind.Call && inside(edge.To) && edge.To != block.Repeats)
-            .Select(edge => edge.To)
-            .Distinct();
+        Edges(block, inside).Select(edge => edge.To).Distinct();
 
     /// <summary>
     /// Returns whether a path that reaches a block may end there, because nothing follows it, what
@@ -126,8 +107,8 @@ internal static class Paths
 
     /// <summary>
     /// Returns the edges a path may follow from a block, as the block reached and whether the
-    /// block's branch is taken to reach it. The edges left out are those <see cref="Onward"/>
-    /// leaves out.
+    /// block's branch is taken to reach it. Call edges, edges out of the region and the back edge
+    /// of a counted loop are left out.
     /// </summary>
     private static IEnumerable<(int To, bool Taken)> Edges(BasicBlock block, Func<int, bool> inside) =>
         block.Successors

@@ -60,11 +60,11 @@ internal sealed class Dataflow<TState>
     /// Enters each label that is an entry point in its own right, and runs what it reaches to a
     /// fixed point. A label is an entry point where a <c>.state</c> declares it, or, unless
     /// <paramref name="declaredOnly"/> is true, where <paramref name="outside"/> finds it can be
-    /// entered from outside the routine. Such a label
-    /// that no path reaches starts from what <paramref name="unreached"/> returns for it, or is
-    /// left unreached where that is null. One that some path reaches and that can be entered from outside starts from
-    /// what <paramref name="entered"/> makes of the state the path brings. Any other label keeps
-    /// what reaches it.
+    /// entered from outside the routine. Such a label that no path reaches starts from what
+    /// <paramref name="unreached"/> returns for it, or is left unreached where that is null. One
+    /// that some path reaches and that can be entered from outside starts from what
+    /// <paramref name="entered"/> makes of the state the path brings. Any other label keeps what
+    /// reaches it.
     /// </summary>
     public void EnterEntries(
         OutsideEntries outside, bool declaredOnly, Func<BasicBlock, TState>? unreached, Func<BasicBlock, TState, TState> entered)
@@ -74,20 +74,11 @@ internal sealed class Dataflow<TState>
             if (!block.IsDeclared && (declaredOnly || !outside.Reaches(block)))
                 continue;
             var here = Reached[block.Index];
-            TState state;
-            if (here is null)
-            {
-                if (unreached is null)
-                    continue;
-                state = unreached(block);
-            }
-            else if (outside.Reaches(block))
-                state = entered(block, here);
-            else
-                continue;
-            if (state.Equals(here))
-                continue;
-            Enter(block.Index, state);
+            var state = here is null ? unreached?.Invoke(block)
+                : outside.Reaches(block) ? entered(block, here)
+                : null;
+            if (state is not null && !state.Equals(here))
+                Enter(block.Index, state);
         }
     }
 

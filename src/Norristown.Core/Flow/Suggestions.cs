@@ -166,7 +166,7 @@ public static class Suggestions
                 if (!block.IsReached || block.Next is not null || block.CallsUnknown
                     || block.Calls is not [{ Signature: { } callee } target]
                     || block.Steps is not [.., { Statement: InstructionStatementSyntax call } calling]
-                    || !Own(model, calling) || Fixed(file, calling, readAsData)
+                    || !Removable(file, calling, readAsData)
                     || JumpFor(call.MnemonicKind) is not { } jump
                     || callee is { IsInterrupt: true } or { NeverReturns: true } or { Inline: not null } or { Pushed: > 0 }
                     || callee.IsFar != (call.MnemonicKind == MnemonicKind.Jsl)
@@ -180,7 +180,7 @@ public static class Suggestions
                 var after = blocks[block.Index + 1];
                 if (!after.IsFallenInto || after.Next is not null
                     || after.Steps.FirstOrDefault(step => step.Label is null) is not { Statement: InstructionStatementSyntax returned } returning
-                    || !Own(model, returning) || Fixed(file, returning, readAsData)
+                    || !Removable(file, returning, readAsData)
                     || returned.MnemonicKind != (call.MnemonicKind == MnemonicKind.Jsl ? MnemonicKind.Rtl : MnemonicKind.Rts)
                     || !Adjacent(call, returned))
                 {
@@ -246,7 +246,7 @@ public static class Suggestions
         foreach (var step in regions.SelectMany(region => region.Blocks).SelectMany(block => block.Steps))
         {
             if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rep or MnemonicKind.Sep } statement
-                || !Own(model, step) || Fixed(file, step, readAsData)
+                || !Removable(file, step, readAsData)
                 || StepOperands.Immediate(model, file.Layout, step) is not { } flags)
             {
                 continue;
@@ -477,7 +477,7 @@ public static class Suggestions
 
                 var uses = sets ? MnemonicKind.Sbc : MnemonicKind.Adc;
                 if (RegisterWalk.NextOf(block, i) is not { Statement: InstructionStatementSyntax arithmetic } next
-                    || arithmetic.MnemonicKind != uses || !Own(model, next) || Fixed(file, next, readAsData)
+                    || arithmetic.MnemonicKind != uses || !Removable(file, next, readAsData)
                     || !Adjacent(setup, arithmetic)
                     || StepOperands.Immediate(model, layout, next) is not { } value
                     || CodeLayout.Expression(arithmetic.Operand!) is not { } expression
@@ -552,18 +552,11 @@ public static class Suggestions
             {
                 continue;
             }
-            // A reason that relies on nothing a called routine leaves without promising it comes
-            // first.
-            string why;
             var carried = before.ValueOf(StatusFlags.Carry) == true && before.IsBacked(StatusFlags.Carry);
-            var unpromised = carried ? Unpromised.Of(before, StatusFlags.Carry) : null;
-            if (carried && unpromised is null)
-                why = "C is already 1";
-            else if ((liveness.After(step) & StatusFlags.Carry) == 0)
-                (why, unpromised) = ("nothing reads the C it sets", null);
-            else if (carried)
-                why = "C is already 1";
-            else
+            var reason = Reason(
+                carried, "C is already 1", carried ? Unpromised.Of(before, StatusFlags.Carry) : null,
+                (liveness.After(step) & StatusFlags.Carry) == 0, "nothing reads the C it sets");
+            if (reason is not var (why, unpromised))
                 continue;
             yield return new Diagnostic(compare.Tree.GetSpan(compare.Span),
                 Catalogue.ZeroCompare.Message(compare.GetText().Trim(), RegisterEffects.Format(register), why)
@@ -607,20 +600,13 @@ public static class Suggestions
             {
                 var nz = StatusFlags.Negative | StatusFlags.Zero;
                 var after = before.Loaded(value, bits);
-                // A reason that relies on nothing a called routine leaves without promising it
-                // comes first.
                 var said = before.ValueOf(StatusFlags.Negative) == after.ValueOf(StatusFlags.Negative)
                     && before.ValueOf(StatusFlags.Zero) == after.ValueOf(StatusFlags.Zero)
                     && before.IsBacked(StatusFlags.Negative) && before.IsBacked(StatusFlags.Zero);
-                var unpromised = said ? Unpromised.Of(before, nz) : null;
-                string why;
-                if (said && unpromised is null)
-                    why = "N and Z already say what it would";
-                else if ((liveness.After(step) & nz) == 0)
-                    (why, unpromised) = ("nothing reads the N and Z it sets", null);
-                else if (said)
-                    why = "N and Z already say what it would";
-                else
+                var reason = Reason(
+                    said, "N and Z already say what it would", said ? Unpromised.Of(before, nz) : null,
+                    (liveness.After(step) & nz) == 0, "nothing reads the N and Z it sets");
+                if (reason is not var (why, unpromised))
                     continue;
                 yield return new Diagnostic(load.Tree.GetSpan(load.Span),
                     Catalogue.LoadAlreadyHeld.Message(text, name, hex, why) + unpromised)
@@ -649,6 +635,28 @@ public static class Suggestions
     }
 
     /// <summary>
+    /// Returns why a suggestion may remove an instruction whose only effect is on flags, with the
+    /// words a message adds where that reason relies on a routine that promises nothing, or null
+    /// where there is no reason. A reason that relies on nothing a called routine leaves without
+    /// promising it comes first: that the flags are already as the instruction would leave them,
+    /// then that nothing reads the flags it sets, then the first again with its caveat.
+    /// </summary>
+    /// <param name="already">Whether the flags are already as the instruction would leave them.</param>
+    /// <param name="alreadyWhy">The words for that reason.</param>
+    /// <param name="unpromised">The caveat that reason carries, or null where it carries none.</param>
+    /// <param name="unread">Whether nothing reads the flags the instruction sets before they change.</param>
+    /// <param name="unreadWhy">The words for that reason.</param>
+    private static (string Why, Unpromised? Unpromised)? Reason(
+        bool already, string alreadyWhy, Unpromised? unpromised, bool unread, string unreadWhy)
+    {
+        if (already && unpromised is null)
+            return (alreadyWhy, null);
+        if (unread)
+            return (unreadWhy, null);
+        return already ? (alreadyWhy, unpromised) : null;
+    }
+
+    /// <summary>
     /// Returns the one-byte instruction that leaves <paramref name="value"/> in
     /// <paramref name="register"/> from what <paramref name="held"/> says the registers hold, with
     /// the words that say why, or null where none does. A transfer from another register comes
@@ -663,18 +671,18 @@ public static class Suggestions
                 return (transfer, $"{RegisterEffects.Format(source)} holds {hex} here");
         }
         var name = RegisterEffects.Format(register);
-        var stepped = register switch
+        (string Up, string Down)? stepped = register switch
         {
             Registers.X => ("inx", "dex"),
             Registers.Y => ("iny", "dey"),
-            _ => Instructions.Modes(cpu, MnemonicKind.Inc).Contains(AddressingMode.Accumulator) ? ("inc a", "dec a") : default,
+            _ => Instructions.Modes(cpu, MnemonicKind.Inc).Contains(AddressingMode.Accumulator) ? ("inc a", "dec a") : null,
         };
-        if (stepped == default || held.ValueOf(register) is not { } now)
+        if (stepped is not var (up, down) || held.ValueOf(register) is not { } now)
             return null;
         if (((now + 1) & 0xff) == value)
-            return (stepped.Item1, $"{name} holds {StateValue.Hex(now, 2)} here");
+            return (up, $"{name} holds {StateValue.Hex(now, 2)} here");
         if (((now - 1) & 0xff) == value)
-            return (stepped.Item2, $"{name} holds {StateValue.Hex(now, 2)} here");
+            return (down, $"{name} holds {StateValue.Hex(now, 2)} here");
         return null;
 
         // Only the 6502's own transfers count: X and Y swap only on the 65816.

@@ -85,7 +85,7 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
                         // Either half of the accumulator may leave with the caret's value.
                         var track = SourceState.Track(register);
                         if (From(register == Registers.A ? state.Whole(register) : state.Of(track), keys))
-                            Add(found, ((int)track, RegisterEffects.Format(register)), null, Category(register), exit);
+                            Add(found, ((int)track, RegisterEffects.Format(register)), null, InputSources.CategoryOf(register), exit);
                     }
                 }
             }
@@ -170,16 +170,9 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
         // the caret, the reader says what, as a source does.
         OutputReader Guessed(OutputReader reader, Location location, MemoryWalk.Value value)
         {
-            var doubts = value.Doubts
-                .Select(key => steps.TryGetValue(key, out var step) ? StepLines.Of(tree, step)?.Span : null)
-                .OfType<TextSpan>()
-                .Distinct()
-                .OrderBy(span => span.Start)
-                .ToList();
+            var doubts = StepLines.Lines(tree, value.Doubts.Where(steps.ContainsKey).Select(key => steps[key]));
             possibly[location].AddRange(doubts);
-            var reason = doubts.Count == 0 ? null : "or possibly " + string.Join(", ", doubts.Select(span =>
-                $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}"));
-            return reader with { Confidence = SourceConfidence.BestEffort, Reason = reason };
+            return reader with { Confidence = SourceConfidence.BestEffort, Reason = StepLines.OrPossibly(tree, doubts) };
         }
     }
 
@@ -222,10 +215,6 @@ public sealed record OutputReaders(TextSpan Routine, IReadOnlyList<ReadOutput> O
     /// <summary>Returns the reader that stands for control leaving the routine after <paramref name="block"/>.</summary>
     private static OutputReader? Exit(SyntaxTree tree, BasicBlock block) =>
         StepLines.Of(tree, block.Steps[^1]) is var (span, _) ? new OutputReader(span, ReaderKind.Exit, SourceConfidence.Proven) : null;
-
-    /// <summary>Returns the category a register or a flag is reported under.</summary>
-    private static InputCategory Category(Registers register) =>
-        (register & Registers.Flags) != Registers.None ? InputCategory.Flag : InputCategory.Register;
 
     /// <summary>Adds a reader to an output, unless the output already has that kind of reader on that line.</summary>
     private static void Add(
