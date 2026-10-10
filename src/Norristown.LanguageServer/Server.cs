@@ -9,10 +9,10 @@ using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
 
-// The Protocol folder holds hand-written LSP types for only the messages the server handles.
-// The formatter converts property names to camel case.
-
-/// <summary>Serves the Language Server Protocol to one client over a pair of streams.</summary>
+/// <summary>
+/// Serves the Language Server Protocol to one client over a pair of streams. The types in the
+/// <c>Protocol</c> folder describe only the messages this server handles.
+/// </summary>
 internal sealed class Server : IDisposable
 {
     private readonly ServerLog log;
@@ -499,6 +499,10 @@ internal sealed class Server : IDisposable
         return LanguageServer.DirectPages.Of(analysis, built, file => outgoing.ToClient(Uris.ToUri(file)), cancellation);
     }
 
+    /// <summary>
+    /// Handles the client opening a document, whose text now comes from the client rather than
+    /// from disk. Its diagnostics are published at once.
+    /// </summary>
     [JsonRpcMethod("textDocument/didOpen")]
     public async Task DidOpenAsync(DidOpenTextDocumentParams request, CancellationToken cancellation)
     {
@@ -507,6 +511,7 @@ internal sealed class Server : IDisposable
         await diagnostics.PublishEditedAsync(document.Uri, document.Version, cancellation, open: true).ConfigureAwait(false);
     }
 
+    /// <summary>Handles an edit to an open document by applying it and publishing what changed.</summary>
     [JsonRpcMethod("textDocument/didChange")]
     public async Task DidChangeAsync(DidChangeTextDocumentParams request, CancellationToken cancellation)
     {
@@ -524,6 +529,9 @@ internal sealed class Server : IDisposable
             request.TextDocument.Uri, request.TextDocument.Version, cancellation).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Handles the client closing a document, whose text from now on comes from disk again.
+    /// </summary>
     [JsonRpcMethod("textDocument/didClose")]
     public Task DidCloseAsync(DidCloseTextDocumentParams request, CancellationToken cancellation)
     {
@@ -554,6 +562,10 @@ internal sealed class Server : IDisposable
                 : []);
     }
 
+    /// <summary>
+    /// Returns the ranges the editor may fold, which are the file's blocks. They come from the
+    /// syntax alone, so the request is answered without waiting for an analysis.
+    /// </summary>
     [JsonRpcMethod("textDocument/foldingRange")]
     public IReadOnlyList<FoldingRange> FoldingRanges(FoldingRangeParams request, CancellationToken cancellation)
     {
@@ -561,6 +573,7 @@ internal sealed class Server : IDisposable
         return workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToFoldingRanges(document.Tree) : [];
     }
 
+    /// <summary>Returns what the editor shows about the position under the pointer, or null for nothing.</summary>
     [JsonRpcMethod("textDocument/hover")]
     public async Task<Hover?> HoverAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
         await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
@@ -608,6 +621,7 @@ internal sealed class Server : IDisposable
             .Distinct()]);
     }
 
+    /// <summary>Returns every occurrence in the file of the name at the caret, for the editor to highlight.</summary>
     [JsonRpcMethod("textDocument/documentHighlight")]
     public async Task<IReadOnlyList<DocumentHighlight>> DocumentHighlightsAsync(
         TextDocumentPositionParams request, CancellationToken cancellation) =>
@@ -662,6 +676,10 @@ internal sealed class Server : IDisposable
             [.. everywhere.Select(asked => asked.Analysis)]);
     }
 
+    /// <summary>
+    /// Returns what could be typed at the caret. Each item's documentation is kept back for
+    /// <see cref="Resolve"/>, which the client calls for the one item it highlights.
+    /// </summary>
     [JsonRpcMethod("textDocument/completion")]
     public async Task<IReadOnlyList<CompletionItem>> CompletionAsync(
         TextDocumentPositionParams request, CancellationToken cancellation)
@@ -688,6 +706,7 @@ internal sealed class Server : IDisposable
             : request;
     }
 
+    /// <summary>Returns the parameters of the call the caret is in, with the active one marked, or null outside a call.</summary>
     [JsonRpcMethod("textDocument/signatureHelp")]
     public async Task<SignatureHelp?> SignatureHelpAsync(
         TextDocumentPositionParams request, CancellationToken cancellation) =>
@@ -695,6 +714,10 @@ internal sealed class Server : IDisposable
             ? CallHelp.At(asked.Program, asked.Model, asked.Position)
             : null;
 
+    /// <summary>
+    /// Returns the lenses shown above the file's declarations, which give what each routine
+    /// costs and which registers it preserves.
+    /// </summary>
     [JsonRpcMethod("textDocument/codeLens")]
     public async Task<IReadOnlyList<CodeLens>> CodeLensesAsync(CodeLensParams request, CancellationToken cancellation)
     {
@@ -706,6 +729,7 @@ internal sealed class Server : IDisposable
         return LanguageServer.CodeLenses.In(document.Tree, analysis.ModelFor(path)?.Families ?? [], analysis.FlowFor(path));
     }
 
+    /// <summary>Returns the paths in the file that the editor may open as links, such as the file an <c>.incbin</c> includes.</summary>
     [JsonRpcMethod("textDocument/documentLink")]
     public async Task<IReadOnlyList<DocumentLink>> DocumentLinksAsync(
         DocumentLinkParams request, CancellationToken cancellation)
@@ -767,6 +791,7 @@ internal sealed class Server : IDisposable
         return outgoing.ToClient(LanguageServer.CallHierarchy.Incoming(analysis, request.Item, cancellation));
     }
 
+    /// <summary>Returns the routines that the routine an item names calls, with the ranges of its calls.</summary>
     [JsonRpcMethod("callHierarchy/outgoingCalls")]
     public async Task<IReadOnlyList<CallHierarchyOutgoingCall>> OutgoingCallsAsync(
         CallHierarchyOutgoingCallsParams request, CancellationToken cancellation)
@@ -776,6 +801,11 @@ internal sealed class Server : IDisposable
         return outgoing.ToClient(LanguageServer.CallHierarchy.Outgoing(analysis, request.Item, cancellation));
     }
 
+    /// <summary>
+    /// Returns the quick fixes and refactorings offered over a range. A client that can ask for
+    /// an action's edits later is sent the actions without them, as <see cref="ResolveCodeActionAsync"/>
+    /// explains.
+    /// </summary>
     [JsonRpcMethod("textDocument/codeAction")]
     public async Task<IReadOnlyList<CodeAction>> CodeActionsAsync(CodeActionParams request, CancellationToken cancellation)
     {
@@ -810,6 +840,10 @@ internal sealed class Server : IDisposable
         return outgoing.ToClient(resolved, asked.Analysis);
     }
 
+    /// <summary>
+    /// Returns the semantic tokens of a whole file, which color each name by what it is declared
+    /// as, under a result id the client may quote to ask for a delta later.
+    /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/full")]
     public Task<Protocol.SemanticTokens> SemanticTokensAsync(SemanticTokensParams request, CancellationToken cancellation)
     {
@@ -871,11 +905,20 @@ internal sealed class Server : IDisposable
         ];
     }
 
+    /// <summary>
+    /// Returns the declarations across every file of the workspace whose names match what the
+    /// programmer typed. The outline of each file answers, so nothing is analyzed.
+    /// </summary>
     [JsonRpcMethod("workspace/symbol")]
     public IReadOnlyList<SymbolInformation> WorkspaceSymbols(
         WorkspaceSymbolParams request, CancellationToken cancellation) =>
         outgoing.ToClient(LanguageServer.WorkspaceSymbols.Matching(workspace.Files(), request.Query, cancellation));
 
+    /// <summary>
+    /// Handles the request to shut down, which the protocol sends before <c>exit</c>. Nothing is
+    /// released until <c>exit</c> arrives, but the framing records that it was sent, which decides
+    /// the exit code.
+    /// </summary>
     [JsonRpcMethod("shutdown")]
     public object? Shutdown() => null;
 
@@ -888,6 +931,10 @@ internal sealed class Server : IDisposable
     [JsonRpcMethod("exit")]
     public void Exit() => Leave(framing.Phase == ServerPhase.ShuttingDown ? 0 : 1, "the client said goodbye");
 
+    /// <summary>
+    /// Creates the formatter that reads and writes the protocol's JSON, which names properties in
+    /// camel case and leaves out the ones that are null, as the protocol expects.
+    /// </summary>
     internal static SystemTextJsonFormatter CreateFormatter()
     {
         var formatter = new SystemTextJsonFormatter();

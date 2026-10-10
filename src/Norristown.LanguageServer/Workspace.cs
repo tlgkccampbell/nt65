@@ -562,8 +562,34 @@ internal sealed class Workspace
             }
         }
 
-        // The diagnostics depend on nothing but the analysis and the file, so a program that has
-        // not been analyzed again since the last publish costs nothing to publish again.
+        var diagnostics = Reported(found);
+        return [.. found
+            .OrderBy(file => file.Key, StringComparer.Ordinal)
+            .Select(file => Publish(file.Key, file.Value.Analysis, file.Value.Tree))];
+
+        Published Publish(string path, ProgramAnalysis analysis, SyntaxTree? tree)
+        {
+            var model = tree is null ? null : analysis.ModelFor(path);
+            return new Published(
+                UriOf(path),
+                versions.TryGetValue(path, out var version) ? version : null,
+                tree,
+                diagnostics[path],
+                analysis.Configuration,
+                model,
+                model is null ? null : RunsFrom.Marked(analysis, model));
+        }
+    }
+
+    /// <summary>
+    /// Returns the diagnostics to publish for each file in <paramref name="found"/>, and remembers
+    /// them for the next publish. The diagnostics depend on nothing but the analysis and the file,
+    /// so a file whose program has not been analyzed again since the last publish gets the list it
+    /// got then, and its suggestions are not looked for again.
+    /// </summary>
+    private IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> Reported(
+        IReadOnlyDictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)> found)
+    {
         IReadOnlyDictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)> before;
         lock (gate)
         {
@@ -580,22 +606,7 @@ internal sealed class Workspace
         {
             reported = now;
         }
-        return [.. found
-            .OrderBy(file => file.Key, StringComparer.Ordinal)
-            .Select(file => Publish(file.Key, file.Value.Analysis, file.Value.Tree))];
-
-        Published Publish(string path, ProgramAnalysis analysis, SyntaxTree? tree)
-        {
-            var model = tree is null ? null : analysis.ModelFor(path);
-            return new Published(
-                UriOf(path),
-                versions.TryGetValue(path, out var version) ? version : null,
-                tree,
-                now[path].Diagnostics,
-                analysis.Configuration,
-                model,
-                model is null ? null : RunsFrom.Marked(analysis, model));
-        }
+        return now.ToDictionary(file => file.Key, file => file.Value.Diagnostics, StringComparer.Ordinal);
     }
 
     /// <summary>
