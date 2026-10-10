@@ -1,4 +1,3 @@
-using System.Globalization;
 using Norristown.Processor;
 
 namespace Norristown.Semantics;
@@ -111,11 +110,7 @@ public sealed class StateRegister
     /// Returns the range of values the register holds as a message gives it, such as
     /// <c>$0000 to $ffff</c>, for a register whose state is a value.
     /// </summary>
-    public string ValueRange()
-    {
-        var format = $"x{Digits}";
-        return $"${0.ToString(format, CultureInfo.InvariantCulture)} to ${Maximum.ToString(format, CultureInfo.InvariantCulture)}";
-    }
+    public string ValueRange() => $"{Value.Hex(0, Digits)} to {Value.Hex(Maximum, Digits)}";
 
     /// <inheritdoc/>
     public override string ToString() => Name;
