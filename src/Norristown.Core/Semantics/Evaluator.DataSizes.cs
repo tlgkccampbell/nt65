@@ -269,7 +269,8 @@ internal sealed partial class Evaluator
     private long? Iterations(BlockSyntax block, RepetitionDirectiveSyntax opener, Func<long?> body)
     {
         var counted = opener.Expression;
-        var binding = BindingIn(block, opener);
+        var binding = BindingIn(block, opener.Name);
+        var indexBinding = BindingIn(block, (opener as EachDirectiveSyntax)?.Index);
         List<Action> iterations = [];
         if (opener is RepeatDirectiveSyntax)
         {
@@ -290,12 +291,18 @@ internal sealed partial class Evaluator
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.List } list)
         {
-            iterations.AddRange(list.Items.Select(item => (Action)(() => { if (binding is not null) names.Items[binding] = item; })));
+            iterations.AddRange(list.Items.Select((item, i) => (Action)(() =>
+            {
+                Count(i);
+                if (binding is not null)
+                    names.Items[binding] = item;
+            })));
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.Enum, Body: { } walked })
         {
-            iterations.AddRange(walked.Symbols.Select(member => (Action)(() =>
+            iterations.AddRange(walked.Symbols.Where(member => member.IsEnumMember).Select((member, i) => (Action)(() =>
             {
+                Count(i);
                 if (binding is null)
                     return;
                 names.Values[binding] = member.Value;
@@ -329,16 +336,25 @@ internal sealed partial class Evaluator
                 names.Items.Remove(binding);
                 names.Members.Remove(binding);
             }
+            if (indexBinding is not null)
+                names.Values.Remove(indexBinding);
+        }
+
+        // Binds an `.each`'s index name, when it has one, to the number of the turn.
+        void Count(int index)
+        {
+            if (indexBinding is not null)
+                names.Values[indexBinding] = Value.Of(index);
         }
     }
 
     /// <summary>
-    /// Returns the name a repetition binds, found where its body refers to it, or null when
-    /// nothing does.
+    /// Returns the name a repetition binds at <paramref name="declared"/>, found where its body
+    /// refers to it, or null when nothing does.
     /// </summary>
-    private Symbol? BindingIn(BlockSyntax block, RepetitionDirectiveSyntax opener)
+    private Symbol? BindingIn(BlockSyntax block, SyntaxToken? declared)
     {
-        if (opener.Name is not { } declared)
+        if (declared is not { } at)
             return null;
         foreach (var name in block.DescendantNodes().OfType<NameExpressionSyntax>())
         {
@@ -346,7 +362,7 @@ internal sealed partial class Evaluator
             {
                 if (resolved.TryGetValue((name.Tree, token.Span.Start), out var symbol)
                     && symbol.Kind == SymbolKind.Binding && symbol.Tree == block.Tree
-                    && symbol.NameSpan.Start == declared.Span.Start)
+                    && symbol.NameSpan.Start == at.Span.Start)
                 {
                     return symbol;
                 }

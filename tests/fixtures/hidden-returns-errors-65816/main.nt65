@@ -1,0 +1,61 @@
+; On the 65816 a hidden `rtl` returns from a far routine as one written there would, and a
+; hidden return is checked against the distance and the exit state the routine declares.
+.module main
+
+.cpu 65816
+
+.export far_back, near_rtl, far_rts, still_wide, through_rti
+
+.segment CODE
+
+; `lda $6B` is $A5 $6B, and from its second byte the processor runs `rtl`.
+.proc far_back: far, native, a8, i8 {
+@top:
+    lda $6B
+    .label leave = @top + 1
+    lsr a
+    bcc leave
+    rtl
+}
+
+; A near routine returns with `rts`, so a hidden `rtl` is the wrong return.
+.proc near_rtl: native, a8, i8 {
+@top:
+    lda $6B
+    .label leave = @top + 1 ;! error[return-distance-mismatch]: `near_rtl` is near, so it returns with `rts`
+    lsr a
+    bcc leave
+    rts
+}
+
+; A far routine returns with `rtl`, so a hidden `rts` is the wrong return.
+.proc far_rts: far, native, a8, i8 {
+@top:
+    lda $60
+    .label leave = @top + 1 ;! error[return-distance-mismatch]: `far_rts` is far, so it returns with `rtl`
+    lsr a
+    bcc leave
+    rtl
+}
+
+; The routine promises to return with an 8-bit A, and the hidden return comes before `sep`.
+.proc still_wide: native, a8, i8 -> a8, i8 {
+    rep #$20
+@top:
+    lda $60
+    .label leave = @top + 1 ;! error[return-state-mismatch]: `rts`: `still_wide` declares it returns with `a8`, but A is 16-bit here
+    lsr a
+    bcc leave
+    sep #$20
+    rts
+}
+
+; `lda $40` runs `rti` from its second byte, which is still refused.
+.proc through_rti: native, a8, i8 {
+@top:
+    lda $40
+    .label leave = @top + 1 ;! error[hidden-path-unfollowed]: nt65 cannot follow the bytes from `leave`: they run as `rti`, which changes where control goes
+    lsr a
+    bcc leave
+    rts
+}

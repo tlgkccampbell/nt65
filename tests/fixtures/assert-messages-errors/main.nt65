@@ -1,0 +1,23 @@
+; An `.assert` message is text, and only a line that does not start a statement of its own
+; continues an `.assert` after its comma.
+.module main
+
+.cpu 6502
+
+.export main
+
+.const LIMIT    = 3
+.const TOO_MANY = "there are more than three of them"
+
+.assert LIMIT == 2, TOO_MANY        ;! error[assertion-failed]: there are more than three of them
+.assert LIMIT == 2,                 ;! error[assertion-failed]: the limit is two
+    .strcat("the limit ", "is two")
+.assert LIMIT == 3, LIMIT           ;! error[assert-message-not-text]: an `.assert` message is text: a string in quotes, a text constant, or a call that returns text
+.assert LIMIT == 3,                 ;! error[expected-text]: expected the message: text in quotes, a text constant or a call that returns text
+
+.segment CODE
+.proc main {
+    .assert LIMIT == 3, main        ;! error[assert-message-not-text]: an `.assert` message is text: a string in quotes, a text constant, or a call that returns text
+    .assert LIMIT == 3,             ;! error[expected-text]: expected the message: text in quotes, a text constant or a call that returns text
+    rts
+}

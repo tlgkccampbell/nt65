@@ -107,7 +107,7 @@ public sealed class CatalogueAreaTests
         ("Instructions",
         [
             "address-size-unreachable", "addressing-mode-missing", "addressing-mode-too-narrow",
-            "assertion-failed", "branch-operand-not-taken", "branch-out-of-reach", "config-refused",
+            "assert-message-not-text", "assertion-failed", "branch-operand-not-taken", "branch-out-of-reach", "config-refused",
             "config-warned", "direct-page-form-missing", "direct-page-needs-65816", "direct-page-only",
             "direct-page-prefix-on-symbol", "encoded-about-nothing", "encoded-mismatch", "encoded-not-a-byte",
             "immediate-missing", "immediate-too-wide", "indirect-jump-wraps", "instruction-not-on-cpu",

@@ -718,21 +718,28 @@ public static class Compiler
 
         // An `.ensure` that names a flag emits nothing where the flags already hold, which the
         // flag analysis of the layout so far tells. On the 65C02 that analysis also settles
-        // whether arithmetic pays the decimal-mode cycle. What either changes moves no edge and no
-        // flag, so one more layout settles it. Only a file with such a line pays for it.
+        // whether arithmetic pays the decimal-mode cycle, and on the 65816 how many bytes a block
+        // move moves. What any of these changes moves no edge and no flag, so one more layout
+        // settles it. Only a file with such a line pays for it.
         if (layout.Steps.Any(step => step.Statement is EnsureDirectiveSyntax ensure
             && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag))
             || (target is Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02
                 && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
                 {
                     MnemonicKind: MnemonicKind.Adc or MnemonicKind.Sbc,
-                } || layout.HiddenPathAt(step)?.Instructions.Any(hidden => hidden.Mnemonic is MnemonicKind.Adc or MnemonicKind.Sbc) == true)))
+                } || layout.HiddenPathAt(step)?.Instructions.Any(hidden => hidden.Mnemonic is MnemonicKind.Adc or MnemonicKind.Sbc) == true))
+            || (target == Cpu.Wdc65816
+                && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
+                {
+                    MnemonicKind: MnemonicKind.Mvn or MnemonicKind.Mvp,
+                })))
         {
-            layout = CodeLayout.Create(model, target, state, flow.Flags!.Known);
+            layout = CodeLayout.Create(model, target, state, flow.Flags);
             flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
         }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
+        found.AddRange(Flow.AddressConstants.BindingsUsedAsAddresses(model, layout));
 
         // A family's body is emitted once per instance, so a mistake in it is found once per
         // instance. A diagnostic that every instance reports is collapsed into one.

@@ -25,6 +25,9 @@ public sealed class ControlFlow
     private readonly Dictionary<StepKey, RelativeCall> relativeCalls;
     private readonly HashSet<StepKey> returnAddresses;
 
+    // The labels each `.next` names, with its lists and tables spread.
+    private readonly NextTargets targets;
+
     // Whether each routine a call in the file reaches was taken never to return.
     private readonly Dictionary<Symbol, bool> neverReturns = [];
 
@@ -55,6 +58,7 @@ public sealed class ControlFlow
         this.annotations = annotations;
         this.relativeCalls = relativeCalls;
         this.returnAddresses = returnAddresses;
+        targets = new NextTargets(model, layout.Steps);
     }
 
     /// <summary>Gets every routine in the file, one region each.</summary>
@@ -275,35 +279,6 @@ public sealed class ControlFlow
         Build(model, layout, exits, signatures, whole: false);
 
     /// <summary>
-    /// Returns whether a symbol is data that holds addresses, which is what a table of targets is.
-    /// That is data declared with <c>.addr</c> or <c>.faraddr</c>, records whose type has a member
-    /// declared so, and mixed data with a member that is either.
-    /// </summary>
-    internal static bool IsAddressData(Symbol symbol) => symbol switch
-    {
-        { Kind: not SymbolKind.Data } => false,
-        { Data: DataDirectiveSyntax element } => IsAddressElement(element)
-            || (element.IsRecord && symbol.Type is { } type && HoldsAddresses(type, [])),
-        { Data: null, Body: { } body } => body.Symbols.Any(IsAddressData),
-        _ => false,
-    };
-
-    /// <summary>Returns whether a directive's element type is <c>.addr</c> or <c>.faraddr</c>.</summary>
-    private static bool IsAddressElement(DataDirectiveSyntax element) =>
-        element.Directive.DirectiveKind is DirectiveKind.Addr or DirectiveKind.FarAddr;
-
-    /// <summary>
-    /// Returns whether a struct or union has a member declared as an address, directly or in a
-    /// record it holds. <paramref name="seen"/> holds the types already being asked about, so a
-    /// type that contains itself ends the walk.
-    /// </summary>
-    private static bool HoldsAddresses(Symbol type, HashSet<Symbol> seen) =>
-        type.IsLayout && seen.Add(type) && (type.Body?.Symbols ?? []).Any(member =>
-            member.Kind == SymbolKind.Member
-            && (member.Data is DataDirectiveSyntax element && IsAddressElement(element)
-                || member.Type is { } inner && HoldsAddresses(inner, seen)));
-
-    /// <summary>
     /// Returns whether a statement is a call instruction, whether or not its operand names the
     /// routine it calls.
     /// </summary>
@@ -420,8 +395,8 @@ public sealed class ControlFlow
         var step = unit.Step;
         if (step.Statement is FallthroughDirectiveSyntax)
             return BlockEnd.Fallthrough;
-        if (layout.HiddenPathAt(step) is not null)
-            return BlockEnd.Jump;
+        if (layout.HiddenPathAt(step) is { } hidden)
+            return hidden.Return is null ? BlockEnd.Jump : BlockEnd.Return;
 
         // A call returns to the statement after it, even where a `.next` lists the routines it
         // calls, unless it calls a routine that never returns. A call to a label inside a routine
@@ -453,44 +428,11 @@ public sealed class ControlFlow
     }
 
     /// <summary>
-    /// Returns the labels one <c>.next</c> names. A target that is a list stands for every label in
-    /// it. So does a data label whose items are all code labels or routines, each optionally minus
-    /// one as in an RTS dispatch table. This is how an indirect call names the routines in its
-    /// table.
+    /// Returns the labels one <c>.next</c> names, as <see cref="NextTargets.Named"/> spreads them.
+    /// This is how an indirect call names the routines in its table.
     /// </summary>
-    internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(NextDirectiveSyntax next, Expansion? on)
-    {
-        foreach (var targetName in next.Targets)
-        {
-            // A `list` parameter names every label the call gave it.
-            if (model.SymbolOf(targetName, on) is { Kind: SymbolKind.MacroParameter, Parameter.Kind: ParameterKind.List } list
-                && model.GivenAt(list, on) is { Argument: var given, Caller: var caller })
-            {
-                foreach (var item in given.Items)
-                {
-                    if (Targets.Of(model, item, caller) is { } each)
-                        yield return each;
-                }
-                continue;
-            }
-
-            if (Targets.Of(model, targetName, on) is not { } target)
-                continue;
-            var spread = Spread(target.Symbol, on).ToList();
-            if (spread.Count > 0)
-            {
-                foreach (var item in spread)
-                    yield return item;
-                continue;
-            }
-
-            // Data that is not a table of code labels names nowhere code goes. It is reported
-            // where the targets are checked rather than followed into the bytes.
-            if (IsDataWithoutCodeLabels(target.Symbol, on))
-                continue;
-            yield return target;
-        }
-    }
+    internal IEnumerable<(Symbol Symbol, Expansion? At)> Named(NextDirectiveSyntax next, Expansion? on) =>
+        targets.Named(next, on);
 
     /// <summary>
     /// Returns the routine a <c>.fallthrough</c> names, or null where it names something else or
@@ -503,8 +445,7 @@ public sealed class ControlFlow
     /// Returns whether a symbol is data that does not spread to code labels, and so names nowhere
     /// code goes.
     /// </summary>
-    internal bool IsDataWithoutCodeLabels(Symbol symbol, Expansion? on) =>
-        symbol.Kind == SymbolKind.Data && !Spread(symbol, on).Any();
+    internal bool IsDataWithoutCodeLabels(Symbol symbol, Expansion? on) => targets.IsDataWithoutCodeLabels(symbol, on);
 
     /// <summary>
     /// Returns the routine emitted directly after <paramref name="region"/>'s routine in the same
@@ -697,7 +638,7 @@ public sealed class ControlFlow
     private static string? Uncounted(Step step) =>
         (step.Statement as InstructionStatementSyntax)?.MnemonicKind switch
         {
-            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles per byte, and the number of bytes is in A",
+            MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles per byte, and moves one byte more than the 16-bit accumulator holds, which nt65 does not know here",
             MnemonicKind.Jam => "`jam` stops the processor, and nothing after it runs until a reset",
             _ => null,
         };
@@ -745,7 +686,15 @@ public sealed class ControlFlow
             .SelectMany(node => node.DescendantTokens())
             .Select(token => token.Span)
             .ToHashSet();
-        var proved = Flags!.Prove(routine, blocks, edges);
+
+        // A `.next` under anything but a call hands control to its labels with the flags the
+        // statement leaves, as a jump does. A call enters them with the caller's flags but
+        // returns with others, so its labels are not counted among these.
+        var dispatches = units
+            .Where(unit => unit.Next is not null && !IsCall(unit.Step.Statement) && RelativeCallIn(relativeCalls, unit.Step) is null)
+            .Select(unit => (unit.Next!, unit.Step.On))
+            .ToList();
+        var proved = Flags!.Prove(routine, blocks, edges, dispatches);
         if (proved.Count == 0)
             return;
         foreach (var (index, branch) in proved)
@@ -781,13 +730,6 @@ public sealed class ControlFlow
         }
         Reach(blocks);
     }
-
-    /// <summary>
-    /// Returns a table item without the <c>- 1</c> of an RTS dispatch table, which names the same
-    /// label either way.
-    /// </summary>
-    private static SyntaxNode Stripped(SyntaxNode item) =>
-        item is BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Minus } difference ? difference.Left : item;
 
     /// <summary>
     /// Returns what each inline <c>.scope</c> of a routine costs. A scope whose lines are blocks of
@@ -1039,11 +981,11 @@ public sealed class ControlFlow
                 continue;
 
             // The bytes from a position inside an instruction go on at the instruction whose start
-            // they reach, as a jump there would.
+            // they reach, as a jump there would, or return as a return written there would.
             if (layout.HiddenPathAt(tail.Step) is { } hidden)
             {
-                blocks[i].End = BlockEnd.Jump;
-                if (landed.TryGetValue(hidden.Landing, out var at))
+                blocks[i].End = hidden.Return is null ? BlockEnd.Jump : BlockEnd.Return;
+                if (hidden.Landing is { } reached && landed.TryGetValue(reached, out var at))
                     Edge(i, at, EdgeKind.Taken);
                 continue;
             }
@@ -1518,150 +1460,6 @@ public sealed class ControlFlow
             return new WrittenRange(first, first + width - 1, true);
         }
         return root == label ? new WrittenRange(location.Offset, location.Offset + width - 1, false) : null;
-    }
-
-    /// <summary>
-    /// Returns the labels a table or a list expands to. The result is empty when the target does
-    /// not expand to labels and so names only itself.
-    /// </summary>
-    private IEnumerable<(Symbol Symbol, Expansion? At)> Spread(Symbol target, Expansion? on)
-    {
-        var items = target.Kind == SymbolKind.List
-            ? target.Items.Select(item => (Item: item, On: on))
-            : ItemsOfTable(target);
-        foreach (var (item, at) in items)
-        {
-            if (Targets.Of(model, Stripped(item), at) is { } named
-                && (named.Symbol.Kind is SymbolKind.Label || named.Symbol.Signature is not null))
-            {
-                yield return named;
-            }
-            else
-                yield break;
-        }
-    }
-
-    /// <summary>
-    /// Returns the addresses a table holds, each paired with the <see cref="Expansion"/> it is in.
-    /// A table is data that <see cref="IsAddressData"/> accepts. Its addresses are the values of
-    /// an <c>.addr</c> or <c>.faraddr</c> declaration, the values of the address members of
-    /// records, and those of each member of mixed data in turn. Values in a body are read from the
-    /// expansions layout made of them, since each iteration of a repetition there may emit a value
-    /// differently. A label on an <c>.addr</c> or <c>.faraddr</c> line is a table too, of the
-    /// values on that line. Any other symbol yields no values.
-    /// </summary>
-    private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsOfTable(Symbol target)
-    {
-        if (target.Kind == SymbolKind.Label)
-        {
-            foreach (var item in ItemsAfterLabel(target))
-                yield return item;
-            yield break;
-        }
-        if (!IsAddressData(target))
-            yield break;
-        if (target.Data is not DataDirectiveSyntax element)
-        {
-            foreach (var member in target.Body?.Symbols ?? [])
-            {
-                foreach (var item in ItemsOfTable(member))
-                    yield return item;
-            }
-            yield break;
-        }
-
-        var type = element.IsRecord ? target.Type : null;
-        foreach (var value in DataLengths.ElementsOf(element))
-        {
-            foreach (var item in type is null ? [value] : AddressesIn(type, value))
-                yield return (item, null);
-        }
-        if (type is not null && element.Tail is BracedDataSyntax { Value: RecordValuesSyntax record })
-        {
-            foreach (var item in AddressesIn(type, record))
-                yield return (item, null);
-        }
-        if (DataSyntax.BodyOf(element) is not { } body)
-            yield break;
-
-        // A single record's body holds its `member = value` lines; an array's holds records.
-        if (type is not null && body.BlockKind == BlockKind.RecordInitializer)
-        {
-            foreach (var item in AddressesIn(type, body.Members.Skip(1).OfType<LineSyntax>().Select(line => line.Statement)))
-                yield return (item, null);
-            yield break;
-        }
-        foreach (var step in layout.Steps)
-        {
-            if (step.Statement is DataValuesSyntax values && DataSyntax.DirectiveOfValues(values) == element)
-            {
-                foreach (var value in DataLengths.ElementsOf(values))
-                {
-                    foreach (var item in type is null ? [value] : AddressesIn(type, value))
-                        yield return (item, step.On);
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Returns the addresses on the <c>.addr</c> or <c>.faraddr</c> line that directly follows a
-    /// label, each paired with the <see cref="Expansion"/> it is in. A label on any other line
-    /// yields no values.
-    /// </summary>
-    private IEnumerable<(SyntaxNode Item, Expansion? On)> ItemsAfterLabel(Symbol label)
-    {
-        var steps = layout.Steps;
-        for (var i = 0; i < steps.Count - 1; i++)
-        {
-            if (steps[i].Label != label)
-                continue;
-            var next = steps[i + 1];
-            if (next.Statement is DataDirectiveSyntax { IsRecord: false } element && IsAddressElement(element))
-            {
-                foreach (var value in DataLengths.ElementsOf(element))
-                    yield return (value, next.On);
-            }
-            yield break;
-        }
-    }
-
-    /// <summary>
-    /// Returns the values a braced record gives the address members of <paramref name="type"/>.
-    /// </summary>
-    private static IEnumerable<SyntaxNode> AddressesIn(Symbol type, SyntaxNode record) =>
-        AddressesIn(type, record is RecordValuesSyntax values ? values.Members : []);
-
-    /// <summary>
-    /// Returns the values that <c>member = value</c> pairs give the address members of
-    /// <paramref name="type"/>, in the order the type declares its members. A member that is an
-    /// array of addresses gives each item of its list, and a member that is a record, or an array
-    /// of them, gives the addresses its own values hold. A member no value names holds zero, which
-    /// is no address of code, so it gives nothing.
-    /// </summary>
-    private static IEnumerable<SyntaxNode> AddressesIn(Symbol type, IEnumerable<StatementSyntax> pairs)
-    {
-        if (type.IsCyclic)
-            yield break;
-        var given = new Dictionary<string, SyntaxNode>(StringComparer.Ordinal);
-        foreach (var pair in pairs.OfType<MemberValueSyntax>())
-            given[pair.Name.Text] = pair.Value;
-        foreach (var member in type.Body?.Symbols ?? [])
-        {
-            if (member.Kind != SymbolKind.Member || given.GetValueOrDefault(member.Name) is not { } value)
-                continue;
-            var items = value is ValueListSyntax list ? [.. list.Values] : new[] { value };
-            foreach (var item in items)
-            {
-                if (member.Type is { IsLayout: true } inner)
-                {
-                    foreach (var address in AddressesIn(inner, item))
-                        yield return address;
-                }
-                else if (member.Data is DataDirectiveSyntax element && IsAddressElement(element))
-                    yield return item;
-            }
-        }
     }
 
     /// <summary>Represents one statement and the annotations under it.</summary>

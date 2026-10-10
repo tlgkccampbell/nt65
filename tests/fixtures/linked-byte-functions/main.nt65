@@ -1,0 +1,38 @@
+; A `.func` body may take a byte of an address with `.lobyte`, `.hibyte` or `.bankbyte`, because
+; the output writes them as ca65's `<`, `>` and `^`, which ld65 works out once the address is
+; known. Each gives a byte, so its result fits a one-byte slot whatever the address is.
+.module main
+
+.cpu 65816
+
+.export main, pointers, far_pointer, digits
+
+.func low(n) = .lobyte(n)
+.func high(n) = .hibyte(n)
+.func bank(n) = .bankbyte(n)
+.func page_digit(n) = '0' + .hibyte(n) .mod 10
+.func next_low(n) = .lobyte(n + 1)
+
+.segment CODE
+
+; A split table of addresses, as an RTS dispatch builds one.
+.data pointers {
+    .byte low(main), low(other)
+    .byte high(main), high(other)
+    .byte next_low(main)
+}
+
+.data far_pointer: .byte low(main), high(main), bank(main)
+
+.data digits: .byte page_digit(main)
+
+.proc main: a8, i8, native {
+    lda #low(other)
+    ldx #high(other)
+    ldy #bank(main)
+    rts
+}
+
+.proc other: a8, i8, native {
+    rts
+}

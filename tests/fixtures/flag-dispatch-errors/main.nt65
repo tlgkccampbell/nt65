@@ -1,0 +1,45 @@
+; The flags a dispatching jump leaves flow into the entries of a table that only its routine's
+; `.next` names, so a wrong carry there is found. Where anything else may hand control to the
+; entries, nothing says which flags they are entered with.
+.module main
+
+.cpu 6502
+
+.export cleared, shared, needs_carry, shared_table
+
+.segment CODE
+
+; `clc` leaves C = 0, and the `rts` hands that to the entry.
+.proc cleared {
+    clc
+    lda cleared_table+1,x
+    pha
+    lda cleared_table,x
+    pha
+    rts
+    .next cleared_table
+    first:
+    jmp needs_carry     ;! error[call-flag-mismatch]: `needs_carry` needs `c = 1`, but C is 0 here
+}
+
+; Another module may jump through an exported table, so the entry is entered with C unknown even
+; though this routine's dispatch sets it.
+.proc shared {
+    sec
+    lda shared_table+1,x
+    pha
+    lda shared_table,x
+    pha
+    rts
+    .next shared_table
+    first:
+    jmp needs_carry     ;! error[call-flag-mismatch]: `needs_carry` needs `c = 1`, but C is not known here
+}
+
+.proc needs_carry: c = 1 {
+    rts
+}
+
+.segment RODATA
+.data cleared_table: .addr cleared::first - 1
+.data shared_table:  .addr shared::first - 1

@@ -5,8 +5,9 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// Works out the range of values an expression that only the linker can finish may take. An
-/// address is somewhere in the space its address size reaches, and each operator narrows or
-/// widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
+/// address is somewhere in the space its address size reaches. A segment's linker symbol is
+/// inside the memory areas the linked configurations place the segment in. Each operator
+/// narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
 /// <c>main</c> lands. A call to a <c>.func</c> takes the range of its body, with each parameter
 /// taking the range of what it is given. ca65 refuses an expression that names an absolute or
 /// far address in a one-byte slot, whatever its value, unless a byte operator takes one byte of
@@ -66,13 +67,31 @@ internal static class LinkRange
                 return model.SymbolOf(name, on) is { IsAddress: true }
                     && model.AddressSizeOf(name, null, on) is AddressSize.Absolute or AddressSize.Far;
 
+            // A segment function is a symbol ld65 defines, as wide as the segment's placement.
+            case CallExpressionSyntax segmental when SegmentFunctions.Of(segmental, model) is { } about:
+                return SegmentFunctions.SizeOf(about.Function, about.Segment) is AddressSize.Absolute or AddressSize.Far;
+
+            // An argument counts only where the body uses its parameter outside every byte
+            // operator, so `low(main)` for `.func low(n) = .lobyte(n)` names nothing wide.
             case CallExpressionSyntax { Callee: { } callee } call
                 when model.SymbolOf(callee, on) is { Kind: SymbolKind.Func, Items: [var body, ..] } function:
                 if (!visiting.Add(function))
                     return false;
                 try
                 {
-                    return call.Arguments.ChildNodes.Append(body).Any(part => NamesWide(model, part, on, visiting));
+                    if (NamesWide(model, body, on, visiting))
+                        return true;
+                    if (FunctionArguments.Match(function, call) is not { } arguments)
+                        return call.Arguments.ChildNodes.Any(part => NamesWide(model, part, on, visiting));
+                    for (var i = 0; i < arguments.Count; i++)
+                    {
+                        if (NamesWide(model, arguments[i], on, visiting)
+                            && Exposes(model, body, function.ParameterSymbols[i], on, []))
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
                 }
                 finally
                 {
@@ -92,6 +111,51 @@ internal static class LinkRange
 
             default:
                 return false;
+        }
+    }
+
+    /// <summary>
+    /// Returns whether part of a <c>.func</c> body uses <paramref name="parameter"/> outside every
+    /// byte operator, directly or through a function it passes the parameter to. Only such a use
+    /// makes the address size of the argument matter to ca65.
+    /// </summary>
+    /// <param name="model">The model the body is read in.</param>
+    /// <param name="node">The part of the body to search.</param>
+    /// <param name="parameter">The parameter to look for.</param>
+    /// <param name="on">The expansion the call is in.</param>
+    /// <param name="visiting">The functions already entered, so that a recursive body ends.</param>
+    private static bool Exposes(SemanticModel model, SyntaxNode node, Symbol parameter, Expansion? on, HashSet<Symbol> visiting)
+    {
+        switch (node)
+        {
+            case UnaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Less or SyntaxKind.Greater or SyntaxKind.Caret }:
+            case CallExpressionSyntax { Callee: null, BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte }:
+                return false;
+            case NameExpressionSyntax name:
+                return model.SymbolOf(name, on) == parameter;
+            case CallExpressionSyntax { Callee: { } callee } call
+                when model.SymbolOf(callee, on) is { Kind: SymbolKind.Func, Items: [var body, ..] } function
+                && FunctionArguments.Match(function, call) is { } arguments:
+                if (!visiting.Add(function))
+                    return false;
+                try
+                {
+                    for (var i = 0; i < arguments.Count; i++)
+                    {
+                        if (Exposes(model, arguments[i], parameter, on, visiting)
+                            && Exposes(model, body, function.ParameterSymbols[i], on, visiting))
+                        {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                finally
+                {
+                    visiting.Remove(function);
+                }
+            default:
+                return node.ChildNodes.Any(child => Exposes(model, child, parameter, on, visiting));
         }
     }
 
@@ -142,6 +206,10 @@ internal static class LinkRange
                     SyntaxKind.Minus when operand is { } negated => Within(-(Int128)negated.High, -(Int128)negated.Low),
                     _ => null,
                 };
+
+            // A segment function is bounded by where the linked configurations place the segment.
+            case CallExpressionSyntax segmental when SegmentFunctions.Of(segmental, model) is { } about:
+                return SegmentFunctions.RangeOf(about.Function, about.Segment);
 
             // A byte or a word of a value is bounded by its width, whatever the value is.
             case CallExpressionSyntax { BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte or BuiltinKind.Bankof }:

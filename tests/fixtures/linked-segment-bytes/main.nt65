@@ -1,0 +1,36 @@
+; The symbols ld65 defines for a segment are as wide as the segment's placement in the linked
+; config, and are bounded by the memory areas it puts the segment in. ca65 refuses an absolute
+; symbol in a one-byte slot whatever its value, so a value that always fits a byte is written as
+; its low byte, which loses nothing. A run address in the zero page needs no narrowing at all.
+.module main
+
+.export main, pages
+
+.segment TABLES
+.data squares: .byte 0, 1, 4, 9
+
+.segment FAST
+.proc fast {
+    inc squares
+    rts
+}
+
+.segment CODE
+.data pages {
+    .byte .loadof(CODE) / 256           ; $08 to $9f, wherever CODE lands in MAIN
+    .byte .runof(TABLES) >> 8           ; $c0 to $cf
+    .byte .spanof(FAST)                 ; no more than ZPCODE's $7e bytes
+    .byte .runof(FAST)                  ; a zero-page address
+}
+
+.proc main {
+    ldx #.spanof(FAST)
+@copy:
+    lda .loadof(FAST) - 1,x
+    sta .runof(FAST) - 1,x
+    dex
+    bne @copy
+    lda #.loadof(TABLES) / 256
+    jsr fast
+    rts
+}

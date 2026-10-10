@@ -11,13 +11,14 @@ public sealed partial class CodeLayout
     /// from each. A position is a label at an instruction plus a number of bytes into it, and
     /// stands where those bytes do, so a branch to it is measured as a branch to any label is.
     /// Once the walks have settled, the bytes from each position are decoded as the CPU would run
-    /// them, until they reach the start of an instruction as written, and the
-    /// <see cref="HiddenPath"/> they make is recorded for the flow analysis.
+    /// them, until they reach the start of an instruction as written or decode as a return, and
+    /// the <see cref="HiddenPath"/> they make is recorded for the flow analysis.
     /// </summary>
     private sealed partial class Walker
     {
-        // The most bytes followed from one position before nt65 gives up on reaching the start of
-        // an instruction. No real trick runs that far inside other instructions.
+        // How far from one position a decoded instruction may start before nt65 gives up on
+        // reaching the start of an instruction. No real trick runs that far inside other
+        // instructions.
         private const int MostHiddenBytes = 32;
 
         // Each `.label` the walk reached, with where it stood.
@@ -53,9 +54,10 @@ public sealed partial class CodeLayout
                 var step = new Step(inside.Directive, inside.On, inside.Routine, nextStream++, inside.Segment, null);
                 layout.steps.Add(step);
                 layout.hidden[step.Key] = path;
-                layout.landings.Add(path.Landing);
+                if (path.Landing is { } landing)
+                    layout.landings.Add(landing);
                 CycleCount? cycles = new CycleCount(0);
-                foreach (var instruction in path.Instructions)
+                foreach (var instruction in path.Return is { } leaving ? path.Instructions.Append(leaving) : path.Instructions)
                     cycles = cycles is { } total && instruction.Cycles is { } each ? total + each : null;
                 layout.lines[step.Key] = new LineLayout(0, null, null, Cycles: cycles);
             }
@@ -103,7 +105,8 @@ public sealed partial class CodeLayout
         /// Returns the path the bytes from <paramref name="from"/> run as, reporting why where nt65
         /// cannot follow them. The bytes have to be known to nt65, run as instructions the CPU has
         /// that neither move the stack nor change where control goes, and reach the start of an
-        /// instruction of the same routine.
+        /// instruction of the same routine. The one exception is an <c>rts</c> or an <c>rtl</c>,
+        /// which ends the path as a return written there would end it.
         /// <para>
         /// Each instruction is counted in the processor state and with the decimal flag that the
         /// analyses found reaching the position, as an ordinary line is. None of the instructions
@@ -125,7 +128,7 @@ public sealed partial class CodeLayout
             var decimalMode = DecimalBefore(inside.Directive, inside.On);
             var decoded = new List<HiddenInstruction>();
             var offset = from.Offset;
-            while (offset - from.Offset < MostHiddenBytes)
+            while (true)
             {
                 if (offset != from.Offset && starts.TryGetValue(offset, out var landing)
                     && landing.Step.Statement is InstructionStatementSyntax)
@@ -134,6 +137,11 @@ public sealed partial class CodeLayout
                         return Unfollowed("they reach an instruction of another routine");
                     return new HiddenPath(inside.Symbol, decoded, landing.Step.Key);
                 }
+
+                // The limit applies to where each decoded instruction starts, so a last
+                // instruction that starts inside it may end past it and still land.
+                if (offset - from.Offset >= MostHiddenBytes)
+                    return Unfollowed("they do not reach the start of an instruction");
                 if (ByteAt(starts, offset, out var why) is not { } opcode)
                     return Unfollowed(why!);
                 if (Opcodes.Decode(cpu, (byte)opcode) is not { } form)
@@ -142,6 +150,14 @@ public sealed partial class CodeLayout
                         + Elsewhere((byte)opcode));
                 }
                 var (mnemonic, mode) = form;
+
+                // A return ends the path, and returns to the routine's caller as one written there
+                // would. Nothing after it runs, so nothing after it is decoded.
+                if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl)
+                {
+                    var leaving = new HiddenInstruction(mnemonic, mode, 0, Cycles.Of(cpu, mnemonic, mode, state, decimalMode)?.Count);
+                    return new HiddenPath(inside.Symbol, decoded, null, leaving);
+                }
                 if (Unfollowable(mnemonic, mode) is { } reason)
                     return Unfollowed($"they run as `{SyntaxFacts.TextOf(mnemonic)}`, which {reason}");
                 var operand = 0L;
@@ -163,7 +179,6 @@ public sealed partial class CodeLayout
                     state = known with { D = StateValue.Unknown };
                 offset += length;
             }
-            return Unfollowed("they do not reach the start of an instruction");
 
             HiddenPath? Unfollowed(string why)
             {

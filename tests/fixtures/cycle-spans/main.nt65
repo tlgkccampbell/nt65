@@ -185,6 +185,99 @@
 .assert .mincycles(always::start, always::done) == 5, "the always-taken branch changed"
 .assert .maxcycles(always::start, always::done) == 6, "the always-taken branch changed"
 
+; A `.next` that names a table goes to every label the table holds, as it does for the flow
+; analysis. Each pass runs `lda` at 3 and `jmp (vector)` at 5. From `second` it runs one `nop` at 2
+; before it arrives, and from `first` two, so the passes cost 3 + 5 + 2 = 10 and 3 + 5 + 4 = 12.
+.export .proc tabled {
+    start:
+    lda color
+    jmp (vector)
+    .next handlers
+    first:
+    nop
+    second:
+    nop
+    done:
+    rts
+}
+
+.assert .mincycles(tabled::start, tabled::done) == 10, "the table changed"
+.assert .maxcycles(tabled::start, tabled::done) == 12, "the table changed"
+
+; A `.next` that names a list goes to every label in it, in the same way, so the passes cost the
+; same as through the table.
+.export .proc listed {
+    start:
+    lda color
+    jmp (vector)
+    .next targets
+    first:
+    nop
+    second:
+    nop
+    done:
+    rts
+}
+
+.list targets {
+    listed::first, listed::second
+}
+
+.assert .mincycles(listed::start, listed::done) == 10, "the list changed"
+.assert .maxcycles(listed::start, listed::done) == 12, "the list changed"
+
+; A branch to a position a `.label` names inside an instruction runs the bytes from there as the
+; instructions they decode as, and goes on at the instruction whose start they reach. Here the
+; operand of `lda #$ea` runs as `nop`, at 2, and goes on at `done`. Taken, the branch costs 3, or
+; 4 across a page, so that pass is 3 + 3 + 2 = 8 to 9. Not taken, it costs 2 and `lda #$ea` 2 more,
+; so that pass is 3 + 2 + 2 = 7.
+.export .proc skipped {
+    .label hidden = @op + 1
+    from:
+    lda color
+    bne hidden
+@op:
+    lda #$ea
+    done:
+    rts
+}
+
+.assert .mincycles(skipped::from, skipped::done) == 7, "the hidden skip changed"
+.assert .maxcycles(skipped::from, skipped::done) == 9, "the hidden skip changed"
+
+; Such a position is an end, which only the taken branch arrives at, at 3 + 3 = 6, or 7 across a
+; page. It is a start too, from which the `nop` alone runs before `done`.
+.assert .mincycles(skipped::from, skipped::hidden) == 6, "the branch into the operand changed"
+.assert .maxcycles(skipped::from, skipped::hidden) == 7, "the branch into the operand changed"
+.assert .mincycles(skipped::hidden, skipped::done) == 2, "the hidden nop changed"
+.assert .maxcycles(skipped::hidden, skipped::done) == 2, "the hidden nop changed"
+
+; The bytes from a position may run a long way out of step with the instructions as written.
+; From `@top + 1` the fifteen `lda #$a9` run one byte out of step, as fifteen `lda #$a9` again,
+; the last taking the opcode of `lda $eaa5` as its operand. The operand of that instruction then
+; runs as `lda $ea`, which starts 30 bytes from the position and ends at `done`, 32 bytes from it.
+; Each immediate load costs 2 and the direct load 3, so the run is 15 × 2 + 3 = 33.
+.export .proc long_run {
+    lda color
+    bne in
+@top:
+    .repeat 15 {
+        lda #$a9
+    }
+    .label in = @top + 1
+    lda $eaa5
+    done:
+    rts
+}
+
+.assert .mincycles(long_run::in, long_run::done) == 33, "the long hidden run changed"
+.assert .maxcycles(long_run::in, long_run::done) == 33, "the long hidden run changed"
+
+.segment RODATA
+.data handlers: .addr tabled::first, tabled::second
+
+.segment CODE
+
 ; A count is a number like any other, so it can be written into data the program reads.
 .segment RODATA
 .export .data budget: .byte .maxcycles(raster::top, raster::bottom)

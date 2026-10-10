@@ -94,12 +94,12 @@
 }
 
 .export .proc inside {
-    .label hidden = @op + 1
+    .label hidden = @op + 1     ;! error[hidden-path-unfollowed]: nt65 cannot follow the bytes from `hidden`: they run as `pha`, which moves the stack
     from:
     lda count
     bne hidden
 @op:
-    lda #$ea
+    lda $48
     done:
     rts
 }
@@ -122,10 +122,10 @@
 ; A `.next ?` under data withholds where control goes from it, just as one under a jump does.
 .assert .mincycles(withheld::from, withheld::done) == 0    ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the span contains `.byte $2c`, whose `.next ?` withholds where control goes
 
-; A position inside an instruction runs as instructions the span does not count, so a pass that
-; can branch there has no count, and the position is not an end either.
-.assert .maxcycles(inside::from, inside::done) == 0        ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: a pass can reach `hidden`, a position inside an instruction, whose instructions nt65 does not count here
-.assert .maxcycles(inside::from, inside::hidden) == 0      ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: `hidden` is a position inside an instruction, not a span end
+; A position inside an instruction whose bytes nt65 cannot follow runs as instructions nobody
+; knows, so a pass that can branch there has no count, and the position is not an end either.
+.assert .maxcycles(inside::from, inside::done) == 0        ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: a pass can reach `hidden`, a position inside an instruction whose bytes nt65 could not follow
+.assert .maxcycles(inside::from, inside::hidden) == 0      ;! error[cycles-span-has-no-bound]: `.maxcycles` cannot count these cycles: `hidden` is a position inside an instruction whose bytes nt65 could not follow
 
 ; Two positions in different routines are not a span at all.
 .assert .mincycles(calling::before, other::far_off) == 0   ;! error[cycles-span-has-no-bound]: `.mincycles` cannot count these cycles: the two positions are in different routines

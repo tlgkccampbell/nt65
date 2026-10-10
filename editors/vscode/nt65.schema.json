@@ -112,6 +112,7 @@
         "argument-missing",
         "arithmetic-overflow",
         "assert-level",
+        "assert-message-not-text",
         "asserted-item-not-restored",
         "assertion-failed",
         "bank-has-no-segment",

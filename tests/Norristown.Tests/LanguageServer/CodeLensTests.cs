@@ -342,13 +342,13 @@ public sealed class CodeLensTests
         Assert.Equal(
             [
                 "18 cycles, 18+ with calls, excluding move and CHROUT",
-                "not counted: a block move takes 7 cycles per byte, and the number of bytes is in A",
+                "not counted: a block move takes 7 cycles per byte, and moves one byte more than the 16-bit accumulator holds, which nt65 does not know here",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
         Assert.Contains(
             """
             cost       18 cycles, 18+ with calls
-            excluding  move: a block move takes 7 cycles per byte, and the number of bytes is in A
+            excluding  move: a block move takes 7 cycles per byte, and moves one byte more than the 16-bit accumulator holds, which nt65 does not know here
                        CHROUT: no code in the program
             """.ReplaceLineEndings("\n"),
             hover?.Contents.Value,
@@ -356,12 +356,14 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
-    /// A block move takes seven cycles for every byte it moves, and the number of bytes is in A
-    /// when it runs, so the routine containing it has no count. The lens says so rather than
-    /// being left out, because a missing lens reads as though the analysis failed.
+    /// A block move takes seven cycles for every byte it moves, and moves one byte more than the
+    /// 16-bit accumulator holds. Where the accumulator is not known, the routine containing the
+    /// move has no count, and the lens says so rather than being left out, because a missing lens
+    /// reads as though the analysis failed. Where an immediate load of a 16-bit A gives it, the
+    /// move is counted.
     /// </summary>
     [Fact]
-    public async Task ALensShowsWhyARoutineWithABlockMoveHasNoCount()
+    public async Task ALensCountsABlockMoveOnlyFromAKnownAccumulator()
     {
         var timeout = TestTimeout.Token();
         const string Source = """
@@ -372,14 +374,39 @@ public sealed class CodeLensTests
                 mvn #$7e, #$7e
                 rts
             }
+            .proc counted: a16, i16 {
+                lda #$00ff
+                ldx #$2000
+                ldy #$3000
+                mvn #$7e, #$7e
+                rts
+            }
+            .proc narrow: a8, i16 {
+                lda #$ff
+                mvn #$7e, #$7e
+                rts
+            }
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
         var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
+        const string Unknown = "not counted: a block move takes 7 cycles per byte, and moves one byte more than the "
+            + "16-bit accumulator holds, which nt65 does not know here";
         Assert.Equal(
-            ["not counted: a block move takes 7 cycles per byte, and the number of bytes is in A"],
+            [
+                Unknown,
+
+                // A 16-bit immediate load takes 2 + 1 = 3 cycles, so the three loads are 9. The
+                // move runs $00FF + 1 = 256 times at 7 cycles, which is 1792, and `rts` is 6, so
+                // the pass is 9 + 1792 + 6 = 1807.
+                "1807 cycles",
+
+                // An 8-bit load leaves the accumulator's high byte as it was, so the count of
+                // bytes is still not known.
+                Unknown,
+            ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }
 
@@ -527,7 +554,9 @@ public sealed class CodeLensTests
     /// <summary>
     /// Which registers a routine uses as its caller left them, in a lens between its cost and what
     /// it preserves. A routine that reads nothing says so, and one whose calls nt65 cannot follow
-    /// ends the list with <c>?</c>.
+    /// ends the list with <c>?</c>. One that calls such code with none of the registers holding
+    /// what its caller left names the registers it does not read, since that code may use what the
+    /// caller left elsewhere. The hover says the same.
     /// </summary>
     [Fact]
     public async Task ALensShowsWhichRegistersARoutineReads()
@@ -550,6 +579,25 @@ public sealed class CodeLensTests
                 jsr rom
                 rts
             }
+            .proc cleared {
+                lda #0
+                ldx #0
+                ldy #0
+                clc
+                clv
+                jsr rom
+                rts
+            }
+            .proc stored {
+                sta $10
+                lda #0
+                ldx #0
+                ldy #0
+                clc
+                clv
+                jsr rom
+                rts
+            }
             """;
         await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
 
@@ -557,9 +605,14 @@ public sealed class CodeLensTests
             new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
 
         Assert.Equal(
-            [(2, "reads none"), (5, "reads A, C"), (11, "reads X, ?")],
+            [
+                (2, "reads none"), (5, "reads A, C"), (11, "reads X, ?"), (16, "reads none of A, X, Y, C, Z, N, V"),
+                (25, "reads A · none of X, Y, C, Z, N, V"),
+            ],
             lenses.Where(lens => lens.Command.Title.StartsWith("reads ", StringComparison.Ordinal))
                 .Select(lens => (lens.Range.Start.Line, lens.Command.Title)));
+        var hover = await client.HoverAsync(MainUri, Locate.At(Source, ".proc |cleared"), timeout);
+        Assert.Contains("reads      none of A, X, Y, C, Z, N, V\n", hover!.Contents.Value, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -748,6 +801,118 @@ public sealed class CodeLensTests
                 // nine times, at 3 to 4, cost 2 + 80 + 27 + 2 + 6 = 117 at least and
                 // 2 + 90 + 36 + 2 + 6 = 136 at most.
                 "117-136 cycles",
+            ],
+            Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
+    /// A count that starts at zero wraps round before the first test, so a `bne` loop runs the
+    /// register's whole range, 256 times for an 8-bit register. A loop that a jump enters at its
+    /// test runs the test as many times as the count says and the body one time fewer.
+    /// </summary>
+    [Fact]
+    public async Task ALoopFromZeroAndALoopEnteredAtItsTestAreCounted()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .segment CODE
+            .proc wraps {
+                ldx #0
+            @turn:
+                sta $0200,x
+                dex
+                bne @turn
+                rts
+            }
+            .proc test_first {
+                ldx #4
+                jmp @test
+            @turn:
+                sta $0200,x
+            @test:
+                dex
+                bne @turn
+                rts
+            }
+            .proc test_first_from_memory {
+                ldx $10
+                jmp @test
+            @turn:
+                sta $0200,x
+            @test:
+                dex
+                bne @turn
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                // A turn is `sta $0200,x` at 5 and `dex` at 2. The 256 turns take the branch back
+                // 255 times at 3 to 4 and fall out once at 2, so the loop is 7 × 256 + 3 × 255 + 2
+                // = 2559 at least and 7 × 256 + 4 × 255 + 2 = 2814 at most. `ldx #0` adds 2 and
+                // `rts` 6.
+                "2567-2822 cycles",
+
+                // The test runs 4 times, the branch taken 3 times into a 5-cycle body, so the loop
+                // is 2 × 4 + (3 + 5) × 3 + 2 = 34 at least and 2 × 4 + (4 + 5) × 3 + 2 = 37 at
+                // most. `ldx #4` adds 2, `jmp` 3 and `rts` 6.
+                "45-48 cycles",
+
+                // The count does not start at an immediate, so the loop keeps its `+`. The fewest
+                // is `ldx $10` at 3, `jmp` at 3, the test at 2 + 2 and `rts` at 6.
+                "16+ cycles, loops",
+            ],
+            Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
+    /// On the 65816 a count from zero runs the index register's whole range, which is 65536 times
+    /// for a 16-bit index and 256 times for an 8-bit one.
+    /// </summary>
+    [Fact]
+    public async Task ALoopFromZeroOnThe65816RunsTheIndexRegistersWholeRange()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc wide: native, a8, i16 {
+                ldx #0
+            @turn:
+                dex
+                bne @turn
+                rts
+            }
+            .proc narrow: native, a8, i8 {
+                ldx #0
+            @turn:
+                dex
+                bne @turn
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                // In native mode a branch costs 2 not taken and 3 taken, wherever it goes. A turn
+                // is `dex` at 2, so 65536 turns with the branch back taken 65535 times are
+                // 2 × 65536 + 3 × 65535 + 2 = 327679. A 16-bit `ldx #0` adds 3 and `rts` 6.
+                "327688 cycles",
+
+                // With an 8-bit index the loop runs 256 times, 2 × 256 + 3 × 255 + 2 = 1279, and an
+                // 8-bit `ldx #0` adds 2 and `rts` 6.
+                "1287 cycles",
             ],
             Costs(lenses).Select(lens => lens.Command.Title));
     }

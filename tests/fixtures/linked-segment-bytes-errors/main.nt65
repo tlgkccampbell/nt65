@@ -1,0 +1,21 @@
+; A segment's linker symbols that may not fit a byte are refused there, as any other value
+; worked out from an address is: nt65 cannot show the value fits, and ca65 would refuse it.
+.module main
+
+.export main, pages
+
+.segment TABLES
+.data squares: .byte 0, 1, 4, 9
+
+.segment CODE
+.data pages {
+    .byte .loadof(CODE)                 ;! error[linked-value-may-not-fit]: `.loadof(CODE)` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(.loadof(CODE))` for its low byte
+    .byte .loadof(CODE) / 16            ;! error[linked-value-may-not-fit]: `.loadof(CODE) / 16` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(.loadof(CODE) / 16)` for its low byte
+    .byte .spanof(CODE)                 ;! error[linked-value-may-not-fit]: `.spanof(CODE)` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(.spanof(CODE))` for its low byte
+}
+
+.proc main {
+    lda #.runof(TABLES) / 2             ;! error[linked-value-may-not-fit]: `.runof(TABLES) / 2` is worked out by the linker from an address, and an immediate is one byte, which nt65 cannot show it fits: use `<(.runof(TABLES) / 2)` for its low byte
+    lda squares
+    rts
+}

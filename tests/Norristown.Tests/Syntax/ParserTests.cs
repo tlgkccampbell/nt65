@@ -232,7 +232,7 @@ public sealed class ParserTests
     [InlineData(".if {", "expected an expression")]
     [InlineData(".repeat 8, {", "expected the name to bind")]
     [InlineData(".each handlers, h", "expected `{`")]
-    [InlineData(".assert 1 == 1, 3", "expected the message, in quotes")]
+    [InlineData(".assert 1 == 1,", "expected the message: text in quotes, a text constant or a call that returns text")]
     [InlineData(".error nope", "expected the message, in quotes")]
     [InlineData(".else {", "`.else` must follow the `}` that closes the previous branch, on the same line")]
     public void UnreadableLinesAreReportedOnce(string line, string message) => Assert.Equal([message], Errors(line));

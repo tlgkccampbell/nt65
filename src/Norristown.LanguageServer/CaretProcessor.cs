@@ -253,18 +253,22 @@ internal static class CaretProcessor
     /// </summary>
     private static Protocol.ProcessorRow Stack(
         ProgramAnalysis analysis,
-        IReadOnlyList<(string Text, int? Bytes)>? pushes,
+        IReadOnlyList<(string Text, int? Bytes, bool Entered)>? pushes,
         (Protocol.ProcessorCaller Caller, InstructionStatementSyntax Call)? chosen)
     {
         if (pushes is null)
             return Row("stack", "unknown");
         var rows = new List<Protocol.ProcessorRow>();
         int? depth = 0;
-        foreach (var (text, bytes) in pushes)
+        foreach (var (text, bytes, _) in pushes)
             rows.Add(Pushed(analysis, text, bytes, ref depth));
-        var pushed = pushes.Count == 0 ? "nothing pushed"
-            : pushes.All(push => push.Bytes is not null) ? Bytes(pushes.Sum(push => push.Bytes!.Value)) + " pushed"
-            : $"{pushes.Count} push{(pushes.Count == 1 ? "" : "es")}";
+
+        // The summary counts what the routine itself pushed. The bytes it was entered with, such
+        // as its return address, are listed but were pushed before it ran.
+        var own = pushes.Where(push => !push.Entered).ToList();
+        var pushed = own.Count == 0 ? "nothing pushed"
+            : own.All(push => push.Bytes is not null) ? Bytes(own.Sum(push => push.Bytes!.Value)) + " pushed"
+            : $"{own.Count} push{(own.Count == 1 ? "" : "es")}";
 
         if (chosen is not var (caller, call))
         {
@@ -283,7 +287,7 @@ internal static class CaretProcessor
         }
         else
         {
-            foreach (var (text, bytes) in below)
+            foreach (var (text, bytes, _) in below)
             {
                 var row = Pushed(analysis, text, bytes, ref depth);
                 rows.Add(row with { Detail = row.Detail is { } size ? $"{size}, pushed by {caller.Name}" : $"pushed by {caller.Name}" });

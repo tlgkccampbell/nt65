@@ -62,6 +62,24 @@ public sealed class InferredSignaturesTests
     }
 
     /// <summary>
+    /// A recursive routine's entry moves to <c>*</c> once its call to itself, in another width,
+    /// is counted. What its returns were found to leave under the earlier entry is learned again
+    /// rather than joined with what they leave now, so the exit converges to the 8 bits every
+    /// path returns with, not to unknown.
+    /// </summary>
+    [Fact]
+    public void AnExitLearnedUnderAnEarlierEntryIsLearnedAgain()
+    {
+        const string Text = ".proc walk {\n    lda $10\n    beq @done\n    dec $10\n    rep #$20\n    jsr walk\n@done:\n    sep #$20\n    rts\n}\n"
+            + ".export .proc main: a8, native {\n    jsr walk\n    lda #1\n    rts\n}\n";
+
+        var analysis = FlowFragment.Analyze("65816", Text);
+
+        Assert.Empty(analysis.Problems());
+        Assert.Equal(Width.Eight, FlowFragment.StateAt(analysis, "lda #1").Processor.A);
+    }
+
+    /// <summary>
     /// Callers that reach a routine with two widths, where its body has an immediate that depends
     /// on the width, are reported once at the routine, with a fix that declares either width.
     /// </summary>

@@ -12,6 +12,10 @@ namespace Norristown.Flow;
 /// no size and no fields, and the editor cannot follow values stored there. Declared as data found
 /// elsewhere, or as a hardware register with <c>.mmio</c>, the same name says what is there.
 /// <para>
+/// It also finds the bindings of a family's body that an instruction uses as an address, which
+/// the build warns about. See <see cref="BindingsUsedAsAddresses"/>.
+/// </para>
+/// <para>
 /// A constant counts where an instruction reaches memory through it: as a direct or indexed
 /// operand, as the pointer of an indirect one, or as the vector of an indirect jump. A constant
 /// that a branch, a jump or a call names directly is the address of code, which <c>.proc</c>
@@ -58,10 +62,44 @@ public static class AddressConstants
                 continue;
             yield return new Diagnostic(
                 tree.GetSpan(declaration.Name.Span),
-                Catalogue.ConstantUsedAsAddress.Message(symbol.DisplayName))
+                Catalogue.ConstantUsedAsAddress.Message(
+                    symbol.DisplayName, "declare it as data, or with `.mmio` if it is a hardware register"))
             {
                 Fix = new DiagnosticFix(FixKind.AddressData),
             };
+        }
+    }
+
+    /// <summary>
+    /// Returns a warning for each instruction of <paramref name="layout"/> that reaches memory
+    /// through the binding of a repetition over an enum, which stands for a member's value there.
+    /// Such a repetition is the body of a family, written as <c>.multiproc</c> or as an
+    /// <c>.each</c> over a named enum, and a bare binding in it is almost never meant as an address.
+    /// </summary>
+    /// <remarks>
+    /// Where a scope around the repetition declares a data family named after the same binding,
+    /// a reader expects the binding to name that data. It names the member's value instead, so
+    /// <c>lda c</c> reads the zero page silently. Elsewhere a constant used as an address is only
+    /// a suggestion, because there it is far more often meant.
+    /// </remarks>
+    public static IEnumerable<Diagnostic> BindingsUsedAsAddresses(SemanticModel model, CodeLayout layout)
+    {
+        foreach (var step in layout.Steps)
+        {
+            if (step.On is null
+                || step.Statement is not InstructionStatementSyntax statement
+                || !ReachesMemory(statement.MnemonicKind, layout.Of(statement, step.On)?.Mode)
+                || StepOperands.Of(model, step) is not { } operand
+                || Named(model, CodeLayout.Expression(operand), step.On) is not ({ Kind: SymbolKind.Binding } binding, var name, var on)
+                || model.BindingsOf(on)?.GetValueOrDefault(binding).Member is not { } member)
+            {
+                continue;
+            }
+            var enumeration = member.Scope.Owner?.DisplayName ?? "the enum";
+            yield return Expansion.Problem(model.Tree, name, on, Severity.Warning, Catalogue.ConstantUsedAsAddress.Message(
+                binding.Name,
+                $"each turn over `{enumeration}` binds it to a member's value, so name the data with a path that ends in "
+                    + $"`{binding.Name}`, or write `#{binding.Name}` for the value"));
         }
     }
 
@@ -88,7 +126,7 @@ public static class AddressConstants
             if (step.Statement is not InstructionStatementSyntax statement
                 || !ReachesMemory(statement.MnemonicKind, file.Layout.Of(statement, step.On)?.Mode)
                 || StepOperands.Of(file.Model, step) is not { } operand
-                || Named(file.Model, CodeLayout.Expression(operand), step.On) is not { } symbol)
+                || Named(file.Model, CodeLayout.Expression(operand), step.On) is not var (symbol, _, _))
             {
                 continue;
             }
@@ -124,7 +162,12 @@ public static class AddressConstants
     /// Returns the symbol an operand names, with a constant added to it or taken from it, or null
     /// where it names none. A macro parameter is followed to the argument its call gave it.
     /// </summary>
-    private static Symbol? Named(SemanticModel model, SyntaxNode? expression, Expansion? on)
+    /// <returns>
+    /// The symbol, the name that names it, and the expansion that name is read in. For a macro
+    /// parameter the name is in the argument the call gave, read where the call is.
+    /// </returns>
+    private static (Symbol Symbol, NameExpressionSyntax Name, Expansion? On)? Named(
+        SemanticModel model, SyntaxNode? expression, Expansion? on)
     {
         switch (expression)
         {
@@ -137,7 +180,7 @@ public static class AddressConstants
                         : null;
             case NameExpressionSyntax name when model.SymbolOf(name, on) is { } symbol:
                 if (symbol.Kind != SymbolKind.MacroParameter)
-                    return symbol;
+                    return (symbol, name, on);
                 return model.GivenAt(symbol, on) is { Argument.Value: { } given, Caller: var caller }
                     ? Named(model, given, caller)
                     : null;

@@ -1,0 +1,90 @@
+; An `.each` may bind the index of each item after the item's name, as a `.repeat` binds its
+; counter, so a table and the IDs of its entries come from one list and cannot fall out of step.
+.module main
+
+.cpu 6502
+
+.export handlers, ids, first_flags, colors, run
+
+.list commands {
+    load
+    save
+    quit
+}
+
+.segment CODE
+.proc load {
+    rts
+}
+.proc save {
+    rts
+}
+.proc quit {
+    rts
+}
+
+; Each command's ID is its position in the list, as a constant.
+.segment RODATA
+.data handlers: .addr[] {
+    .each commands, command, id {
+        command
+    }
+}
+.data ids: .byte[] {
+    .each commands, command, id {
+        id
+    }
+}
+
+; The index is a constant in the body, so a condition may test it.
+.data first_flags: .byte[] {
+    .each commands, command, id {
+        .if id == 0 {
+            $80
+        } .else {
+            id
+        }
+    }
+}
+
+; Over a named enum the index counts the members, whatever values they have.
+.enum Color {
+    red = 4
+    green = 8
+    blue = 12
+}
+.data colors: .byte[] {
+    .each Color, color, n {
+        color + n
+    }
+}
+
+; A family's body may use the index too, as each instance's number.
+.segment CODE
+.scope paint {
+    .each Color, color, n {
+        .export .proc color {
+            ldx #n
+            lda #color
+            rts
+        }
+    }
+}
+
+; Over a `list` parameter the index counts the arguments.
+.macro load_all(values: list(const)) {
+    .each values, value, i {
+        lda #value
+        sta $0200 + i
+    }
+}
+
+.segment CODE
+.proc run {
+    load_all!(7, 9, 11)
+    rts
+}
+
+.assert .sizeof(ids) == 3
+.assert .sizeof(first_flags) == 3
+.assert .sizeof(colors) == 3

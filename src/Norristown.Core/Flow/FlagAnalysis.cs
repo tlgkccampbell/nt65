@@ -18,7 +18,9 @@ namespace Norristown.Flow;
 /// A routine's entry, and a label with a signature of its own, are entered with the flags the
 /// signature gives before <c>-&gt;</c>, and nothing else known. A label <c>.state</c> declares, and
 /// a label anything other than this routine's own branches, jumps and <c>.next</c> annotations
-/// names, are entered with nothing known, since control may arrive there from anywhere. A call
+/// names, are entered with nothing known, since control may arrive there from anywhere. A label
+/// that a table names is an exception where only this routine's <c>.next</c> annotations name the
+/// table, so that only the jumps they are under reach it. Their flags flow in as a branch's do. A call
 /// returns with what <see cref="FlagExits"/> says its routine returns with: the flags it keeps
 /// as they were before the call, and the values it gives others. Every other flag is unknown
 /// after it. Where a decision or a check depends on such an answer, the answer is recorded in
@@ -29,13 +31,14 @@ namespace Norristown.Flow;
 /// another value. An <c>.ensure</c> gives them their values whatever it emits to do so.
 /// </para>
 /// </summary>
-internal sealed class FlagAnalysis
+internal sealed class FlagAnalysis : IKnownFlags
 {
     private readonly SemanticModel model;
     private readonly CodeLayout layout;
     private readonly IReadOnlySet<StepKey> patched;
     private readonly IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants;
     private readonly InferredSignatures signatures;
+    private readonly NextTargets targets;
     private readonly Dictionary<StepKey, FlagState> before = [];
 
     // What is known after each block that leaves the routine by running into another, keyed by
@@ -70,6 +73,7 @@ internal sealed class FlagAnalysis
         this.variants = variants;
         this.exits = exits;
         this.signatures = signatures;
+        targets = new NextTargets(model, layout.Steps);
     }
 
     /// <summary>
@@ -154,6 +158,13 @@ internal sealed class FlagAnalysis
     }
 
     /// <summary>
+    /// Returns the constant the accumulator holds just before <paramref name="statement"/> in
+    /// <paramref name="on"/>, or null where it is not known or no path reaches it, which is what
+    /// layout asks about a block move.
+    /// </summary>
+    public long? Accumulator(SyntaxNode statement, Expansion? on) => Before(statement, on)?.Held.A;
+
+    /// <summary>
     /// Returns the signature a call to <paramref name="target"/> is checked against: its own, or,
     /// for a label with none, that of the routine it is in.
     /// </summary>
@@ -169,19 +180,31 @@ internal sealed class FlagAnalysis
     /// <summary>
     /// Works out the flags through one routine's <paramref name="blocks"/>, and returns each
     /// block whose last statement is a conditional branch the analysis proves goes one way only.
-    /// The blocks are left as they are. <paramref name="edges"/> holds the spans of the tokens
-    /// in this file's statements and <c>.next</c> annotations that made the blocks' edges, so a
-    /// label named anywhere else may be entered from outside.
+    /// The blocks are left as they are.
     /// </summary>
-    public Dictionary<int, ProvedBranch> Prove(Symbol routine, IReadOnlyList<BasicBlock> blocks, IReadOnlySet<TextSpan> edges)
+    /// <param name="routine">The routine the blocks are of.</param>
+    /// <param name="blocks">The routine's blocks.</param>
+    /// <param name="edges">
+    /// The spans of the tokens in this file's statements and <c>.next</c> annotations that made
+    /// the blocks' edges. A label named anywhere else may be entered from outside.
+    /// </param>
+    /// <param name="dispatches">
+    /// The routine's <c>.next</c> annotations under statements other than calls, each with the
+    /// expansion of the statement above it. A label that only the table such a <c>.next</c> names
+    /// holds is entered only by the jump the <c>.next</c> is under.
+    /// </param>
+    public Dictionary<int, ProvedBranch> Prove(
+        Symbol routine, IReadOnlyList<BasicBlock> blocks, IReadOnlySet<TextSpan> edges,
+        IReadOnlyList<(NextDirectiveSyntax Next, Expansion? On)> dispatches)
     {
         var proved = new Dictionary<int, ProvedBranch>();
         if (blocks.Count == 0)
             return proved;
+        var dispatched = Dispatched(dispatches, edges);
         var seeds = new List<(int, FlagState)> { (0, FlagState.Entered(routine.Signature?.EntryFlags ?? FlagValues.None)) };
         foreach (var block in blocks)
         {
-            if (IsEntry(block, edges))
+            if (IsEntry(block, edges, dispatched))
                 seeds.Add((block.Index, FlagState.Given(block.IsDeclared ? FlagValues.None : block.Label?.Signature?.EntryFlags ?? FlagValues.None)));
         }
         var reached = Solve(blocks, seeds, exits.Of, track: true);
@@ -326,11 +349,13 @@ internal sealed class FlagAnalysis
     /// routine's caller, or null where it goes back somewhere else, as <c>rti</c> does.
     /// <paramref name="last"/> holds the flags before its last statement and
     /// <paramref name="through"/> those after it. A <c>.next .return</c> returns with what its
-    /// statement leaves, as an <c>rts</c> returns with what it finds.
+    /// statement leaves, as an <c>rts</c> returns with what it finds. So do the bytes from a
+    /// position inside an instruction that end in a return, which is not among the instructions
+    /// they run as before it.
     /// </summary>
-    private static FlagState? ReturnedWith(BasicBlock block, FlagState last, FlagState through)
+    private FlagState? ReturnedWith(BasicBlock block, FlagState last, FlagState through)
     {
-        if (block.Next is { ReturnToken: not null })
+        if (block.Next is { ReturnToken: not null } || layout.HiddenPathAt(block.Steps[^1])?.Return is not null)
             return through;
         return block.Next is null && block.Steps[^1].Statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl }
             ? last
@@ -703,18 +728,65 @@ internal sealed class FlagAnalysis
     /// Returns whether control may enter <paramref name="block"/> from somewhere the routine's
     /// own edges do not show. That is a label a <c>.state</c> declares, a label with a
     /// signature of its own, an exported label, and a label named anywhere but at one of
-    /// <paramref name="edges"/>, by a <c>.patch</c>, or as the address an instruction reads or
-    /// writes.
+    /// <paramref name="edges"/>, by a <c>.patch</c>, as the address an instruction reads or
+    /// writes, or as an item of one of the <paramref name="dispatched"/> tables.
     /// </summary>
-    private bool IsEntry(BasicBlock block, IReadOnlySet<TextSpan> edges)
+    private bool IsEntry(BasicBlock block, IReadOnlySet<TextSpan> edges, IReadOnlyList<TextSpan> dispatched)
     {
         if (block.Label is not { } label)
             return false;
         if (block.IsDeclared || label.Signature is not null || label.IsExported)
             return true;
         return model.ReferencesTo(label).Any(reference =>
-            !reference.IsDeclaration && !edges.Contains(reference.Span) && !Touches(reference.Span));
+            !reference.IsDeclaration && !edges.Contains(reference.Span) && !Touches(reference.Span)
+            && !dispatched.Any(item => item.Contains(reference.Span)));
     }
+
+    /// <summary>
+    /// Returns the spans of the items of the lists and tables that <paramref name="dispatches"/>
+    /// spread, where nothing but those annotations hands control to what the items name. A label
+    /// named only there is reached only along the edges the flow graph gives the
+    /// <c>.next</c>, so the flags the dispatching statement leaves flow into it as a branch's do.
+    /// <para>
+    /// A list or a table counts only where every item names a label or a routine, so the flow
+    /// graph spreads all of it. It must not be exported. Every other name of it in the file must
+    /// be in one of <paramref name="dispatches"/>, in a jump of this routine, or in an instruction
+    /// that only reads its bytes, as <c>lda table,x</c> does. Anything else, such as a call's
+    /// <c>.next</c> or another routine's, may hand control to its labels with other flags.
+    /// </para>
+    /// </summary>
+    private List<TextSpan> Dispatched(
+        IReadOnlyList<(NextDirectiveSyntax Next, Expansion? On)> dispatches, IReadOnlySet<TextSpan> edges)
+    {
+        var spans = new List<TextSpan>();
+        foreach (var (next, on) in dispatches)
+        {
+            foreach (var name in next.Targets)
+            {
+                if (Targets.Of(model, name, on) is not { Symbol: var table } || table.IsExported
+                    || model.ReferencesTo(table).Any(reference => !reference.IsDeclaration && !Touches(reference.Span)
+                        && !(edges.Contains(reference.Span) && (InJump(reference.Span)
+                            || dispatches.Any(each => each.Next.Tree == model.Tree && each.Next.Span.Contains(reference.Span))))))
+                {
+                    continue;
+                }
+                var items = targets.ItemsOf(table, on).ToList();
+                if (items.Count == 0 || targets.Spread(table, on).Count() != items.Count)
+                    continue;
+                spans.AddRange(items.Where(each => each.Item.Tree == model.Tree).Select(each => each.Item.Span));
+            }
+        }
+        return spans;
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether the name at <paramref name="span"/> is in the operand of
+    /// an instruction that transfers control without calling, such as <c>jmp (table,x)</c>.
+    /// </summary>
+    private bool InJump(TextSpan span) =>
+        model.Tree.Root.FindToken(span.Start).Parent?.AncestorsAndSelf().OfType<InstructionStatementSyntax>().FirstOrDefault()
+            is { } instruction
+        && Instructions.IsControlTransfer(instruction.MnemonicKind) && !Instructions.IsCall(instruction.MnemonicKind);
 
     /// <summary>
     /// Returns a value indicating whether the name at <paramref name="span"/> names code only to

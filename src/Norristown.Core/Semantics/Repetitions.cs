@@ -32,7 +32,7 @@ public static class Repetitions
         return opener switch
         {
             RepeatDirectiveSyntax repeat => Counted(model, block, repeat.Expression, binding, outer, diagnostics),
-            EachDirectiveSyntax each => Walked(model, block, each.Expression, binding, outer, diagnostics),
+            EachDirectiveSyntax each => Walked(model, block, each.Expression, binding, outer, diagnostics, IndexOf(model, each)),
             MultiProcDeclarationSyntax family =>
                 Walked(model, block, family.Expression, binding, outer, diagnostics, folded: true),
 
@@ -66,6 +66,15 @@ public static class Repetitions
             ? declared
             : null;
     }
+
+    /// <summary>
+    /// Returns the name an <c>.each</c> binds to the index of each item or member, or null when it
+    /// names none.
+    /// </summary>
+    public static Symbol? IndexOf(SemanticModel model, EachDirectiveSyntax each) =>
+        each.Index is { IsMissing: false } index && model.SymbolAt(index) is { Kind: SymbolKind.Binding } declared
+            ? declared
+            : null;
 
     /// <summary>
     /// Returns the message explaining why a <c>.repeat</c> or <c>.each</c> body may not contain
@@ -107,12 +116,12 @@ public static class Repetitions
     }
 
     /// <summary>
-    /// Returns the iterations of <c>.each what, h</c>. The name takes each item of a list, or
-    /// each member of an enum, in source order.
+    /// Returns the iterations of <c>.each what, h, i</c>. The name takes each item of a list, or
+    /// each member of an enum, in source order, and the index name counts them from zero.
     /// </summary>
     private static IReadOnlyList<Expansion> Walked(
         SemanticModel model, BlockSyntax block, SyntaxNode walked, Symbol? binding, Expansion? outer,
-        List<Diagnostic>? diagnostics, bool folded = false)
+        List<Diagnostic>? diagnostics, Symbol? index = null, bool folded = false)
     {
         // `.multiproc` names its routines after an enum's members, so a list gives no iterations.
         // The binder has already reported the list where the family is declared.
@@ -133,7 +142,8 @@ public static class Repetitions
                 return [];
             var words = parameter.Accepts.Element?.Kind == ParameterKind.One;
             return [.. argument.Items.Select((item, i) => Expansion.Iteration(
-                outer, block, binding, words ? Value.Word(Word(item)) : Value.Unknown, words ? null : item, i))];
+                outer, block, binding, words ? Value.Word(Word(item)) : Value.Unknown, words ? null : item, i,
+                indexBinding: index))];
         }
 
         // A list item is kept as it was written, because the items may be labels, which have no
@@ -142,11 +152,11 @@ public static class Repetitions
         // list of lists is walked.
         var named = model.SymbolOf(walked, outer);
         if ((model.ItemsOf(walked) ?? (named is { Kind: SymbolKind.List } list ? list.Items : null)) is { } items)
-            return [.. items.Select((item, i) => Expansion.Iteration(outer, block, binding, Value.Unknown, item, i))];
+            return [.. items.Select((item, i) => Expansion.Iteration(outer, block, binding, Value.Unknown, item, i, indexBinding: index))];
 
         if (named is { Kind: SymbolKind.Enum, Body: { } members })
             return [.. members.Symbols.Where(member => member.IsEnumMember).Select(
-                (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member))];
+                (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member, index))];
 
         Report(model, diagnostics, walked, outer, Catalogue.EachNotOverAList);
         return [];

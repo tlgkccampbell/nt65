@@ -344,7 +344,8 @@ public static class Catalogue
         "expected-text",
         Severity.Error,
         "expected {0}",
-        "A message, or a linker name, goes in double quotes. nt65 has no bare-word text.");
+        "A message, or a linker name, goes in double quotes. nt65 has no bare-word text. An `.assert` message "
+            + "may also be a text constant or a call that returns text.");
 
     internal static DiagnosticDescriptor ExpectedDataType { get; } = Entry(
         Area.ReadingALine,
@@ -585,12 +586,13 @@ public static class Catalogue
         Area.ReadingALine,
         "continuation-outside-expression",
         Severity.Error,
-        "a line can continue only inside brackets, a macro call's arguments or a parameter list",
+        "a line can continue only inside brackets, a macro call's arguments or a parameter list, or after an `.assert`'s comma",
         "A line whose `(` or `[` is still open at its end continues onto the next, so a long expression, macro "
             + "call or list of parameters can be written across lines. Only an expression's own brackets, a macro "
             + "call's arguments and a macro's or a function's parameters may hold a line break: a group's "
             + "parentheses, a call's or a macro call's arguments, a set, an index, and the parentheses after the "
-            + "name that `.macro` or `.func` declares. The parentheses of an operand such as `(ptr),y`, written in "
+            + "name that `.macro` or `.func` declares. An `.assert` line that ends with a comma continues too, so "
+            + "its message can go on the next line. The parentheses of an operand such as `(ptr),y`, written in "
             + "an instruction or in a braced argument like `{(ptr),y}`, and a data declaration's count stay on one "
             + "line.");
 
@@ -1197,7 +1199,8 @@ public static class Catalogue
             + "writes the function's body with the argument in place of the parameter and leaves ld65 to work it "
             + "out once the address is known. ld65 works out the arithmetic, bitwise, shift, comparison and "
             + "logical operators and `<`, `>` and `^`, so `.func digit(n, place) = '0' + (n / place) .mod 10` can "
-            + "be given a routine's address. A built-in function, `.in`, a charmap or text in the body is worked out "
+            + "be given a routine's address. `.lobyte`, `.hibyte` and `.bankbyte` are written as those operators, so "
+            + "they can be given one too. Any other built-in function, `.in`, a charmap or text in the body is worked out "
             + "by nt65 before the output is written, and so needs every parameter it uses to be given a constant. "
             + "The body is written into the output of the file that calls it, so an address it names has to be "
             + "declared in that file.");
@@ -1589,10 +1592,11 @@ public static class Catalogue
         Area.Values,
         "binding-not-over-an-enum",
         Severity.Error,
-        "`{0}` cannot end a path: only the binding of an `.each` over an enum can",
+        "`{0}` cannot end a path: only the name an `.each` over an enum binds to each member can",
         "Inside `.each Enum, e`, a path such as `handlers::e` names the member of `handlers` that has the same "
             + "name as the current enum member. When `.each` iterates over a `.list` or a list parameter, its "
-            + "variable stands for a value rather than a name, so it cannot be used at the end of a path.");
+            + "variable stands for a value rather than a name, so it cannot be used at the end of a path. Neither can "
+            + "the index that `.each Enum, e, i` binds, which is a number.");
 
     internal static DiagnosticDescriptor FamilyMemberMissing { get; } = Entry(
         Area.Values,
@@ -2630,6 +2634,15 @@ public static class Catalogue
         "The `.assert` condition is false. nt65 checks an assertion as soon as it can evaluate the condition; one "
             + "that depends on final addresses is passed on for the linker to check.");
 
+    internal static DiagnosticDescriptor AssertMessageNotText { get; } = Entry(
+        Area.Instructions,
+        "assert-message-not-text",
+        Severity.Error,
+        "an `.assert` message is text: a string in quotes, a text constant, or a call that returns text",
+        "The message is what nt65 reports when the condition does not hold, and what ld65 reports when the "
+            + "linker checks it, so it has to be text nt65 can work out before writing the output. A long "
+            + "message can be declared once as a text constant, `.const MSG = \"...\"`, and named on the line.");
+
     internal static DiagnosticDescriptor ConfigRefused { get; } = Entry(
         Area.Instructions,
         "config-refused",
@@ -2743,7 +2756,8 @@ public static class Catalogue
         "From a position inside an instruction, nt65 decodes the bytes as the processor runs them, until they "
             + "reach the start of an instruction as written, and the analyses follow those instructions. Every "
             + "byte has to be known before linking, each instruction has to be one the processor has, and none may "
-            + "change where control goes or move the stack, or nt65 could not tell where they lead.");
+            + "change where control goes or move the stack, or nt65 could not tell where they lead. The one "
+            + "exception is an `rts` or an `rtl`, which ends the path and is checked as a return written there.");
 
     internal static DiagnosticDescriptor PatchVariantRejected { get; } = Entry(
         Area.ControlFlow,
@@ -2971,10 +2985,14 @@ public static class Catalogue
         Area.ControlFlow,
         "computed-branch-unchecked",
         Severity.Error,
-        "{0} branches to a computed address, which nt65 cannot follow: write the label it goes to as its operand",
+        "{0} branches to {1}, which nt65 cannot follow: {2}",
         "The target is an expression rather than a label, so the analysis has no label at which to continue. A "
             + "branch can only reach a place within its range, which is code the program holds, so the label at "
-            + "that address can be named. Where nothing there has a label, add one.");
+            + "that address can be named. Where nothing there has a label, add one. A target written as an offset "
+            + "from the branch, such as `*+4`, is placed against the routine's bytes: where it lands on an "
+            + "instruction of the same routine, the fix labels that instruction and branches to the label. Where "
+            + "it lands inside an instruction, a `.label` names that position, and the bytes there are checked as "
+            + "the instructions they run as.");
 
     internal static DiagnosticDescriptor PushedReturnUnchecked { get; } = Entry(
         Area.ControlFlow,
@@ -4269,13 +4287,17 @@ public static class Catalogue
         Area.Suggestions,
         "constant-used-as-address",
         Severity.Info,
-        "`{0}` is used as an address: declare it as data, or with `.mmio` if it is a hardware register",
+        "`{0}` is used as an address: {1}",
         "A constant is a number to nt65, even where an instruction reaches memory through it, so what is at that "
             + "address has no element type, size or fields, and the editor cannot follow values stored there. Declared "
             + "as data found elsewhere, `.data name: .byte = address`, the same name has all of those, and with "
             + "`.mmio` in place of `.data` it is a hardware register, whose value the hardware sets. The output is the "
             + "same. A constant that a branch, a jump or a call names directly is the address of code, and is not "
-            + "suggested.");
+            + "suggested. In the body of a family, a `.multiproc` or an `.each` over a named enum, the binding is a "
+            + "member's value, and an instruction that reaches memory through it bare is a warning rather than a "
+            + "suggestion. There a reader expects the name to mean the member's data, such as `level::ch`, and "
+            + "`lda ch` reads the address that the value names instead. Write the path to the data, or `#ch` for "
+            + "the value itself.");
 
     internal static DiagnosticDescriptor WidthAlreadySet { get; } = Entry(
         Area.Suggestions,

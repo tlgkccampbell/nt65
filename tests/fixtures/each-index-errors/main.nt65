@@ -1,0 +1,44 @@
+; The index an `.each` binds is a number, so it names no member and no declaration.
+.module main
+
+.cpu 6502
+
+.list commands {
+    1
+    2
+}
+
+.enum Color {
+    red
+    green
+}
+
+.segment RODATA
+.export .data twice: .byte[] {
+    .each commands, command, command {      ;! error[name-already-declared]: `command` is already declared in this scope
+        command
+    }
+}
+
+.export .data unnamed: .byte[] {
+    .each commands, command, {              ;! error[expected-name]: expected the name to bind the index to
+        command
+    }
+}
+
+.export .data counted: .byte[] {
+    .repeat 2, i, j {                       ;! error[expected-brace]: expected `{`
+        i
+    }
+}
+
+.scope shades {
+    .data red:   .byte = 1
+    .data green: .byte = 2
+}
+
+.export .data by_index: .byte[] {
+    .each Color, color, n {
+        shades::n                           ;! error[binding-not-over-an-enum]: `n` cannot end a path: only the name an `.each` over an enum binds to each member can
+    }
+}

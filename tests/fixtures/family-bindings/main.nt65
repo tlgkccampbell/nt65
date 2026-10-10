@@ -1,0 +1,59 @@
+; In a family's body the binding stands for a member's value, a number. Used bare as an address,
+; it reads or writes the memory at that number, which is almost never what is meant where the
+; member's own data is one path away, so the build warns. As an immediate, in a path, or in a
+; condition it is the member, as it should be.
+.module main
+
+.cpu 6502
+
+.export play::pulse, play::noise, clear, counts
+
+.enum Channel {
+    pulse
+    noise
+}
+
+.macro load(source) {
+    lda source
+}
+
+.segment BSS
+.scope level {
+    .each Channel, ch {
+        .data ch: .byte
+    }
+}
+
+.segment CODE
+.scope play {
+    .multiproc Channel, ch {
+        lda ch                  ;! warning[constant-used-as-address]: `ch` is used as an address: each turn over `Channel` binds it to a member's value, so name the data with a path that ends in `ch`, or write `#ch` for the value
+        sta ch + 1              ;! warning[constant-used-as-address]: `ch` is used as an address: each turn over `Channel` binds it to a member's value, so name the data with a path that ends in `ch`, or write `#ch` for the value
+        load!(ch)               ;! warning[constant-used-as-address]: `ch` is used as an address: each turn over `Channel` binds it to a member's value, so name the data with a path that ends in `ch`, or write `#ch` for the value
+        lda #ch
+        lda level::ch
+        .if ch == Channel::noise {
+            ora #$80
+        }
+        sta level::ch
+        rts
+    }
+}
+
+; An `.each` over a named enum binds a member the same way, inside a routine too.
+.proc clear {
+    lda #0
+    .each Channel, c {
+        sta c                   ;! warning[constant-used-as-address]: `c` is used as an address: each turn over `Channel` binds it to a member's value, so name the data with a path that ends in `c`, or write `#c` for the value
+        sta level::c
+    }
+    rts
+}
+
+; A `.repeat` only counts, and its index is not a member of anything, so nothing is said.
+.proc counts {
+    .repeat 2, i {
+        lda i
+    }
+    rts
+}

@@ -55,13 +55,13 @@ internal sealed partial class Evaluator
 
         void Walk(SyntaxNode node)
         {
-            // A segment function's value comes from the linker, and its width is the one the
-            // segment functions give.
+            // A segment function's value comes from the linker, and its width is that of where
+            // the linked configurations place the segment.
             if (node is CallExpressionSyntax asked
-                && SegmentFunctions.Of(asked, segments, name => SymbolOf(name) is not null) is not null)
+                && SegmentFunctions.Of(asked, segments, name => SymbolOf(name) is not null) is { } about)
             {
                 named = true;
-                widest = Widest(widest, SegmentFunctions.SizeOf());
+                widest = Widest(widest, SegmentFunctions.SizeOf(about.Function, about.Segment));
                 return;
             }
 

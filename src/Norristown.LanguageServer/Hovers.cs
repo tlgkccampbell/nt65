@@ -119,6 +119,25 @@ internal static class Hovers
     }
 
     /// <summary>
+    /// Formats the registers a routine reads as both the lens and the hover show them, as
+    /// <see cref="Format(Registers, bool)"/> does. Where the routine passes control to code nt65 cannot follow, and
+    /// the answer is still complete because none of the registers holds an entry value there, the
+    /// registers it does not read are named, such as <c>none of A, X, Y, C, Z, N, V</c> or
+    /// <c>X · none of A, Y, C, Z, N, V</c>. That code may use what the caller left elsewhere, so a
+    /// bare <c>none</c> would claim more than nt65 knows.
+    /// </summary>
+    /// <param name="reads">What the routine was found to read.</param>
+    /// <returns>The registers, as a bare list.</returns>
+    internal static string Format(RoutineReads reads)
+    {
+        var unread = Registers.All & ~reads.Read;
+        if (!reads.Complete || !reads.Bounded || unread == Registers.None)
+            return Format(reads.Read, reads.Complete);
+        var none = $"none of {string.Join(", ", RegisterEffects.Each(unread).Select(RegisterEffects.Format))}";
+        return reads.Read == Registers.None ? none : $"{Format(reads.Read, true)} · {none}";
+    }
+
+    /// <summary>
     /// Formats the registers a routine preserves where its signature promises some of them with
     /// <c>keeps</c>, such as <c>keeps X · also preserves Y, C, V (inferred)</c>. The promise comes
     /// first. The registers the analysis only found unchanged follow, marked as inferred, because
@@ -322,11 +341,16 @@ internal static class Hovers
         Routine(card, analysis, symbol);
 
         // A position inside an instruction runs the bytes there as other instructions, which the
-        // source does not show.
+        // source does not show, and neither does it show what they cost. Each instruction is
+        // shown with its own cycles, and the run with its total.
         if (symbol.Kind == SymbolKind.Label
             && analysis.LayoutFor(symbol.Tree.Path)?.HiddenInstructionsOf(symbol) is { Count: > 0 } hidden)
         {
-            card.Row("runs", string.Join("; ", hidden));
+            card.Row("runs", string.Join("; ", hidden.Select(each => $"{each} ({each.Cycles?.ToString() ?? "no count"})")));
+            CycleCount? total = new CycleCount(0);
+            foreach (var each in hidden)
+                total = total is { } sum && each.Cycles is { } cycles ? sum + cycles : null;
+            card.Row("cycles", total is { } known ? $"{known} in all" : null);
         }
         var expansion = MacroCallHover.At(analysis, model, reference);
         card.Row("expands to", expansion?.Becomes());
@@ -511,7 +535,7 @@ internal static class Hovers
                 region.Routine.Name,
                 Cost: CodeLenses.Format(region.Cost, region.Total, "never returns", false),
                 Excluded: region.Cost.IsKnown ? region.Total.Excluded ?? [] : [],
-                Read: Format(region.Reads.Read, region.Reads.Complete),
+                Read: Format(region.Reads),
                 Kept: region.Total.Ends ? Preserved(region, "also") : null))
             .ToList();
         Rows(card, "cost", found.Select(region => (region.Name, region.Cost)));

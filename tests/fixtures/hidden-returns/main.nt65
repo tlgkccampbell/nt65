@@ -1,0 +1,43 @@
+; A branch into an operand whose byte is $60 runs `rts`, a classic way to save a byte. nt65
+; follows such a hidden return as it would a return written there: the routine's keeps, its exit
+; flags and what it leaves on the stack are checked where it returns.
+.module main
+
+.cpu 6502
+
+.export halve, carry_clear, both_ways
+
+.segment CODE
+
+; `lda $60` is $A5 $60, and from its second byte the processor runs `rts`.
+.proc halve: keeps y {
+@top:
+    lda $60
+    .label done = @top + 1
+    lsr a
+    bcc done
+    ldx #1
+    rts
+}
+
+; The carry is clear on the branch into the operand, which is what the signature promises.
+.proc carry_clear: -> c = 0 {
+@top:
+    lda $60
+    .label leave = @top + 1
+    lsr a
+    bcc leave
+    clc
+    rts
+}
+
+; A path may run other hidden instructions before the return. `lda $60E8` is $AD $E8 $60, and
+; from its second byte the processor runs `inx`, then `rts`.
+.proc both_ways: keeps y {
+@top:
+    lda $60E8
+    .label tail = @top + 1
+    lsr a
+    bcc tail
+    rts
+}

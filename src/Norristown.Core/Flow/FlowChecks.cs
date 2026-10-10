@@ -22,8 +22,9 @@ internal sealed class FlowChecks
 
     // A line of a macro body serves every call, so code there that one expansion never reaches
     // is reported only where no expansion of the line is reached. The first holds what would be
-    // reported for each such line, and the second the lines some expansion reaches.
-    private readonly Dictionary<SyntaxNode, Diagnostic> unreachedInExpansions = [];
+    // reported for each such line, at each call that leaves it unreached, and the second the lines
+    // some expansion reaches.
+    private readonly Dictionary<SyntaxNode, List<Diagnostic>> unreachedInExpansions = [];
     private readonly HashSet<SyntaxNode> reachedInExpansions = [];
 
     // Whether the file places another module or may be placed itself. In such a file a
@@ -42,7 +43,7 @@ internal sealed class FlowChecks
 
     /// <summary>Gets what the checks have found, in the order they were reported.</summary>
     public IReadOnlyList<Diagnostic> Found =>
-        [.. diagnostics, .. unreachedInExpansions.Where(pair => !reachedInExpansions.Contains(pair.Key)).Select(pair => pair.Value)];
+        [.. diagnostics, .. unreachedInExpansions.Where(pair => !reachedInExpansions.Contains(pair.Key)).SelectMany(pair => pair.Value)];
 
     /// <summary>
     /// Gets every <c>.fallthrough</c> whose claim only the translation unit can check. See
@@ -83,7 +84,7 @@ internal sealed class FlowChecks
                 }
                 else
                 {
-                    Report(call, Catalogue.InlineDataMissing.Message(name, "one `.strz`", "none follows this one"));
+                    Report(call, step.On, Catalogue.InlineDataMissing.Message(name, "one `.strz`", "none follows this one"));
                 }
                 continue;
             }
@@ -91,7 +92,7 @@ internal sealed class FlowChecks
             if (inline.Expression is not { } count
                 || model.ValueOf(count, step.On).AsNumber() is not { } bytes || bytes < 0)
             {
-                Report(call, Catalogue.InlineCountNotConstant.Message(name, inline.Text));
+                Report(call, step.On, Catalogue.InlineCountNotConstant.Message(name, inline.Text));
                 continue;
             }
 
@@ -108,16 +109,13 @@ internal sealed class FlowChecks
             }
             if (taken != bytes)
             {
-                Report(call, Catalogue.InlineDataMissing.Message(
+                Report(call, step.On, Catalogue.InlineDataMissing.Message(
                     name,
                     $"{Bytes(bytes)} of data",
                     taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
             }
         }
         return found;
-
-        void Report(SyntaxNode node, DiagnosticMessage message) =>
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
 
         static string Bytes(long count) => count == 1 ? "1 byte" : $"{count} bytes";
     }
@@ -154,8 +152,8 @@ internal sealed class FlowChecks
         {
             if (keys.Contains(variant.Written.Key) && variant.Problem is { } problem)
             {
-                diagnostics.Add(new Diagnostic(variant.Name.Tree.GetSpan(variant.Name.Span), Catalogue.PatchVariantRejected.Message(
-                    variant.Name.GetText().Trim(), SyntaxFacts.TextOf(variant.WrittenMnemonic), problem)));
+                Report(variant.Name, variant.On, Catalogue.PatchVariantRejected.Message(
+                    variant.Name.GetText().Trim(), SyntaxFacts.TextOf(variant.WrittenMnemonic), problem));
             }
         }
     }
@@ -175,13 +173,11 @@ internal sealed class FlowChecks
             if (!keys.Contains(unlisted.Written.Key))
                 continue;
             var patch = unlisted.Patch;
-            diagnostics.Add(new Diagnostic(patch.Tree.GetSpan(patch.Span), Catalogue.PatchVariantsRequired.Message(
-                unlisted.Store.Statement.GetTextOnOneLine(), unlisted.Label.DisplayName))
-            {
-                Fix = unlisted.Inferred == MnemonicKind.None
+            Report(patch, unlisted.Store.On, Catalogue.PatchVariantsRequired.Message(
+                    unlisted.Store.Statement.GetTextOnOneLine(), unlisted.Label.DisplayName),
+                unlisted.Inferred == MnemonicKind.None
                     ? null
-                    : new DiagnosticFix(FixKind.Variant, SyntaxFacts.TextOf(unlisted.Inferred)),
-            });
+                    : new DiagnosticFix(FixKind.Variant, SyntaxFacts.TextOf(unlisted.Inferred)));
         }
     }
 
@@ -200,12 +196,10 @@ internal sealed class FlowChecks
             if (!keys.Contains(missed.Written.Key))
                 continue;
             var patch = missed.Patch;
-            diagnostics.Add(new Diagnostic(patch.Tree.GetSpan(patch.Span), Catalogue.PatchMissesStore.Message(
-                missed.Store.Statement.GetTextOnOneLine(), missed.Before ? "before" : "past", missed.Label.DisplayName,
-                missed.Length == 1 ? "1 byte" : $"{missed.Length} bytes", missed.Into))
-            {
-                Fix = missed.Fix,
-            });
+            Report(patch, missed.Store.On, Catalogue.PatchMissesStore.Message(
+                    missed.Store.Statement.GetTextOnOneLine(), missed.Before ? "before" : "past", missed.Label.DisplayName,
+                    missed.Length == 1 ? "1 byte" : $"{missed.Length} bytes", missed.Into),
+                missed.Fix);
         }
     }
 
@@ -225,10 +219,10 @@ internal sealed class FlowChecks
                     continue;
                 if (flow.IsDataWithoutCodeLabels(target.Symbol, annotation.On))
                 {
-                    diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
-                        ControlFlow.IsAddressData(target.Symbol)
+                    Report(targetName, annotation.On,
+                        NextTargets.IsAddressData(target.Symbol)
                             ? Catalogue.NextTableHasNoLabels.Message(target.Symbol.DisplayName)
-                            : Catalogue.NextTargetNotATable.Message(target.Symbol.DisplayName)));
+                            : Catalogue.NextTargetNotATable.Message(target.Symbol.DisplayName));
                     continue;
                 }
                 if (target.Symbol.IsAddress
@@ -237,16 +231,15 @@ internal sealed class FlowChecks
                     var (here, there) = model.Segments.Find(annotation.Segment!)!
                         .Excluding(model.Segments.Find(target.Symbol.Segment!)!)!.Value;
                     var what = $"`{target.Symbol.QualifiedName}`";
-                    diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span), Catalogue.SegmentNotVisible.Message(
+                    Report(targetName, annotation.On, Catalogue.SegmentNotVisible.Message(
                         annotation.a is PatchDirectiveSyntax ? what : $"`{Annotations.Format(annotation.a)}` targets {what}",
-                        target.Symbol.Segment!, annotation.Segment!, there.Config, there.Area, here.Area)));
+                        target.Symbol.Segment!, annotation.Segment!, there.Config, there.Area, here.Area));
                     continue;
                 }
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
                     continue;
-                diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
-                    Catalogue.NextTargetNotCode.Message(
-    target.Symbol.DisplayName, target.Symbol.KindPhrase, Annotations.Format(annotation.a))));
+                Report(targetName, annotation.On, Catalogue.NextTargetNotCode.Message(
+                    target.Symbol.DisplayName, target.Symbol.KindPhrase, Annotations.Format(annotation.a)));
             }
         }
     }
@@ -275,21 +268,23 @@ internal sealed class FlowChecks
             if (unreached && block.Steps is [{ Statement: InstructionStatementSyntax } first, ..])
             {
                 var above = region.Blocks[block.Index - 1];
-                var found = new Diagnostic(first.Statement.Tree.GetSpan(first.Statement.Span),
+                var found = Expansion.Problem(model.Tree, first.Statement, first.On, null,
                     Catalogue.CodeUnreachable.Message(block.Stream != above.Stream
                         ? "execution does not fall into a nested segment block, so start it with a label that is "
                             + "jumped to, named by a `.next`, or declared by a `.state`"
                         : above.Steps is [.., var branch] && flow.Flags?.ProvedAt(branch) is { Taken: true } proved
                             ? $"`{branch.Statement.GetText().Trim()}` above is always taken, because {proved.Why}, "
                                 + "and nothing branches or jumps here"
-                            : "the statement above does not fall through, and nothing branches or jumps here"))
-                {
-                    IsUnnecessary = true,
-                };
+                            : "the statement above does not fall through, and nothing branches or jumps here"));
+
+                // Only the code itself is faded. Reported at a call, the call is still needed.
+                found = found with { IsUnnecessary = found.Related.Count == 0 };
                 if (first.On is null)
                     diagnostics.Add(found);
+                else if (unreachedInExpansions.TryGetValue(first.Statement, out var calls))
+                    calls.Add(found);
                 else
-                    unreachedInExpansions.TryAdd(first.Statement, found);
+                    unreachedInExpansions[first.Statement] = [found];
                 continue;
             }
             if (block.Index == 0 || block.Label is not { Kind: not SymbolKind.Data } label || block.Predecessors.Count > 0
@@ -299,11 +294,9 @@ internal sealed class FlowChecks
             }
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
-            diagnostics.Add(new Diagnostic(label.DeclarationSpan,
-                Catalogue.LabelUnreachable.Message(label.DisplayName))
-            {
-                Fix = new DiagnosticFix(FixKind.State, At: label.DeclarationSpan),
-            });
+            diagnostics.Add(Expansion.Problem(model.Tree, label.Tree, label.NameSpan, block.On, null,
+                Catalogue.LabelUnreachable.Message(label.DisplayName),
+                new DiagnosticFix(FixKind.State, At: label.DeclarationSpan)));
         }
     }
 
@@ -384,7 +377,7 @@ internal sealed class FlowChecks
         };
         var found = call is var (reported, _, _)
             ? new Diagnostic(reported.Tree.GetSpan(reported.Span), message,
-                [new RelatedSpan(statement.Tree.GetSpan(statement.Span), "in the macro body")])
+                [new RelatedSpan(statement.Tree.GetSpan(statement.Span), Expansion.InTheMacroBody)])
             : new Diagnostic(statement.Tree.GetSpan(statement.Span), message);
         diagnostics.Add(found with { Fix = fix });
     }
@@ -426,6 +419,7 @@ internal sealed class FlowChecks
                 null when statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rts or MnemonicKind.Rtl } instruction
                     => SyntaxFacts.TextOf(instruction.MnemonicKind),
                 { ReturnToken: not null } => ".next .return",
+                null when layout.HiddenPathAt(unit.Step)?.Return is { } hidden => SyntaxFacts.TextOf(hidden.Mnemonic),
                 _ => null,
             };
             if (returned is not null && routine.Signature is { HasNoCaller: true } own)
@@ -437,8 +431,11 @@ internal sealed class FlowChecks
                     // A handler is left by `rti`, which is the instruction to use instead. A
                     // routine that never returns has no instruction that would do. It should
                     // leave some other way there, or not say `noreturn`. A `.next .return` has
-                    // no instruction to replace.
-                    own.IsInterrupt && unit.Next is null ? new DiagnosticFix(FixKind.Return, "rti") : null);
+                    // no instruction to replace, and nor has a return inside another
+                    // instruction's bytes.
+                    own.IsInterrupt && unit.Next is null && statement is InstructionStatementSyntax
+                        ? new DiagnosticFix(FixKind.Return, "rti")
+                        : null);
             }
             foreach (var called in Callees(unit))
             {
@@ -481,14 +478,6 @@ internal sealed class FlowChecks
                 : unit.Next is { } next && ControlFlow.IsCall(unit.Step.Statement)
                     ? flow.Named(next, unit.Step.On).Select(named => named.Symbol).Distinct()
                     : [];
-
-        // A line of a macro body is reported at the call that expanded it, with the line as a
-        // note, and without a fix, which would change a line every call expands.
-        void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
-            diagnostics.Add(Expansion.BodyLine(node, on, model.Tree) is var (call, _, _)
-                ? new Diagnostic(call.Tree.GetSpan(call.Span), message,
-                    [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")])
-                : new Diagnostic(node.Tree.GetSpan(node.Span), message) with { Fix = fix });
     }
 
     /// <summary>
@@ -520,13 +509,13 @@ internal sealed class FlowChecks
             var statement = $"`{unit.Step.Statement.GetText().Trim()}`";
             if (unit.Next is { } claimed && (claimed.QuestionToken ?? claimed.ReturnToken) is { } unknown && IsBranch(unit))
             {
-                diagnostics.Add(new Diagnostic(claimed.Tree.GetSpan(claimed.Span), Severity.Error,
+                Report(claimed, unit.Step.On,
                     Catalogue.NextUnknownAfterBranch.Message(
                         $".next {unknown.Text}",
                         statement,
                         BranchTarget(unit) is { } taken
                             ? $"if the branch is always taken, write `.next {taken.DisplayName}`, and otherwise remove the `.next`"
-                            : "write the label the branch goes to as its operand")));
+                            : "write the label the branch goes to as its operand"));
                 continue;
             }
 
@@ -536,14 +525,13 @@ internal sealed class FlowChecks
             {
                 if (Instructions.IsCall(instruction.MnemonicKind) || flow.RelativeCallAt(unit.Step) is not null)
                 {
-                    diagnostics.Add(new Diagnostic(returning.Tree.GetSpan(returning.Span), Severity.Error,
-                        Catalogue.ReturnAfterCall.Message(statement)));
+                    Report(returning, unit.Step.On, Catalogue.ReturnAfterCall.Message(statement));
                     continue;
                 }
                 if (instruction.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl or MnemonicKind.Rti)
                 {
-                    diagnostics.Add(new Diagnostic(returning.Tree.GetSpan(returning.Keyword.Span), Severity.Error,
-                        Catalogue.NextSuccessorsKnown.Message(statement, "returns to its caller", "")));
+                    Report(returning.Keyword, unit.Step.On,
+                        Catalogue.NextSuccessorsKnown.Message(statement, "returns to its caller", ""));
                     continue;
                 }
             }
@@ -559,13 +547,13 @@ internal sealed class FlowChecks
                     // The flags may show that the branch the `.next` calls always taken never is.
                     if (flow.Flags?.ProvedAt(unit.Step) is { Taken: false } never)
                     {
-                        diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Span), Severity.Error,
-                            Catalogue.NextNeverTaken.Message(target.DisplayName, unit.Step.Statement.GetText().Trim(), never.Why)));
+                        Report(next, unit.Step.On,
+                            Catalogue.NextNeverTaken.Message(target.DisplayName, unit.Step.Statement.GetText().Trim(), never.Why));
                     }
                     continue;
                 }
-                diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
-                    Catalogue.NextNotTheBranchTarget.Message($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName)));
+                Report(next.Keyword, unit.Step.On,
+                    Catalogue.NextNotTheBranchTarget.Message($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName));
                 continue;
             }
             if (Known(unit) is not { } does)
@@ -576,13 +564,11 @@ internal sealed class FlowChecks
             var ends = next.Parent is LineSyntax line && Fallthrough.EndsABody(line);
             var rewrite = ends && next.Tree == model.Tree && next.Targets.Count == 1
                 && flow.RoutineNamed(next.Targets[0], null) is not null;
-            diagnostics.Add(new Diagnostic(next.Tree.GetSpan(next.Keyword.Span), Severity.Error,
+            Report(next.Keyword, unit.Step.On,
                 Catalogue.NextSuccessorsKnown.Message(
                     $"`{unit.Step.Statement.GetText().Trim()}`", does,
-                    ends ? "; if this routine runs into the one after it, use `.fallthrough`" : ""))
-            {
-                Fix = rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null,
-            });
+                    ends ? "; if this routine runs into the one after it, use `.fallthrough`" : ""),
+                rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null);
         }
     }
 
@@ -682,4 +668,22 @@ internal sealed class FlowChecks
                 Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)));
         }
     }
+
+    /// <summary>
+    /// Reports a problem with <paramref name="node"/>, found in the expansion <paramref name="on"/>.
+    /// A line of a macro body is reported at the call that expanded it, with the line as a note
+    /// and without <paramref name="fix"/>, as
+    /// <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+    /// describes.
+    /// </summary>
+    private void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+        diagnostics.Add(Expansion.Problem(model.Tree, node, on, null, message, fix));
+
+    /// <summary>
+    /// Reports a problem with <paramref name="token"/>, found in the expansion <paramref name="on"/>.
+    /// A token on a line of a macro body is reported at the call that expanded it, with the token
+    /// as a note and without <paramref name="fix"/>.
+    /// </summary>
+    private void Report(SyntaxToken token, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+        diagnostics.Add(Expansion.Problem(model.Tree, token.Parent.Tree, token.Span, on, null, message, fix));
 }

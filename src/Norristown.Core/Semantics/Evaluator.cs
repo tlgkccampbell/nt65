@@ -344,7 +344,8 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Returns whether the output can leave a part of a <c>.func</c> body to ld65 when an
     /// address flows into it. ld65 works out every operator but <c>.in</c>, so an operation, a
-    /// name, a number and a call to another function can be written for it to finish.
+    /// name, a number and a call to another function can be written for it to finish. So can
+    /// <c>.lobyte</c>, <c>.hibyte</c> and <c>.bankbyte</c>, which are ca65's byte operators.
     /// </summary>
     private bool IsLinkTime(SyntaxNode node) => node switch
     {
@@ -352,6 +353,9 @@ internal sealed partial class Evaluator
         NumberExpressionSyntax or CharacterExpressionSyntax => true,
         BinaryExpressionSyntax binary => !IsIn(binary.OperatorToken),
         CallExpressionSyntax { Callee: { } callee } => SymbolOf(callee)?.Kind == SymbolKind.Func,
+
+        // The output writes these as ca65's `<`, `>` and `^`, which ld65 works out.
+        CallExpressionSyntax { Callee: null, BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte } => true,
         _ => false,
     };
 
@@ -1151,11 +1155,31 @@ internal sealed partial class Evaluator
     private void Report(Span span, DiagnosticMessage message, IReadOnlyList<RelatedSpan> related) =>
         Add(new Diagnostic(span, Severity.Error, message, related));
 
-    private void Report(SyntaxToken token, DiagnosticMessage message) =>
-        Add(new Diagnostic(token.Parent.Tree.GetSpan(token.Span), Severity.Error, message, []));
+    private void Report(SyntaxToken token, DiagnosticMessage message) => Report(token.Parent.Tree, token.Span, message);
 
-    private void Report(SyntaxNode node, DiagnosticMessage message) =>
-        Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message, []));
+    private void Report(SyntaxNode node, DiagnosticMessage message) => Report(node.Tree, node.Span, message);
+
+    /// <summary>
+    /// Reports a problem with the text at <paramref name="span"/> of <paramref name="tree"/>. Text
+    /// in the body of a <c>.func</c> that evaluation is inside is reported at the outermost call,
+    /// which is in the source being evaluated and gave the arguments, with the body's text as a
+    /// note. The body serves every call, as a macro body does, and only the call can change.
+    /// </summary>
+    private void Report(SyntaxTree tree, TextSpan span, DiagnosticMessage message)
+    {
+        foreach (var (_, function, _) in calls)
+        {
+            if (function.Items[0] is { } body && body.Tree == tree
+                && span.Start >= body.FullSpan.Start && span.Start < body.FullSpan.End)
+            {
+                var outermost = calls[0].Call;
+                Add(new Diagnostic(outermost.Tree.GetSpan(outermost.Span), Severity.Error, message,
+                    [new RelatedSpan(tree.GetSpan(span), "in the function body")]));
+                return;
+            }
+        }
+        Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message, []));
+    }
 
     private void Add(Diagnostic diagnostic)
     {

@@ -68,6 +68,21 @@ public sealed class CodeActionsTests
             ".export .proc main {\n    bcs @over\n    .next @over\n    .byte 1\n@over:\n    rts\n}\n"
         },
         {
+            "Label the landing `@skip` and branch to it",
+            ".export .proc main {\n    inx\n    beq *+3\n    dex\n    rts\n}\n",
+            ".export .proc main {\n    inx\n    beq @skip\n    dex\n@skip:\n    rts\n}\n"
+        },
+        {
+            "Label the landing `@skip2` and branch to it",
+            ".export .proc main {\n@skip:\n    inx\n    bcc @skip\n    beq *+3\n    dex\n    rts\n}\n",
+            ".export .proc main {\n@skip:\n    inx\n    bcc @skip\n    beq @skip2\n    dex\n@skip2:\n    rts\n}\n"
+        },
+        {
+            "Branch to `@done`",
+            ".export .proc main {\n    inx\n    beq *+3\n    dex\n@done:\n    rts\n}\n",
+            ".export .proc main {\n    inx\n    beq @done\n    dex\n@done:\n    rts\n}\n"
+        },
+        {
             "Change to `.fallthrough`",
             ".export .proc main: native {\n    jsr after\n    .next after\n}\n.export .proc after {\n    rts\n}\n",
             ".export .proc main: native {\n    jsr after\n    .fallthrough after\n}\n.export .proc after {\n    rts\n}\n"
@@ -152,6 +167,24 @@ public sealed class CodeActionsTests
         // On the 6502 an immediate has only one width, so the only diagnostic on the half-written
         // line is the parser's, and no edit the server could write would fix it.
         await client.OpenAsync(MainUri, ".module main\n.cpu 6502\n.segment CODE\n.export .proc main {\n    lda #\n    rts\n}\n");
+        Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
+
+        Assert.Empty(await ActionsAsync(client, MainUri, timeout));
+    }
+
+    /// <summary>
+    /// A branch to an offset that lands inside an instruction, or outside its routine, has no
+    /// instruction start to label, so no fix is offered for it.
+    /// </summary>
+    [Theory]
+    [InlineData(".export .proc main {\n    inx\n    beq *+3\n    lda $1234\n    rts\n}\n")]
+    [InlineData(".export .proc main {\n    inx\n    beq *-2\n    rts\n}\n")]
+    public async Task ABranchThatLandsOnNoInstructionStartIsOfferedNoLabel(string body)
+    {
+        var timeout = TestTimeout.Token();
+        await using var client = await TestClient.StartAsync(timeout);
+
+        await client.OpenAsync(MainUri, Header + body);
         Assert.NotEmpty((await client.NextDiagnosticsAsync(timeout)).Diagnostics);
 
         Assert.Empty(await ActionsAsync(client, MainUri, timeout));

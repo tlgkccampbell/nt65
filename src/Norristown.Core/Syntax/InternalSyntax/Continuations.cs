@@ -5,11 +5,13 @@ namespace Norristown.Syntax.InternalSyntax;
 /// <summary>
 /// Joins the lines the lexer reads, one per line of the file, into the lines the parser reads. A
 /// line continues onto the next while a <c>(</c> or <c>[</c> on it is still open, so a long
-/// expression can be written across several lines. The line break becomes trivia on the token
-/// before it, and the joined line is lexed text like any other, which the parser reads as one.
+/// expression can be written across several lines. An <c>.assert</c> line that ends with a
+/// <c>,</c> also continues, so that a long message can go on a line of its own. The line break
+/// becomes trivia on the token before it, and the joined line is lexed text like any other, which
+/// the parser reads as one.
 /// <para>
-/// Only an expression's brackets, a call's or a macro call's arguments and a macro's or a
-/// function's parameters may hold a line break, which the parser checks. Joining is decided from
+/// Only an expression's brackets, a call's or a macro call's arguments, a macro's or a function's
+/// parameters and the commas of an <c>.assert</c> may hold a line break, which the parser checks. Joining is decided from
 /// the tokens alone, so a line that the parser will refuse is still joined, and the parser says
 /// why. To keep an unclosed bracket from swallowing the rest of the file, a line that starts a
 /// statement of its own is never joined to the one before it. Such a line is blank, or starts with
@@ -46,10 +48,17 @@ internal static class Continuations
             var first = i;
             open.Clear();
             Track(physical[i], open);
+            var asserts = physical[i].Tokens[0].DirectiveKind == DirectiveKind.Assert;
+            var comma = asserts && EndsWithComma(physical[i]);
             i++;
-            while (open.Count > 0 && i < physical.Length && Joins(physical[i], open.Peek()))
+            while (i < physical.Length
+                && (open.Count > 0 ? Joins(physical[i], open.Peek()) : comma && Joins(physical[i], BracketKind.Expression)))
             {
                 Track(physical[i], open);
+
+                // A line holding only a comment leaves the comma before it at the end.
+                if (asserts && physical[i].LineKind != LineKind.Blank)
+                    comma = EndsWithComma(physical[i]);
                 i++;
             }
             starts.Add(first);
@@ -86,6 +95,13 @@ internal static class Continuations
                 open.Pop();
         }
     }
+
+    /// <summary>
+    /// Returns a value indicating whether the last token of <paramref name="line"/>, before its
+    /// end, is a <c>,</c>.
+    /// </summary>
+    private static bool EndsWithComma(GreenLine line) =>
+        line.Tokens is [.., { Kind: SyntaxKind.Comma }, _];
 
     /// <summary>
     /// Returns the kind of list the <c>(</c> at <paramref name="at"/> opens. It opens a macro

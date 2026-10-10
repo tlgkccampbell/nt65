@@ -2,7 +2,8 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// Represents the memory area that one linked configuration runs a segment in, with the range of
-/// addresses the area covers. Two different areas of one configuration that cover exactly the
+/// addresses the area covers. <see cref="Segment.Loads"/> uses it for the area a segment loads
+/// into as well. Two different areas of one configuration that cover exactly the
 /// same addresses are alternatives, so segments that run in them are never mapped at the same
 /// moment. The switchable banks of a cartridge mapper and disk overlays that share a load
 /// address are laid out this way.

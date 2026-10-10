@@ -180,9 +180,10 @@ internal static class TextMateGrammar
             TextMateRule.Block($@"(?i)(\.module)\b", "$", [Directive],
                 [TextMateRule.Scoped(@"(?i)(?<!:):(?!:)\s*\b(placed|placeable)\b", Kind), include]),
 
-            // The name a repetition binds, last before its brace.
+            // The names a repetition binds, last before its brace: the item's, and after it the
+            // name an `.each` binds to the index.
             TextMateRule.Block($@"(?i)(\.(?:repeat|each))\b", @"(?=\{)|$", [Directive],
-                [TextMateRule.Scoped($@",\s*({Word})(?=\s*\{{)", Constant), include]),
+                [TextMateRule.Scoped($@",\s*({Word})(?=\s*(?:,\s*(?:{Word}\s*)?)?\{{)", Constant), include]),
 
             // The name a `.multiproc` binds is the one after its comma: a signature may follow
             // it, so it is not the last name before the brace as a repetition's is.

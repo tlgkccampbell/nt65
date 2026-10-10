@@ -2,7 +2,7 @@
 
 .cpu 6502
 
-.export row_lo, dispatch, Channel, level, play
+.export row_lo, dispatch, keywords, Channel, level, play
 
 .const SCREEN = $0400
 
@@ -33,6 +33,29 @@
     .each Cmd, c {
         actions::c - 1              ; an RTS dispatch table
     }
+}
+
+.list statements {
+    do_end
+    do_for
+    do_next
+}
+
+.data keywords: .byte[] {
+    .each statements, stmt, id {
+        $80 + id, <(stmt - 1), >(stmt - 1)  ; the token, then the RTS dispatch address
+    }
+}
+
+.segment CODE
+.proc do_end {
+    rts
+}
+.proc do_for {
+    rts
+}
+.proc do_next {
+    rts
 }
 
 .enum Channel {

@@ -432,11 +432,19 @@ internal sealed class StateChecks
     /// </summary>
     public void CheckReturn(Step step, MnemonicKind mnemonic, ProcessorState state, Symbol routine, Cause? whyMode = null)
     {
+        // A return inside another instruction's bytes has no mnemonic of its own to replace.
         var signature = signatureOf(routine) ?? Signature.Default;
+        var written = step.Statement is InstructionStatementSyntax;
         if (mnemonic == MnemonicKind.Rts && signature.IsFar)
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"), Own(step, FixKind.Return, "rtl"));
+        {
+            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"),
+                written ? Own(step, FixKind.Return, "rtl") : null);
+        }
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"), Own(step, FixKind.Return, "rts"));
+        {
+            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"),
+                written ? Own(step, FixKind.Return, "rts") : null);
+        }
         CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine,
             signature.Declared, whyMode);
     }
@@ -682,44 +690,17 @@ internal sealed class StateChecks
     /// <summary>
     /// Reports a problem with <paramref name="node"/>, in the expansion that
     /// <paramref name="step"/> belongs to. A line of a macro body is wrong only for the call that
-    /// expanded it. It is reported at that call, which is the side that can change, with the body
-    /// line named beside it. A line a call gave as a block argument is the caller's own, and is
-    /// reported where it appears.
+    /// expanded it, so it is reported at that call, as
+    /// <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+    /// describes. A line a call gave as a block argument is the caller's own, and is reported where
+    /// it appears.
     /// </summary>
     /// <remarks>
     /// <paramref name="fix"/> is attached only where the node is a line of this file outside
     /// every expansion, since a fix elsewhere would change a line that serves more than this one.
     /// </remarks>
-    public void ReportAt(SyntaxNode node, Step step, DiagnosticMessage message, DiagnosticFix? fix = null)
-    {
-        if (fix is not null && step.On is null && node.Tree == model.Tree)
-        {
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
-            return;
-        }
-
-        var inBody = node.Tree != model.Tree;
-        MacroCallSyntax? call = null;
-        for (var level = step.On; level is not null; level = level.Outer)
-        {
-            if (level.Call is null)
-                continue;
-            call = level.Call;
-            if (level.Body is { } body && body.Tree == node.Tree
-                && node.Position >= body.Position && node.Position < body.FullSpan.End)
-            {
-                inBody = true;
-            }
-        }
-
-        if (!inBody || call is null)
-        {
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message));
-            return;
-        }
-        diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
-            [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
-    }
+    public void ReportAt(SyntaxNode node, Step step, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+        diagnostics.Add(Expansion.Problem(model.Tree, node, step.On, Severity.Error, message, step.On is null ? fix : null));
 
     /// <summary>
     /// Reports a diagnostic for <c>d:</c> on a constant address, which reaches it through the

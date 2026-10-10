@@ -164,3 +164,43 @@
     pla
     rti                     ;! error[keeps-broken]: `sets_stacked_carry` promises `keeps a, c`, but A, C are not the same as on entry here, because `sta $0102,x` writes into the bytes on the stack: nt65 does not follow which byte it changes, so what a pull or an `rti` restores after it is not known
 }
+
+; A `txs` from the X a `tsx` copied moves the stack back to where it was, so it drops what was
+; pushed since, and the `pla` after it gets back what the first `pha` saved.
+.export .proc drops_pushes: keeps a {
+    pha
+    tsx
+    pha
+    pha
+    txs
+    pla
+    rts
+}
+
+.export .proc moves_nowhere: keeps a {
+    pha
+    tsx
+    txs
+    pla
+    rts
+}
+
+; A pull between them, or a change to X, leaves nothing known about the stack the `txs` sets.
+.export .proc pulls_between: keeps a {
+    pha
+    tsx
+    pha
+    pla
+    txs
+    pla
+    rts                     ;! error[keeps-broken]: `pulls_between` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
+}
+
+.export .proc moves_x: keeps a {
+    pha
+    tsx
+    inx
+    txs
+    pla
+    rts                     ;! error[keeps-broken]: `moves_x` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
+}

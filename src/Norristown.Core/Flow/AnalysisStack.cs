@@ -138,36 +138,42 @@ public sealed class AnalysisStack : IEquatable<AnalysisStack>
     /// <summary>
     /// Returns this stack with a value <paramref name="size"/> bytes wide pushed, high byte first
     /// as the processor pushes it. A value the analysis does not know is pushed as bytes it knows
-    /// nothing about.
+    /// nothing about, unless it is a <c>*</c> item that <paramref name="starred"/> names.
     /// </summary>
-    public AnalysisStack PushValue(StateValue held, int size)
+    /// <param name="held">The value pushed, in the routine's terms.</param>
+    /// <param name="size">How many bytes the push takes.</param>
+    /// <param name="starred">The part of the state the value was a <c>*</c> item for, if any.</param>
+    /// <param name="terms">The expansion whose <c>*</c> item that is, or null for the routine's.</param>
+    /// <returns>The stack with the value pushed.</returns>
+    public AnalysisStack PushValue(StateValue held, int size, StateParts starred = StateParts.None, Expansion? terms = null)
     {
-        if (held.Kind == StateValueKind.Unknown)
+        if (held.Kind == StateValueKind.Unknown && starred == StateParts.None)
             return Push(StackEntry.Opaque, size);
         var builder = entries.ToBuilder();
         for (var i = size - 1; i >= 0; i--)
-            builder.Add(new StackEntry(false, Width.Unknown, Width.Unknown, Held: held, Size: size, Byte: i));
+            builder.Add(new StackEntry(false, Width.Unknown, Width.Unknown, Held: held, Size: size, Byte: i, Starred: starred, Terms: terms));
         return new AnalysisStack(builder.ToImmutable(), IsAnchored, offset);
     }
 
     /// <summary>
-    /// Returns what a pull of <paramref name="size"/> bytes gets back. That is the value a push of
-    /// the same size left on top, or unknown when the top bytes are anything else.
+    /// Returns the top byte of the push a pull of <paramref name="size"/> bytes gets back. That is
+    /// the top of a push of the same size, which says what it holds. It returns null when the top
+    /// bytes are anything else.
     /// </summary>
-    public StateValue PulledValue(int size)
+    public StackEntry? PulledPush(int size)
     {
         if (size > entries.Length)
-            return StateValue.Unknown;
+            return null;
         var top = entries[^1];
         if (top.Size != size)
-            return StateValue.Unknown;
+            return null;
         for (var i = 0; i < size; i++)
         {
             var entry = entries[entries.Length - 1 - i];
-            if (entry.Size != size || entry.Byte != i || entry.Held != top.Held)
-                return StateValue.Unknown;
+            if (entry.Size != size || entry.Byte != i || entry.Held != top.Held || entry.Starred != top.Starred || entry.Terms != top.Terms)
+                return null;
         }
-        return top.Held;
+        return top;
     }
 
     /// <summary>

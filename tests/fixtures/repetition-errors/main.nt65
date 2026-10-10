@@ -50,7 +50,7 @@
 
 .data by_handler: .addr[] {
     .each handlers, h {
-        actions::h              ;! error[binding-not-over-an-enum]: `h` cannot end a path: only the binding of an `.each` over an enum can
+        actions::h              ;! error[binding-not-over-an-enum]: `h` cannot end a path: only the name an `.each` over an enum binds to each member can
     }
 }
 
