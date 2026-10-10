@@ -1946,8 +1946,8 @@ Examples. A jump table inside a proc: the targets need no declarations because t
 ```
 
 Every item of `table` is a code label, so `.next table` says the same. A table is read only
-from data declared as addresses: a label on a line of `.addr` directives is a position, and
-names no targets.
+from data declared as addresses, or from a label on a line of `.addr` or `.faraddr`, whose
+items are the addresses on that line and no others.
 
 Data that names a label says nothing about which jump reaches it, so the flag analysis enters a
 label that data names with every flag unknown. A table that only this routine's `.next`
@@ -2720,9 +2720,16 @@ range error: `<x` and `.loword(x)` say which part is meant.
 Any other value in a one-byte slot that names an absolute or far address, such as `main / 256`
 or `'0' + main .mod 10`, has a value only ld65 knows. ca65 refuses it there whatever it comes
 to, unless `<`, `>`, `^`, `.lobyte`, `.hibyte` or `.bankbyte` takes one byte of the address. nt65
-bounds the value from its operators and the sizes of the addresses in it. Where the value always
+bounds the value from its operators and from where the addresses in it may be: a label is inside
+the memory areas the linked configs run its segment in, within the bank each area starts in for
+an absolute label, and otherwise anywhere its address size reaches. Where the value always
 fits a byte, the output writes it inside `.lobyte()`, which loses nothing. Where nt65 cannot show
-that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. The bound
+that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. A two-byte
+slot is held to the same rule with a 16-bit bound: a value there that names a far address, or an
+absolute one the linked configs place past $FFFF, which ld65 would refuse, is written inside
+`.loword()` where it always fits and is otherwise an error that asks for `.loword`. An `.addr`
+holds the address within its bank, as ca65 keeps it on the 65816, so only a far address counts
+there. The bound
 respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
 bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
 is an error, since the shift can leave 32 bits before the `.mod` brings it back.

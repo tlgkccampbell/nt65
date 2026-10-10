@@ -1,0 +1,31 @@
+; A label is inside the memory areas the linked config runs its segment in, so a label in bank
+; $7e is $7e0000 or more, whatever its address size. A value worked out from it is bounded by
+; that bank. A value in a two-byte slot that names a far address, or an address placed past
+; $ffff, is written inside `.loword()` where it always fits 16 bits, which loses nothing.
+.module main
+
+.export start, offsets
+
+.segment FARDATA
+.data far_table: .byte 1, 2, 3
+
+.segment DATA7E
+.data buffer: .byte[16]
+
+.segment RODATA
+.data offsets {
+    .byte (buffer - $7e2000) / 256          ; $00 to $df, wherever buffer lands in WRAM
+    .word buffer - $7e0000                  ; $2000 to $ffff
+    .word .loadof(FARDATA) - $810000        ; $8000 to $ffff
+    .word (far_table - $810000) / 2         ; $4000 to $7fff
+    .word .loword(buffer)                   ; the low 16 bits, as the source says
+    .addr buffer                            ; an address within its bank
+}
+
+.segment CODE
+.proc start: a16, i16, native {
+    ldx #buffer - $7e0000
+    lda #.loadof(FARDATA) - $810000
+    ldy #.loword(far_table)
+    rts
+}
