@@ -130,6 +130,12 @@ public static class SyntaxFacts
 
     private static readonly FrozenSet<string> cpuNameSet = CpuNames.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
+    private static readonly FrozenSet<string> addressSizes =
+        new[] { "zp", "abs", "far" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    private static readonly FrozenSet<string> assertLevels =
+        new[] { "warning", "error", "ldwarning", "lderror" }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     // Every directive that may begin a line, one row each, so that adding a directive takes one
     // row here and one case in the parser. `.segment` parses to one of three kinds and `.proc` to
     // one of two; the rest of the line decides which.
@@ -444,11 +450,7 @@ public static class SyntaxFacts
     /// Checks whether <paramref name="text"/> is a level a ca65 <c>.assert</c> reports at. An nt65
     /// <c>.assert</c> does not take a level, because nt65 decides when a check can be made.
     /// </summary>
-    public static bool IsAssertLevel(string text) =>
-        text.Equals("warning", StringComparison.OrdinalIgnoreCase)
-        || text.Equals("error", StringComparison.OrdinalIgnoreCase)
-        || text.Equals("ldwarning", StringComparison.OrdinalIgnoreCase)
-        || text.Equals("lderror", StringComparison.OrdinalIgnoreCase);
+    public static bool IsAssertLevel(string text) => assertLevels.Contains(text);
 
     /// <summary>Checks whether <paramref name="text"/> is one of the CPU names.</summary>
     public static bool IsCpuName(string text) => cpuNameSet.Contains(text);
@@ -457,10 +459,7 @@ public static class SyntaxFacts
     /// Checks whether <paramref name="text"/> is an address size, which is <c>zp</c>, <c>abs</c> or
     /// <c>far</c>.
     /// </summary>
-    public static bool IsAddressSize(string text) =>
-        text.Equals("zp", StringComparison.OrdinalIgnoreCase)
-        || text.Equals("abs", StringComparison.OrdinalIgnoreCase)
-        || text.Equals("far", StringComparison.OrdinalIgnoreCase);
+    public static bool IsAddressSize(string text) => addressSizes.Contains(text);
 
     /// <summary>
     /// Checks whether <paramref name="text"/> names an address-size prefix, which appears before

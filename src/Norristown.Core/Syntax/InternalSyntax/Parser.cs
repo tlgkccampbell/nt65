@@ -194,6 +194,20 @@ internal sealed partial class Parser
         Kind == SyntaxKind.Identifier && Current.Text.Equals(word, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Returns a value indicating whether a token of <paramref name="kind"/> appears anywhere from
+    /// the current token to the end of the line.
+    /// </summary>
+    private bool Ahead(SyntaxKind kind)
+    {
+        for (var at = index; at < tokens.Length; at++)
+        {
+            if (tokens[at].Kind == kind)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Returns the current token and moves past it. The position stays on the end-of-line token
     /// once it is reached.
     /// </summary>
@@ -376,7 +390,7 @@ internal sealed partial class Parser
         }
 
         // These blocks' lines follow a grammar of their own. A struct or union member has the
-        // form of a labelled data declaration and needs no rule of its own.
+        // form of a labeled data declaration and needs no rule of its own.
         //
         // The line that opens a block belongs to that block, so it arrives here with the block's
         // own kind as its context; it is parsed as an opener, and only the lines after it are

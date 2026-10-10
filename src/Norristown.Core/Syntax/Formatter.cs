@@ -210,7 +210,7 @@ public static class Formatter
             var piece = pieces[i];
             if (piece.Run == Run.None)
             {
-                formatted[i] = piece.Head.Length == 0 ? "" : new string(' ', piece.Indent) + piece.Head;
+                formatted[i] = Plain(piece);
                 continue;
             }
 
@@ -247,7 +247,7 @@ public static class Formatter
             {
                 if (!code.TryGetValue(line, out var text))
                 {
-                    formatted[line] = pieces[line].Head.Length == 0 ? "" : new string(' ', pieces[line].Indent) + pieces[line].Head;
+                    formatted[line] = Plain(pieces[line]);
                     continue;
                 }
                 formatted[line] = pieces[line].Comment is { } note ? text + new string(' ', at - text.Length) + note : text;
@@ -255,6 +255,9 @@ public static class Formatter
             i = end;
         }
         return formatted;
+
+        // A line outside any run, or a comment-only line inside one, is its head after its indent.
+        static string Plain(Piece piece) => piece.Head.Length == 0 ? "" : new string(' ', piece.Indent) + piece.Head;
     }
 
     /// <summary>
@@ -318,14 +321,7 @@ public static class Formatter
     /// Returns the width of the text of the 0-based line <paramref name="line"/> of the file,
     /// without the line break that ends it.
     /// </summary>
-    private static int Width(SyntaxTree tree, int line)
-    {
-        var start = tree.LineStarts[line];
-        var end = tree.GetLineEnd(line);
-        while (end > start && tree.Text[end - 1] is '\r' or '\n')
-            end--;
-        return end - start;
-    }
+    private static int Width(SyntaxTree tree, int line) => tree.GetLineContentEnd(line) - tree.LineStarts[line];
 
     /// <summary>
     /// Returns where the comment at the end of the 0-based line <paramref name="index"/> of the file

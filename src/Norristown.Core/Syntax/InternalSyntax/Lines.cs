@@ -2,8 +2,16 @@ using System.Collections.Immutable;
 
 namespace Norristown.Syntax.InternalSyntax;
 
+/// <summary>
+/// Answers the questions about a line that its tokens alone decide, before the line is parsed:
+/// its kind, whether it opens or closes a block, which kind of block it opens, and the forms a few
+/// directives can take. The parser asks the same questions while reading a line.
+/// </summary>
 internal static class Lines
 {
+    /// <summary>
+    /// Returns the kind of line <paramref name="tokens"/> make, from the first one or two of them.
+    /// </summary>
     public static LineKind Classify(ImmutableArray<GreenToken> tokens)
     {
         var first = tokens[0].Kind;

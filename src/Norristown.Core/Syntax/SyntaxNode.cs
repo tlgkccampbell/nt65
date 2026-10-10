@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text;
 using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Syntax;
@@ -411,7 +412,7 @@ public abstract class SyntaxNode
         var text = GetText();
         if (!text.Contains('\n') && !text.Contains('\r'))
             return text;
-        var built = new System.Text.StringBuilder();
+        var built = new StringBuilder();
         SyntaxToken? previous = null;
         foreach (var token in DescendantTokens())
         {
@@ -513,7 +514,7 @@ public abstract class SyntaxNode
     /// Returns the token whose full span, including trivia, contains <paramref name="position"/>.
     /// The whitespace and the comment after a token belong to it, and the indentation before the
     /// first token of a line belongs to that token. A caret in either trivia therefore finds the
-    /// token next to it, as in Roslyn. A missing token has zero width and contains no position,
+    /// token next to it. A missing token has zero width and contains no position,
     /// so it is never the result except at the end of a node, described below.
     /// <para>
     /// The end of a node is past all of its text, so it falls in no token. At that position the
@@ -674,8 +675,8 @@ public abstract class SyntaxNode
 
     /// <summary>
     /// Creates the red node for each child that is not a token, in source order. A slot that
-    /// holds a list contributes its items rather than the list node, as in Roslyn, so nothing
-    /// above the syntax layer ever sees the node over a list.
+    /// holds a list contributes its items rather than the list node, so nothing above the syntax
+    /// layer ever sees the node over a list.
     /// </summary>
     private protected virtual ImmutableArray<SyntaxNode> CreateChildNodes()
     {

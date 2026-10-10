@@ -55,11 +55,11 @@ public static class Outline
             // is the enum it iterates over and the signature the routines share.
             case MultiProcDeclarationSyntax { Name: { IsMissing: false } bound } multiproc:
                 return new OutlineItem(OutlineKind.Proc, bound.Text,
-                    multiproc.GetText().Trim().TrimEnd('{').TrimEnd()[".multiproc".Length..].Trim(),
+                    TextAfter(opener, multiproc.Keyword)?.TrimEnd('{').TrimEnd() ?? "",
                     block.Span, bound.Span, children);
 
             case ScopeDeclarationSyntax scope:
-                // `.scope { }` is anonymous, so the item is labelled with the directive itself.
+                // `.scope { }` is anonymous, so the item is labeled with the directive itself.
                 return new OutlineItem(OutlineKind.Scope, scope.Name?.Text ?? ".scope", null,
                     block.Span, scope.Name?.Span ?? scope.Keyword.Span, children);
 

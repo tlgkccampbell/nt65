@@ -382,6 +382,12 @@ public sealed class SyntaxTree
     public int GetLineEnd(int line) => LineEnd(Text, LineStarts, line);
 
     /// <summary>
+    /// Returns the offset where the 0-based line <paramref name="line"/> ends, before its line
+    /// break.
+    /// </summary>
+    internal int GetLineContentEnd(int line) => ContentEnd(Text, LineStarts, line);
+
+    /// <summary>
     /// Returns the diagnostic span for a range. A diagnostic span is on one line, so a range that
     /// continues onto the next line of the file is cut at the end of the line it starts on.
     /// </summary>
@@ -391,7 +397,7 @@ public sealed class SyntaxTree
         var column = span.Start - LineStarts[line] + 1;
         var width = span.Length;
         if (line + 1 < LineStarts.Length && span.Start + width > LineStarts[line + 1])
-            width = Math.Max(0, ContentEnd(Text, LineStarts, line) - span.Start);
+            width = Math.Max(0, GetLineContentEnd(line) - span.Start);
         return new Span(Path, line + 1, column, column + width);
     }
 

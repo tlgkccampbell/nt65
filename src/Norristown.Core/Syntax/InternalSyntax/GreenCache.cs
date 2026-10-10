@@ -5,8 +5,8 @@ using System.Runtime.InteropServices;
 namespace Norristown.Syntax.InternalSyntax;
 
 /// <summary>
-/// Shares tokens and whitespace that recur often (mnemonics, registers, punctuation with
-/// common trivia), as Roslyn's green-node cache does.
+/// Shares the tokens and whitespace that recur often, such as mnemonics, registers and
+/// punctuation with common trivia, so that the lines of a file hold one object for each.
 /// <para>
 /// Each thread keeps its own tables. They are small and direct-mapped, so with one shared set,
 /// threads lexing different files would evict each other's entries, and the whitespace table,

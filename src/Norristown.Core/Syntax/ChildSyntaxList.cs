@@ -10,8 +10,8 @@ namespace Norristown.Syntax;
 /// requested and then cached by the parent.
 /// <para>
 /// An empty slot contributes no child. A slot that holds a list contributes the list's items and
-/// separators rather than the node over them, as in Roslyn, so an analyzer walking a node's
-/// children never sees a list node.
+/// separators rather than the node over them, so an analyzer walking a node's children never
+/// sees a list node.
 /// </para>
 /// <para>
 /// A line is the exception to reading children from slots. It stores its tokens directly in its
