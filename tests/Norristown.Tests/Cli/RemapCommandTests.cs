@@ -131,23 +131,23 @@ public sealed class RemapCommandTests : IDisposable
             """, Read("game.lbl"));
     }
 
-    /// <summary>Each failure is reported, naming the file it concerns where there is one.</summary>
+    /// <summary>
+    /// Each failure is reported, naming the file it concerns where there is one. A wrong command
+    /// line also points at <c>--help</c>, as every command's does.
+    /// </summary>
     [Theory]
-    [InlineData(new[] { "remap-dbg", "nowhere.dbg" }, ExitCode.InputError, "nowhere.dbg: error: file not found")]
-    [InlineData(new[] { "remap-dbg" }, ExitCode.UsageError, "nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`")]
-    [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, ExitCode.UsageError, "nt65: `remap-dbg` takes one debug file, and was given more than one")]
-    [InlineData(new[] { "remap-dbg", "--out" }, ExitCode.UsageError, "nt65: `--out` needs a file to write")]
-    [InlineData(new[] { "remap-dbg", "game.dbg", "--labels" }, ExitCode.UsageError, "nt65: `--labels` needs a file to write")]
-    [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, ExitCode.UsageError, "nt65: `--bogus` is not an option")]
-    public void EachFailureIsReportedWithItsExitCode(string[] arguments, ExitCode expected, string message)
+    [InlineData(new[] { "remap-dbg", "nowhere.dbg" }, ExitCode.InputError, "nowhere.dbg: error: file not found\n")]
+    [InlineData(new[] { "remap-dbg" }, ExitCode.UsageError, "nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`\nsee `nt65 --help`\n")]
+    [InlineData(new[] { "remap-dbg", "a.dbg", "b.dbg" }, ExitCode.UsageError, "nt65: `remap-dbg` takes one debug file, and was given more than one\nsee `nt65 --help`\n")]
+    [InlineData(new[] { "remap-dbg", "--out" }, ExitCode.UsageError, "nt65: `--out` needs a file to write\nsee `nt65 --help`\n")]
+    [InlineData(new[] { "remap-dbg", "game.dbg", "--labels" }, ExitCode.UsageError, "nt65: `--labels` needs a file to write\nsee `nt65 --help`\n")]
+    [InlineData(new[] { "remap-dbg", "--bogus", "game.dbg" }, ExitCode.UsageError, "nt65: `--bogus` is not an option\nsee `nt65 --help`\n")]
+    public void EachFailureIsReportedWithItsExitCode(string[] arguments, ExitCode expected, string printed)
     {
         root.Write("a.dbg", Linked);
         root.Write("game.dbg", Linked);
 
-        var result = Nt65.Run(root.FullName, arguments);
-
-        Assert.Equal(expected, result.Code);
-        Assert.StartsWith(message, result.Printed);
+        Assert.Equal((expected, printed), Nt65.Run(root.FullName, arguments));
     }
 
     /// <summary>A debug file that is not one ld65 wrote is refused rather than half rewritten.</summary>
