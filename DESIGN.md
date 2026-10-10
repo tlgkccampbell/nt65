@@ -2734,7 +2734,10 @@ absolute one placed past $FFFF, which ld65 would refuse, is written inside
 `.loword()` where it always fits and is otherwise an error that asks for `.loword`. An `.addr`
 holds the address within its bank, as ca65 keeps it on the 65816, so only a far address counts
 there. ca65 range-checks an `.addr` and an absolute operand on the other CPUs, so the output
-writes `.loword()` around one that names an address placed past $FFFF. The bound
+writes `.loword()` around one that names an address placed past $FFFF. It range-checks the
+pointer of `jmp (abs)` and `jml [abs]` on every CPU, the 65816 included, and of `jmp (abs,x)`
+and `jsr (abs,x)` everywhere but the 65816, so the output writes `.loword()` around those in
+the same way. The bound
 respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
 bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
 is an error, since the shift can leave 32 bits before the `.mod` brings it back.

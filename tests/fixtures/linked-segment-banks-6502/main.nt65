@@ -1,14 +1,21 @@
 ; An `.addr` and an absolute operand hold the address within its bank on the 6502, as they do
 ; on the 65816. ca65 range-checks both on the 6502, so one that names a label the linked config
 ; places past $ffff is written inside `.loword()`, which gives ca65 the address within the bank.
+; ca65 range-checks the pointer of an indirect jump on every CPU, so it is written the same way.
 .module main
 
-.export start, pointers
+.export start, pointers, dispatch
 
 .segment BANK1
-.data table: .byte 1, 2, 3
+.data table:  .byte 1, 2, 3
+.data vector: .addr far_side
 
 .proc far_side {
+    jsr far_helper                          ; a call within bank $01
+    rts
+}
+
+.proc far_helper {
     rts
 }
 
@@ -25,7 +32,11 @@
     ldx #2
     lda table,x                             ; the bank $01 cartridge window
     sta table + 1
-    jsr far_side
     lda pointers
     rts
+}
+
+.proc dispatch {
+    jmp (vector)                            ; a pointer in the bank $01 cartridge window
+    .next ?
 }
