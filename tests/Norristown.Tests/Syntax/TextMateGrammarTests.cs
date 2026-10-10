@@ -5,9 +5,13 @@ using Norristown.Tests.Fixtures;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks the TextMate grammar the editor colors nt65 with against the lexer and the parser, over
+/// the documents' examples and a file of lines where a regex and the parser could disagree.
+/// </summary>
 public sealed class TextMateGrammarTests
 {
-    // Lines that exercise the places a regex and the parser could disagree.
+    /// <summary>Lines that exercise the places a regex and the parser could disagree.</summary>
     private const string Tricky = """
         z: ::foo
         lda z:ptr+1
@@ -83,6 +87,10 @@ public sealed class TextMateGrammarTests
 
     private static readonly string GrammarPath = Repo.Path("editors", "vscode", "syntaxes", "nt65.tmLanguage.json");
 
+    /// <summary>
+    /// The grammar file the extension ships is the one the server generates. An update run
+    /// rewrites it instead of comparing it.
+    /// </summary>
     [Fact]
     public void GrammarFileIsUpToDate()
     {
@@ -104,49 +112,55 @@ public sealed class TextMateGrammarTests
     [Fact]
     public void GrammarScopesEveryTokenAsTheParserReadsIt()
     {
-        var sources = DesignCorpus.Blocks.Select(b => (Name: b.ToString(), b.Text)).Append(("tricky", Tricky));
-        var failures = new List<string>();
-        foreach (var (name, text) in sources)
-        {
-            var tree = SyntaxTree.Parse(name, text);
-            var bodies = Bodies(tree);
-            // The grammar reads one line of the file at a time, as the lexer does. Where an
-            // expression continues, the line the parser reads started some tokens earlier.
-            var lineScopes = TextMateTokenizer.Nt65.Scope([.. tree.PhysicalLines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
-            var earlier = 0;
-            for (var l = 0; l < tree.PhysicalLines.Length; l++)
-            {
-                var line = tree.PhysicalLines[l];
-                var statement = tree.GetLine(l);
-                if (statement.LineIndex == l)
-                    earlier = 0;
-                var lineText = line.ToFullString().TrimEnd('\r', '\n');
-                var scopes = lineScopes[l];
-                var offset = 0;
-                for (var t = 0; t < line.Tokens.Length; t++)
-                {
-                    var token = line.Tokens[t];
-                    var start = offset + token.LeadingWidth;
-                    var triviaStart = start + token.Text.Length;
-                    offset += token.FullWidth;
-                    var comment = token.LeadingTrivia.Concat(token.TrailingTrivia).FirstOrDefault(x => x.Kind == SyntaxKind.CommentTrivia);
-                    if (comment is not null)
-                    {
-                        var at = lineText.IndexOf(comment.Text, token.Kind == SyntaxKind.EndOfLine ? 0 : triviaStart, StringComparison.Ordinal);
-                        if (scopes[at..].Any(s => s != TextMateGrammar.Comment))
-                            failures.Add($"{name}:{l + 1}: comment `{comment.Text}` is not scoped as a comment");
-                    }
-                    if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.ContainsDiagnostics)
-                        continue;
-                    var expected = Expected(statement, earlier + t, bodies.GetValueOrDefault(statement.LineIndex));
-                    var actual = scopes[start..triviaStart].Distinct().ToList();
-                    if (actual.Count != 1 || actual[0] != expected)
-                        failures.Add($"{name}:{l + 1}: `{token.Text}` is {token.Kind}, expected {expected ?? "no scope"}, grammar gives {string.Join(" + ", actual.Select(s => s ?? "no scope"))}");
-                }
-                earlier += line.Tokens.Length - 1;
-            }
-        }
+        var sources = DesignCorpus.Blocks.Select(block => (Name: block.ToString(), block.Text)).Append((Name: "tricky", Text: Tricky));
+        var failures = sources.SelectMany(source => Problems(source.Name, source.Text)).ToList();
         Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    /// <summary>
+    /// Returns a problem for each token of <paramref name="text"/> the grammar scopes otherwise
+    /// than the parser reads it, and for each comment it does not scope as a comment.
+    /// </summary>
+    private static IEnumerable<string> Problems(string name, string text)
+    {
+        var tree = SyntaxTree.Parse(name, text);
+        var bodies = Bodies(tree);
+
+        // The grammar reads one line of the file at a time, as the lexer does. Where an
+        // expression continues, the line the parser reads started some tokens earlier.
+        var lineScopes = TextMateTokenizer.Nt65.Scope([.. tree.PhysicalLines.Select(line => line.ToFullString().TrimEnd('\r', '\n'))]);
+        var earlier = 0;
+        for (var l = 0; l < tree.PhysicalLines.Length; l++)
+        {
+            var line = tree.PhysicalLines[l];
+            var statement = tree.GetLine(l);
+            if (statement.LineIndex == l)
+                earlier = 0;
+            var lineText = line.ToFullString().TrimEnd('\r', '\n');
+            var scopes = lineScopes[l];
+            var offset = 0;
+            for (var t = 0; t < line.Tokens.Length; t++)
+            {
+                var token = line.Tokens[t];
+                var start = offset + token.LeadingWidth;
+                var triviaStart = start + token.Text.Length;
+                offset += token.FullWidth;
+                var comment = token.LeadingTrivia.Concat(token.TrailingTrivia).FirstOrDefault(x => x.Kind == SyntaxKind.CommentTrivia);
+                if (comment is not null)
+                {
+                    var at = lineText.IndexOf(comment.Text, token.Kind == SyntaxKind.EndOfLine ? 0 : triviaStart, StringComparison.Ordinal);
+                    if (scopes[at..].Any(s => s != TextMateGrammar.Comment))
+                        yield return $"{name}:{l + 1}: comment `{comment.Text}` is not scoped as a comment";
+                }
+                if (token.Kind is SyntaxKind.EndOfLine or SyntaxKind.BadToken || token.ContainsDiagnostics)
+                    continue;
+                var expected = Expected(statement, earlier + t, bodies.GetValueOrDefault(statement.LineIndex));
+                var actual = scopes[start..triviaStart].Distinct().ToList();
+                if (actual.Count != 1 || actual[0] != expected)
+                    yield return $"{name}:{l + 1}: `{token.Text}` is {token.Kind}, expected {expected ?? "no scope"}, grammar gives {string.Join(" + ", actual.Select(s => s ?? "no scope"))}";
+            }
+            earlier += line.Tokens.Length - 1;
+        }
     }
 
     /// <summary>

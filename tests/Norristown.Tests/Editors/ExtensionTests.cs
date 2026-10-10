@@ -28,6 +28,7 @@ public sealed class ExtensionTests : IDisposable
 
     private readonly TempFolder root = new("nt65-extension-");
 
+    /// <summary>Deletes the project written for the test.</summary>
     public void Dispose() => root.Dispose();
 
     /// <summary>Every key the reader knows is in the schema, and the schema has no others.</summary>
@@ -102,19 +103,19 @@ public sealed class ExtensionTests : IDisposable
             cancellation: TestTimeout.Token()));
 
         var printed = error.ToString().ReplaceLineEndings("\n").Split('\n').Where(line => line.Length > 0).ToList();
-        var matcher = new Regex(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));
+        var matcher = Matcher();
         var matched = printed.Select(line => matcher.Match(line)).Where(match => match.Success).ToList();
 
         Assert.Equal(printed.Count, matched.Count);
         foreach (var match in matched)
         {
-            Assert.Equal("main.nt65", match.Groups[int.Parse(Pattern("file"))].Value);
-            Assert.True(int.Parse(match.Groups[int.Parse(Pattern("line"))].Value) > 0);
-            Assert.True(int.Parse(match.Groups[int.Parse(Pattern("column"))].Value) > 0);
-            Assert.Equal("error", match.Groups[int.Parse(Pattern("severity"))].Value);
-            Assert.NotEmpty(match.Groups[int.Parse(Pattern("message"))].Value);
+            Assert.Equal("main.nt65", Field(match, "file"));
+            Assert.True(int.Parse(Field(match, "line")) > 0);
+            Assert.True(int.Parse(Field(match, "column")) > 0);
+            Assert.Equal("error", Field(match, "severity"));
+            Assert.NotEmpty(Field(match, "message"));
         }
-        Assert.Contains(matched, match => match.Groups[5].Value.Contains("`nowhere` is not declared", StringComparison.Ordinal));
+        Assert.Contains(matched, match => Field(match, "message").Contains("`nowhere` is not declared", StringComparison.Ordinal));
 
         // nt65's messages about itself have no position and do not match, so the Problems panel
         // holds only what is wrong with the program.
@@ -126,7 +127,7 @@ public sealed class ExtensionTests : IDisposable
     [Fact]
     public void TheProblemMatcherKnowsEverySeverity()
     {
-        var matcher = new Regex(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));
+        var matcher = Matcher();
         foreach (var severity in Enum.GetValues<Severity>())
         {
             var name = severity.ToString().ToLowerInvariant();
@@ -200,7 +201,7 @@ public sealed class ExtensionTests : IDisposable
 
     /// <summary>
     /// Every keybinding the extension contributes runs a command it contributes, and each one's
-    /// colours are contributed with a default for every kind of theme. A keybinding or a colour
+    /// colors are contributed with a default for every kind of theme. A keybinding or a color
     /// that names nothing does nothing, and nothing else would notice.
     /// </summary>
     [Fact]
@@ -213,19 +214,19 @@ public sealed class ExtensionTests : IDisposable
             contributes.GetProperty("keybindings").EnumerateArray(),
             binding => Assert.Contains(binding.GetProperty("command").GetString(), commands));
 
-        var colours = contributes.GetProperty("colors").EnumerateArray().ToList();
+        var colors = contributes.GetProperty("colors").EnumerateArray().ToList();
         foreach (var group in (ReadOnlySpan<string>)["a", "x", "y", "flags", "widths", "memory"])
         {
             foreach (var suffix in (ReadOnlySpan<string>)["", "Background", "FaintBackground"])
-                Assert.Contains(colours, colour => colour.GetProperty("id").GetString() == $"nt65.sources.{group}{suffix}");
+                Assert.Contains(colors, color => color.GetProperty("id").GetString() == $"nt65.sources.{group}{suffix}");
         }
-        Assert.All(colours, colour => Assert.Equal(
+        Assert.All(colors, color => Assert.Equal(
             ["dark", "highContrast", "highContrastLight", "light"],
-            colour.GetProperty("defaults").EnumerateObject().Select(theme => theme.Name).Order(StringComparer.Ordinal)));
+            color.GetProperty("defaults").EnumerateObject().Select(theme => theme.Name).Order(StringComparer.Ordinal)));
     }
 
     /// <summary>
-    /// The grammar that colours the grid in a hover is checked against the lines the server
+    /// The grammar that colors the grid in a hover is checked against the lines the server
     /// writes into it. Markdown formatting does not apply inside a fenced block, so the grid is
     /// fenced as a language of its own, and this grammar is the only thing that tells its parts
     /// apart. Nothing compiles the grammar or the server's text, so nothing else would notice
@@ -245,8 +246,8 @@ public sealed class ExtensionTests : IDisposable
         Assert.Equal("./syntaxes/nt65-hover.tmLanguage.json", grammar.GetProperty("path").GetString());
         Assert.Equal("source.nt65-hover", Hover.RootElement.GetProperty("scopeName").GetString());
 
-        // The grammar colours the key of every row, whether it is one word, two, or a register.
-        // It also colours the block total and the reason on a cycles row, which are about more
+        // The grammar colors the key of every row, whether it is one word, two, or a register.
+        // It also colors the block total and the reason on a cycles row, which are about more
         // than the line, and anything the analysis could not work out. Everything else is left
         // plain.
         foreach (var (line, text, scope) in (ReadOnlySpan<(string, string, string?)>)[
@@ -336,6 +337,15 @@ public sealed class ExtensionTests : IDisposable
 
     private static IEnumerable<string> Enumeration(JsonElement element) =>
         element.GetProperty("enum").EnumerateArray().Select(value => value.GetString() ?? "");
+
+    /// <summary>Returns the regular expression of the <c>$nt65</c> problem matcher's pattern.</summary>
+    private static Regex Matcher() => new(Pattern("regexp"), RegexOptions.None, TimeSpan.FromSeconds(5));
+
+    /// <summary>
+    /// Returns the text <paramref name="match"/> captured for <paramref name="field"/>, which the
+    /// matcher's pattern names by group number.
+    /// </summary>
+    private static string Field(Match match, string field) => match.Groups[int.Parse(Pattern(field))].Value;
 
     /// <summary>Returns one field of the matcher's pattern, as text in the form the manifest gives it.</summary>
     private static string Pattern(string field)

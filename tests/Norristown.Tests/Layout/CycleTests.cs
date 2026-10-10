@@ -1,7 +1,7 @@
 using Norristown.Layout;
 using Norristown.Processor;
-using Norristown.Syntax;
 using Norristown.Semantics;
+using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Layout;
@@ -216,7 +216,7 @@ public sealed class CycleTests
     public void The65816TakesTheCyclesItsWidthsImply(MnemonicKind mnemonic, AddressingMode mode, string state, string cycles)
     {
         var parts = state.Split(", ");
-        var processor = new ProcessorState(Width(parts[0]), Width(parts[1]), parts[2] switch
+        var processor = new ProcessorState(WidthOf(parts[0]), WidthOf(parts[1]), parts[2] switch
         {
             "native" => ProcessorMode.Native,
             "emu" => ProcessorMode.Emulation,
@@ -225,11 +225,12 @@ public sealed class CycleTests
 
         Assert.Equal(cycles, Cycles.Of(Cpu.Wdc65816, mnemonic, mode, processor)?.Count.ToString());
 
-        static Width Width(string item) => item[1..] switch
+        // The item is `a8`, `i16` or `a?`, and the width follows its first letter.
+        static Width WidthOf(string item) => item[1..] switch
         {
-            "8" => Norristown.Semantics.Width.Eight,
-            "16" => Norristown.Semantics.Width.Sixteen,
-            _ => Norristown.Semantics.Width.Unknown,
+            "8" => Width.Eight,
+            "16" => Width.Sixteen,
+            _ => Width.Unknown,
         };
     }
 
@@ -286,9 +287,9 @@ public sealed class CycleTests
             """));
         var layout = analysis.Files.Single().Layout;
         var lines = analysis.File("main.nt65").Tree.Root.DescendantNodes()
-            .OfType<Norristown.Syntax.LineSyntax>()
+            .OfType<LineSyntax>()
             .Select(line => line.Statement)
-            .OfType<Norristown.Syntax.InstructionStatementSyntax>()
+            .OfType<InstructionStatementSyntax>()
             .ToList();
 
         Assert.Equal("3", layout.AnyOf(lines[0])?.Cycles?.ToString());

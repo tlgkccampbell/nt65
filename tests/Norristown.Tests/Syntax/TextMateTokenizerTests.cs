@@ -4,7 +4,7 @@ namespace Norristown.Tests.Syntax;
 
 /// <summary>
 /// Checks <see cref="TextMateTokenizer"/> against small grammars, one TextMate feature at a time,
-/// so that the grammar tests built on it check what VS Code would colour. Each expectation is the
+/// so that the grammar tests built on it check what VS Code would color. Each expectation is the
 /// behavior of vscode-textmate. Every scope is one letter, and each line's scopes are shown as a
 /// string with one letter per character, or <c>.</c> for a character no rule scopes.
 /// </summary>

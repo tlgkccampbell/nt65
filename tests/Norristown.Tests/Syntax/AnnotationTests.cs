@@ -162,7 +162,7 @@ public sealed class AnnotationTests
     /// <summary>
     /// An edit elsewhere in the file leaves an annotated line alone, green node and all, so what
     /// it carries is still there. A line the edit reaches is parsed again, and its annotations are
-    /// discarded with the old parse, as Roslyn does too.
+    /// discarded with the old parse.
     /// </summary>
     [Fact]
     public void AnEditKeepsTheAnnotationsOfTheLinesItLeavesAlone()
@@ -493,13 +493,5 @@ public sealed class AnnotationTests
             yield return $"{named}: after {what}, {found.Count} nodes carry the tag";
         else if (found[0].Kind != kind || found[0].GetText() != text)
             yield return $"{named}: after {what}, the tag is on a {found[0].Kind} saying {found[0].GetText()}, not a {kind} saying {text}";
-    }
-
-    /// <summary>
-    /// Represents a rewrite that overrides nothing, which is the one rewrite that must change
-    /// nothing.
-    /// </summary>
-    private sealed class Untouched : SyntaxRewriter
-    {
     }
 }

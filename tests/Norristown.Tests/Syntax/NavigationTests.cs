@@ -13,7 +13,7 @@ public sealed class NavigationTests
 {
     /// <summary>
     /// The most problems each check reports for one variant. Beyond that, more reports would
-    /// only repeat the same failure.
+    /// only repeat the same failure, and each check stops as soon as it has reported that many.
     /// </summary>
     private const int MaximumProblems = 5;
 
@@ -27,21 +27,17 @@ public sealed class NavigationTests
     {
         // One variant of one source is the unit of work, rather than a whole source: a long file
         // costs more than a short one, so splitting them apart keeps every core busy to the end.
-        var variants = Repo.Sources()
-            .SelectMany(path => BrokenLines.Of(path)
-                .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
-            .ToList();
-        Assert.True(variants.Count > 1000, $"{variants.Count} variants is too few to be every source's");
-
-        var failures = Repo.CollectFailures(variants, variant =>
+        var failures = Repo.CollectFailures(SourceVariant.All(), variant =>
         {
             var tree = SyntaxTree.Parse(variant.Path, variant.Text);
-            var problems = new List<string>();
-            EveryPositionFindsTheTokenAtIt(tree, problems);
-            TheTokensOfTheRootAreTheFile(tree, problems);
-            SteppingFromATokenWalksTheFile(tree, problems);
-            EveryNodeIsFoundByItsSpanAndHeldByItsParent(tree, problems);
-            return problems.Select(problem => $"{variant.Where}: {problem}");
+            IEnumerable<string>[] checks =
+            [
+                EveryPositionFindsTheTokenAtIt(tree),
+                TheTokensOfTheRootAreTheFile(tree),
+                SteppingFromATokenWalksTheFile(tree),
+                EveryNodeIsFoundByItsSpanAndHeldByItsParent(tree),
+            ];
+            return checks.SelectMany(check => check.Take(MaximumProblems)).Select(problem => $"{variant.Where}: {problem}");
         });
         Assert.True(failures.Count == 0, string.Join("\n", failures.Take(20)));
     }
@@ -172,72 +168,69 @@ public sealed class NavigationTests
     /// position, never a missing one, and the same token the walk over the tree's tokens has at
     /// that place.
     /// </summary>
-    private static void EveryPositionFindsTheTokenAtIt(SyntaxTree tree, List<string> problems)
+    private static IEnumerable<string> EveryPositionFindsTheTokenAtIt(SyntaxTree tree)
     {
         var tokens = tree.Root.DescendantTokens().ToList();
 
         // The walk over the tokens and the lookup by position read the same file, so they are
         // stepped through together rather than searched one against the other.
         var at = 0;
-        var earlier = problems.Count;
-        for (var position = 0; position < tree.Text.Length && problems.Count < earlier + MaximumProblems; position++)
+        for (var position = 0; position < tree.Text.Length; position++)
         {
             var found = tree.Root.FindToken(position);
             while (at < tokens.Count && tokens[at].FullSpan.End <= position)
                 at++;
             if (!found.FullSpan.Contains(position))
-                problems.Add($"{position} finds {Describe(found)}, which is not written there");
+                yield return $"{position} finds {Describe(found)}, which is not written there";
             else if (found.IsMissing)
-                problems.Add($"{position} finds the missing {found.Kind}");
+                yield return $"{position} finds the missing {found.Kind}";
             else if (at >= tokens.Count || found.Position != tokens[at].Position)
-                problems.Add($"{position} finds {Describe(found)}, and the walk has {Describe(tokens[at])}");
+                yield return $"{position} finds {Describe(found)}, and the walk has {Describe(tokens[at])}";
         }
 
         // The end of the file has no text, and the last token is the answer there.
         var end = tree.Root.FindToken(tree.Text.Length);
         if (end.Position != tokens[^1].Position)
-            problems.Add($"the end of the file finds {Describe(end)}, not the last token {Describe(tokens[^1])}");
+            yield return $"the end of the file finds {Describe(end)}, not the last token {Describe(tokens[^1])}";
     }
 
     /// <summary>
     /// The tokens under the root make up the file. Each of them appears once, in source order,
     /// and their text with their trivia is the file's own text.
     /// </summary>
-    private static void TheTokensOfTheRootAreTheFile(SyntaxTree tree, List<string> problems)
+    private static IEnumerable<string> TheTokensOfTheRootAreTheFile(SyntaxTree tree)
     {
         var joined = new StringBuilder();
         var at = 0;
-        var earlier = problems.Count;
         foreach (var token in tree.Root.DescendantTokens())
         {
-            if (token.Position != at && problems.Count < earlier + MaximumProblems)
-                problems.Add($"{Describe(token)} starts at {token.Position}, and the token before it ended at {at}");
+            if (token.Position != at)
+                yield return $"{Describe(token)} starts at {token.Position}, and the token before it ended at {at}";
             at = token.FullSpan.End;
             joined.Append(token.ToFullString());
         }
         if (joined.ToString() != tree.Text)
-            problems.Add("the tokens do not give back the file's text");
+            yield return "the tokens do not give back the file's text";
     }
 
     /// <summary>
     /// Stepping from token to token, forwards and back, walks the same tokens in the same order
     /// as the walk over the tree, missing ones included, and stops at either end of the file.
     /// </summary>
-    private static void SteppingFromATokenWalksTheFile(SyntaxTree tree, List<string> problems)
+    private static IEnumerable<string> SteppingFromATokenWalksTheFile(SyntaxTree tree)
     {
         var tokens = tree.Root.DescendantTokens().ToList();
-        var earlier = problems.Count;
-        for (var i = 0; i < tokens.Count && problems.Count < earlier + MaximumProblems; i++)
+        for (var i = 0; i < tokens.Count; i++)
         {
             var next = tokens[i].GetNextToken();
             var wanted = i + 1 < tokens.Count ? tokens[i + 1] : (SyntaxToken?)null;
             if (!Same(next, wanted))
-                problems.Add($"after {Describe(tokens[i])} comes {Describe(next)}, not {Describe(wanted)}");
+                yield return $"after {Describe(tokens[i])} comes {Describe(next)}, not {Describe(wanted)}";
 
             var previous = tokens[i].GetPreviousToken();
             var before = i > 0 ? tokens[i - 1] : (SyntaxToken?)null;
             if (!Same(previous, before))
-                problems.Add($"before {Describe(tokens[i])} comes {Describe(previous)}, not {Describe(before)}");
+                yield return $"before {Describe(tokens[i])} comes {Describe(previous)}, not {Describe(before)}";
         }
     }
 
@@ -245,21 +238,18 @@ public sealed class NavigationTests
     /// Every node of the file is found again by the range it covers, and every node and token is
     /// held by the node it hangs from.
     /// </summary>
-    private static void EveryNodeIsFoundByItsSpanAndHeldByItsParent(SyntaxTree tree, List<string> problems)
+    private static IEnumerable<string> EveryNodeIsFoundByItsSpanAndHeldByItsParent(SyntaxTree tree)
     {
-        var earlier = problems.Count;
         foreach (var node in tree.Root.DescendantNodes())
         {
-            if (problems.Count >= earlier + MaximumProblems)
-                break;
             if (tree.Root.FindNode(node.Span) is var found && found.Span != node.Span)
-                problems.Add($"{node.Kind} at {node.Span} is found as {found.Kind} at {found.Span}");
+                yield return $"{node.Kind} at {node.Span} is found as {found.Kind} at {found.Span}";
             if (node.Parent is not { } parent || !parent.FullSpan.Contains(node.FullSpan))
-                problems.Add($"{node.Kind} at {node.FullSpan} is not held by {node.Parent?.Kind}");
+                yield return $"{node.Kind} at {node.FullSpan} is not held by {node.Parent?.Kind}";
             foreach (var child in node.ChildNodesAndTokens())
             {
                 if (child.AsNode() is { } inner && !ReferenceEquals(inner.Parent, node))
-                    problems.Add($"{inner.Kind} under {node.Kind} hangs from {inner.Parent?.Kind}");
+                    yield return $"{inner.Kind} under {node.Kind} hangs from {inner.Parent?.Kind}";
             }
         }
     }

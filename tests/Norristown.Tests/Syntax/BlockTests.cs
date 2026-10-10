@@ -1,9 +1,13 @@
 using Norristown.Semantics;
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks the block layer, which pairs the braces of a file into blocks before any line is parsed,
+/// and recovers when a brace is missing or one too many.
+/// </summary>
 public sealed class BlockTests
 {
     private const string ThreeProcsBlocks = """

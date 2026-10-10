@@ -6,6 +6,10 @@ using Lexer = Norristown.Syntax.InternalSyntax.Lexer;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks missing tokens, which stand in a required slot where the source has no token: each has
+/// no text and no width, sits where the token belongs, and is shared with every other of its kind.
+/// </summary>
 public sealed class MissingTokenTests
 {
     [Fact]

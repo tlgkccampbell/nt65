@@ -173,13 +173,7 @@ public sealed class TreeDiagnosticsTests
     [Fact]
     public void TheRootAnswersForTheWholeFileOnWholeAndBrokenLines()
     {
-        var variants = Repo.Sources()
-            .SelectMany(path => BrokenLines.Of(path)
-                .Select((text, cut) => (Where: $"{Repo.Named(path)} cut {cut}", Path: Repo.Named(path), Text: text)))
-            .ToList();
-        Assert.True(variants.Count > 1000, $"{variants.Count} variants is too few to be every source's");
-
-        var failures = Repo.CollectFailures(variants, variant =>
+        var failures = Repo.CollectFailures(SourceVariant.All(), variant =>
         {
             var problems = new List<string>();
             var tree = SyntaxTree.Parse(variant.Path, variant.Text);

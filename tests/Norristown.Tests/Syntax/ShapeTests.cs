@@ -19,7 +19,7 @@ public sealed class ShapeTests
     [Fact]
     public void EveryNodeHasTheShapeItsRowDescribes()
     {
-        var table = new NodeTree(NodeTable.Read(Repo.ReadText(Repo.Path(NodeTable.File.Split('/')))));
+        var table = new NodeTree(SyntaxTable.Rows());
         var failures = Repo.CollectFailures(Repo.Sources(), path =>
         {
             var problems = new SortedDictionary<string, string>(StringComparer.Ordinal);

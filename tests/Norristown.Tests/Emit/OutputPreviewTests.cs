@@ -1,4 +1,5 @@
 using Norristown.Emit;
+using Norristown.Project;
 using Norristown.Syntax;
 using Norristown.Tests.Fixtures;
 
@@ -15,7 +16,7 @@ public sealed class OutputPreviewTests
     /// The source line the preview gives for each output line is the one the line map beside the
     /// output records: both describe the same mapping, and an editor and a debugger have to agree
     /// about where a line came from. The fixture runner checks every fixture's output against the
-    /// preview itself, since it has already analysed the program.
+    /// preview itself, since it has already analyzed the program.
     /// </summary>
     [Fact]
     public void TheLinesShownAreTheLinesTheMapRecords()
@@ -49,8 +50,8 @@ public sealed class OutputPreviewTests
     {
         var analysis = Compiler.Analyze(
             [new SourceFile("text.nt65", ".module text\n.export .charmap screen {\n    'A'..'Z' = $01\n}\n")],
-            Norristown.Project.ProjectSettings.None);
-        var preview = OutputPreview.Of(analysis, Norristown.Project.ProjectSettings.None, "text.nt65");
+            ProjectSettings.None);
+        var preview = OutputPreview.Of(analysis, ProjectSettings.None, "text.nt65");
         Assert.NotNull(preview);
         Assert.StartsWith("; No file:", preview.Text, StringComparison.Ordinal);
         Assert.Equal([0], preview.SourceLines);
@@ -66,8 +67,8 @@ public sealed class OutputPreviewTests
     {
         var analysis = Compiler.Analyze(
             [new SourceFile("main.nt65", ".module main\n.segment CODE\n.export .proc main {\n    lda nowhere\n    rts\n}\n")],
-            Norristown.Project.ProjectSettings.None);
-        var preview = OutputPreview.Of(analysis, Norristown.Project.ProjectSettings.None, "main.nt65");
+            ProjectSettings.None);
+        var preview = OutputPreview.Of(analysis, ProjectSettings.None, "main.nt65");
         Assert.NotNull(preview);
         Assert.Equal(
             "nt65: this output is incomplete because the program has an error at line 4: `nowhere` is not declared",
@@ -86,7 +87,7 @@ public sealed class OutputPreviewTests
     public void AFileTheProgramDoesNotHoldHasNoOutput()
     {
         var analysis = Compiler.Analyze(
-            [new SourceFile("main.nt65", ".module main\n")], Norristown.Project.ProjectSettings.None);
-        Assert.Null(OutputPreview.Of(analysis, Norristown.Project.ProjectSettings.None, "other.nt65"));
+            [new SourceFile("main.nt65", ".module main\n")], ProjectSettings.None);
+        Assert.Null(OutputPreview.Of(analysis, ProjectSettings.None, "other.nt65"));
     }
 }

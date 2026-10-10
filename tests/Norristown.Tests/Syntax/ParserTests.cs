@@ -2,6 +2,10 @@ using Norristown.Syntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks what the parser makes of one line: how expressions bind, which operand forms and
+/// statements it reads, what it reports for a line it cannot read, and how deep it will go.
+/// </summary>
 public sealed class ParserTests
 {
     [Theory]
@@ -32,7 +36,7 @@ public sealed class ParserTests
     [InlineData("screen(\"HELLO\")", "screen(\"HELLO\")")]
     [InlineData(".target(65c02)", ".target(65c02)")]
     public void ExpressionsBindAsCDoes(string expression, string shape) =>
-        Assert.Equal(shape, SyntaxDump.Infix(Expression(expression)));
+        Assert.Equal(shape, SyntaxDump.Infix(Expressions.Parse(expression)));
 
     [Theory]
     // An operand of a shift or a bitwise operator may not be a different binary operator.
@@ -406,13 +410,6 @@ public sealed class ParserTests
     /// <summary>Returns line <paramref name="line"/> of a tree, 0-based.</summary>
     private static LineSyntax Line(SyntaxTree tree, int line) =>
         tree.Root.DescendantNodes().OfType<LineSyntax>().ElementAt(line);
-
-    /// <summary>
-    /// Returns the operand of a <c>.word</c>, which is the shortest line an expression fits on.
-    /// </summary>
-    private static SyntaxNode Expression(string expression) =>
-        Assert.Single(Assert.IsType<InlineDataSyntax>(
-            Assert.IsType<DataDirectiveSyntax>(Statement(".word " + expression)).Tail).Values);
 
     private static string[] Errors(string line) => [.. Parse(line).Diagnostics.Select(d => d.Message)];
 }

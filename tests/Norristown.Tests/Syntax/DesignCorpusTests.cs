@@ -1,8 +1,12 @@
-using Norristown.Syntax.InternalSyntax;
 using Norristown.Syntax;
+using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks the code blocks of the documents against the compiler and the fixtures, so that no
+/// example in them can drift from what nt65 reads and writes.
+/// </summary>
 public sealed class DesignCorpusTests
 {
     [Fact]

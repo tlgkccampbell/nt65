@@ -30,7 +30,7 @@ internal static class Fidelity
             var text = line.ToFullString();
             var pieces = Pieces(line);
             if (pieces != text)
-                yield return $"line {line.LineIndex + 1}: the line's pieces read back as {Quote(pieces)}, not {Quote(text)}";
+                yield return $"line {line.LineIndex + 1}: the line's pieces read back as {SyntaxDump.Escape(pieces)}, not {SyntaxDump.Escape(text)}";
         }
     }
 
@@ -40,6 +40,4 @@ internal static class Fidelity
         + line.Statement.ToFullString()
         + (line.SkippedTokens?.ToFullString() ?? "")
         + line.EndOfLineToken.ToFullString();
-
-    private static string Quote(string text) => "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
 }

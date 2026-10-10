@@ -5,14 +5,14 @@ namespace Norristown.Tests.Syntax;
 
 /// <summary>
 /// Scopes lines with a TextMate grammar the way VS Code's tokenizer, vscode-textmate, runs it, so
-/// that tests can check what a grammar colours without an editor. It supports the features the
+/// that tests can check what a grammar colors without an editor. It supports the features the
 /// nt65 grammar uses, which are match rules, blocks, captures and includes of the repository. A
 /// grammar that relies on something it would scope differently from vscode-textmate is refused
 /// with <see cref="NotSupportedException"/>.
 /// </summary>
 internal sealed class TextMateTokenizer
 {
-    /// <summary>The tokenizer for the grammar VS Code colours nt65 with.</summary>
+    /// <summary>The tokenizer for the grammar VS Code colors nt65 with.</summary>
     public static readonly TextMateTokenizer Nt65 = new(TextMateGrammar.Root, TextMateGrammar.Repository);
 
     private readonly IReadOnlyList<TextMateRule> root;
@@ -40,7 +40,7 @@ internal sealed class TextMateTokenizer
     /// </summary>
     /// <returns>
     /// For each line, the scope of each character, or null for a character no rule scopes. Where
-    /// groups nest, the innermost group's scope is the one kept, as it is the one a theme colours.
+    /// groups nest, the innermost group's scope is the one kept, as it is the one a theme colors.
     /// </returns>
     public string?[][] Scope(IReadOnlyList<string> lines)
     {
@@ -76,7 +76,7 @@ internal sealed class TextMateTokenizer
                 else
                 {
                     // vscode-textmate gives up on the rest of the line when a match rule matches
-                    // nothing, so a grammar that does this would colour differently in the editor.
+                    // nothing, so a grammar that does this would color differently in the editor.
                     if (best.Length == 0 && chosen.Begin is null)
                         throw new NotSupportedException($"`{chosen.Match}` matches nothing at {l + 1}:{best.Index + 1}");
                     if (chosen.Captures is { } captures)

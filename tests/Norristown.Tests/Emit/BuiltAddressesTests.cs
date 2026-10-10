@@ -63,12 +63,12 @@ public sealed class BuiltAddressesTests : IDisposable
 
     private static readonly ProjectSettings Built = ProjectSettings.None with { Out = "build" };
 
-    private readonly DirectoryInfo root = Directory.CreateTempSubdirectory("nt65-built-");
+    private readonly TempFolder root = new("nt65-built-");
     private readonly ProgramAnalysis analysis = Compiler.Analyze(
         [new SourceFile("src/a.nt65", A), new SourceFile("src/b.nt65", B)], ProjectSettings.None);
 
     /// <summary>Deletes the project written for the test.</summary>
-    public void Dispose() => root.Delete(recursive: true);
+    public void Dispose() => root.Dispose();
 
     /// <summary>
     /// Each zero-page data declaration takes the address of the label its own module defines, and
@@ -132,8 +132,8 @@ public sealed class BuiltAddressesTests : IDisposable
         var dbg = WriteBuild();
         Assert.Equal(2, BuiltAddresses.Of(analysis, Built, root.FullName)?.Addresses.Count);
 
-        File.Delete(Path.Combine(root.FullName, "build", "a.s.lines"));
-        File.Delete(Path.Combine(root.FullName, "build", "b.s.lines"));
+        File.Delete(root.PathOf("build/a.s.lines"));
+        File.Delete(root.PathOf("build/b.s.lines"));
         Assert.Equal(2, BuiltAddresses.Of(analysis, Built, root.FullName)?.Addresses.Count);
 
         File.SetLastWriteTimeUtc(dbg, File.GetLastWriteTimeUtc(dbg).AddSeconds(1));
@@ -152,12 +152,13 @@ public sealed class BuiltAddressesTests : IDisposable
         return Write("build/game.dbg", Linked);
     }
 
-    /// <summary>Writes <paramref name="text"/> at a path relative to the project root, and returns the full path.</summary>
+    /// <summary>
+    /// Writes <paramref name="text"/> at a path relative to the project root, and returns the full
+    /// path with the platform's separators, as the reader gives it back.
+    /// </summary>
     private string Write(string path, string text)
     {
-        var full = Path.GetFullPath(path, root.FullName);
-        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
-        File.WriteAllText(full, text);
-        return full;
+        root.Write(path, text);
+        return Path.GetFullPath(root.PathOf(path));
     }
 }

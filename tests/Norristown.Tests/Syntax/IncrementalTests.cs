@@ -3,6 +3,10 @@ using Norristown.Syntax.InternalSyntax;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks that an edit gives the tree a full parse of the edited text would, and that it parses
+/// again only the lines it reaches.
+/// </summary>
 public sealed class IncrementalTests
 {
     /// <summary>
@@ -170,10 +174,10 @@ public sealed class IncrementalTests
 
             if (batch.Count < Batch)
                 continue;
-            Compare(batch);
+            Check(batch, Problems);
             batch.Clear();
         }
-        Compare(batch);
+        Check(batch, Problems);
     }
 
     /// <summary>
@@ -208,10 +212,10 @@ public sealed class IncrementalTests
 
             if (batch.Count < Batch)
                 continue;
-            Together(batch);
+            Check(batch, TogetherProblems);
             batch.Clear();
         }
-        Together(batch);
+        Check(batch, TogetherProblems);
     }
 
     [Fact]
@@ -221,32 +225,35 @@ public sealed class IncrementalTests
         Assert.Same(tree, tree.WithChanges([]));
     }
 
-    /// <summary>Compares each step's one-at-a-time tree with its all-at-once one.</summary>
-    private static void Together(List<Step> batch)
+    /// <summary>
+    /// Checks a batch's steps in parallel, each with <paramref name="problems"/>, and fails on
+    /// the earliest step that has anything wrong with it.
+    /// </summary>
+    private static void Check(List<Step> batch, Func<Step, IEnumerable<string>> problems)
     {
-        var failures = Repo.CollectFailures(batch, step =>
+        var failures = Repo.CollectFailures(batch, step => problems(step).Take(1));
+        if (failures.Count > 0)
+            Assert.Fail(failures[0]);
+    }
+
+    /// <summary>
+    /// Returns what is wrong with one step of the all-at-once replay, if anything, comparing the
+    /// tree the changes gave together with the one they gave one at a time.
+    /// </summary>
+    private static IEnumerable<string> TogetherProblems(Step step)
+    {
+        var (index, _, one, together) = step;
+        if (one.Text != together.Text)
         {
-            var (index, _, one, together) = step;
-            if (one.Text != together.Text)
-                return [$"step {index}: the text differs from applying the changes one at a time"];
-            var dump = SyntaxDump.Full(together);
-            return dump == SyntaxDump.Full(one) && dump == SyntaxDump.Full(SyntaxTree.Parse("main.nt65", together.Text))
-                ? []
-                : new[] { $"step {index}: the tree differs from applying the changes one at a time" };
-        });
-        if (failures.Count > 0)
-            Assert.Fail(failures[0]);
+            yield return $"step {index}: the text differs from applying the changes one at a time";
+            yield break;
+        }
+        var dump = SyntaxDump.Full(together);
+        if (dump != SyntaxDump.Full(one) || dump != SyntaxDump.Full(SyntaxTree.Parse("main.nt65", together.Text)))
+            yield return $"step {index}: the tree differs from applying the changes one at a time";
     }
 
-    /// <summary>Checks a batch's steps in parallel and fails on the earliest bad one.</summary>
-    private static void Compare(List<Step> batch)
-    {
-        var failures = Repo.CollectFailures(batch, step => Problems(step).Take(1));
-        if (failures.Count > 0)
-            Assert.Fail(failures[0]);
-    }
-
-    /// <summary>Returns what is wrong with one step of the replay, if anything.</summary>
+    /// <summary>Returns what is wrong with one step of the one-at-a-time replay, if anything.</summary>
     private static IEnumerable<string> Problems(Step step)
     {
         var (index, change, before, after) = step;

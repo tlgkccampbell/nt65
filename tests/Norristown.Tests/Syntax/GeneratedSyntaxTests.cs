@@ -1,10 +1,13 @@
-using System.Collections.Immutable;
 using System.Reflection;
 using Norristown.Syntax;
 using Norristown.SyntaxGenerator;
 
 namespace Norristown.Tests.Syntax;
 
+/// <summary>
+/// Checks the generated syntax classes against the node table they were written from, and the
+/// visitors against the classes.
+/// </summary>
 public sealed class GeneratedSyntaxTests
 {
     /// <summary>
@@ -15,7 +18,7 @@ public sealed class GeneratedSyntaxTests
     [Fact]
     public void EveryNodeKindHasARowAndAClass()
     {
-        var table = Table();
+        var table = SyntaxTable.Rows();
         var described = table.SelectMany(node => node.Kinds).ToHashSet(StringComparer.Ordinal);
         var kinds = Enum.GetValues<SyntaxKind>().Where(kind => kind >= SyntaxKind.Line).Select(kind => kind.ToString());
         Assert.Equal([.. kinds.Order(StringComparer.Ordinal)], [.. described.Order(StringComparer.Ordinal)]);
@@ -38,7 +41,7 @@ public sealed class GeneratedSyntaxTests
     [Fact]
     public void APieceRecordsItsTypeAndItsKinds()
     {
-        foreach (var piece in Table().SelectMany(node => node.Slots).Where(slot => slot.IsPiece))
+        foreach (var piece in SyntaxTable.Rows().SelectMany(node => node.Slots).Where(slot => slot.IsPiece))
         {
             Assert.NotEqual("", piece.Type);
             if (piece.List != ListShape.None)
@@ -55,7 +58,7 @@ public sealed class GeneratedSyntaxTests
     [Fact]
     public void EverySlotOfALayoutIsAPropertyOfTheClass()
     {
-        var tree = new NodeTree(Table());
+        var tree = new NodeTree(SyntaxTable.Rows());
         var assembly = typeof(SyntaxNode).Assembly;
         foreach (var node in tree.Nodes.Where(node => !node.IsAbstract && !node.IsHandWritten))
         {
@@ -81,7 +84,7 @@ public sealed class GeneratedSyntaxTests
     [Fact]
     public void EveryNodeClassAcceptsAndEveryClassHasAVisitMethod()
     {
-        var table = Table();
+        var table = SyntaxTable.Rows();
         var assembly = typeof(SyntaxNode).Assembly;
         const BindingFlags declared = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
         foreach (var node in table.Where(node => !node.IsAbstract))
@@ -137,9 +140,6 @@ public sealed class GeneratedSyntaxTests
             tree.Root.DescendantNodes().Prepend(tree.Root).Select(node => node.Kind.ToString())
                 .Where(MethodNames.Overridden.Contains).Distinct().Order(StringComparer.Ordinal));
     }
-
-    private static ImmutableArray<NodeRow> Table() =>
-        NodeTable.Read(Repo.ReadText(Repo.Path(NodeTable.File.Split('/'))));
 
     private sealed class Collector : SyntaxWalker
     {

@@ -40,7 +40,7 @@ public sealed class BranchTests
 
         // On its own the first reaches 125 bytes and is in range. Once the second has grown by
         // the three bytes of its `jmp`, it reaches 128 and is not.
-        Assert.Equal(2, Occurrences(written, "    jmp p__"));
+        Assert.Equal(2, written.AsSpan().Count("    jmp p__"));
         Assert.DoesNotContain("    beq", written, StringComparison.Ordinal);
     }
 
@@ -111,15 +111,4 @@ public sealed class BranchTests
     /// segment.
     /// </summary>
     private static string Written(string text) => Analysis.Outputs(("main.nt65", ".module main\n.segment CODE\n" + text))["main.s"];
-
-    private static int Occurrences(string text, string find)
-    {
-        int count = 0, at = 0;
-        while ((at = text.IndexOf(find, at, StringComparison.Ordinal)) >= 0)
-        {
-            count++;
-            at += find.Length;
-        }
-        return count;
-    }
 }

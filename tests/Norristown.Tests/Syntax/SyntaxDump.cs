@@ -173,9 +173,13 @@ internal static class SyntaxDump
         return builder.ToString();
     }
 
-    /// <summary>A node's child nodes and tokens rendered in source order.</summary>
+    /// <summary>
+    /// Renders <paramref name="text"/> in quotes, with each line break written out as
+    /// <c>\r</c> or <c>\n</c>, so that a failure message shows where every line ends.
+    /// </summary>
+    public static string Escape(string text) => "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
+
+    /// <summary>Returns a node's child nodes and tokens rendered in source order.</summary>
     private static IEnumerable<string> Children(SyntaxNode node, Func<SyntaxNode, string> ofNode, Func<SyntaxToken, string> ofToken) =>
         node.ChildNodesAndTokens().Select(child => child.AsNode() is { } inner ? ofNode(inner) : ofToken(child.AsToken()));
-
-    private static string Escape(string text) => "\"" + text.Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
 }

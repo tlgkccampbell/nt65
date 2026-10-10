@@ -1,11 +1,12 @@
+using Norristown.Semantics;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Layout;
 
 /// <summary>
 /// Checks <c>.endof</c> and <c>.spanof</c>, which give the address just past something and how
-/// many bytes it takes. They describe layout rather than shape, so they are address expressions like any
-/// label difference — resolved by ca65 and ld65 — and never nt65 constants.
+/// many bytes it takes. They describe layout rather than shape, so they are address expressions
+/// that ca65 and ld65 resolve, like any label difference, and never nt65 constants.
 /// </summary>
 public sealed class ExtentTests
 {
@@ -163,7 +164,7 @@ public sealed class ExtentTests
     {
         var analysis = Analysis.Program(("main.nt65", ".module main\n.segment CODE\n" + text));
         var model = analysis.File("main.nt65");
-        var measured = Norristown.Semantics.Extents.MeasuredIn(model).Single();
+        var measured = Extents.MeasuredIn(model).Single();
         return analysis.Files.Single().Layout.SpanOf(measured);
     }
 }

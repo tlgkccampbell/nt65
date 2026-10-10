@@ -262,9 +262,10 @@ public sealed class SyntaxGeneratorTests
     }
 
     /// <summary>
-    /// A green node rolls up what its slots hold as it is built — a diagnostic, an annotation —
-    /// so that a walk looking for one of those follows only the slots that lead to one. They are
-    /// bits of one flags word, so each slot is read once no matter how many things are rolled up.
+    /// A green node rolls up what its slots hold, such as a diagnostic or an annotation, as it is
+    /// built, so that a walk looking for one of those follows only the slots that lead to one.
+    /// They are bits of one flags word, so each slot is read once no matter how many things are
+    /// rolled up.
     /// </summary>
     [Fact]
     public void AGreenNodeRollsUpWhatItsSlotsHold()
