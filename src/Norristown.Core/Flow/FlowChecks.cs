@@ -134,18 +134,21 @@ internal sealed class FlowChecks
         CheckNextIsNeeded(units);
         CheckFallthrough(units);
         CheckReturnsAndCalls(region.Routine, units);
-        CheckPatchVariants(units);
-        CheckUnlistedPatches(units);
-        CheckMissedPatches(units);
+        CheckPatches(units);
     }
 
     /// <summary>
-    /// Reports each instruction a <c>.patch … as</c> lists that cannot stand in for the patched
-    /// instruction, as <see cref="PatchVariant.Problem"/> decides.
+    /// Reports what is wrong with the <c>.patch</c> directives whose instructions are among
+    /// <paramref name="units"/>: each listed variant that cannot stand in for the patched
+    /// instruction, as <see cref="PatchVariant.Problem"/> decides, each store that may write the
+    /// opcode under a <c>.patch</c> that lists no variants, and each store whose bytes reach
+    /// outside the instruction its <c>.patch</c> names into something no other <c>.patch</c> under
+    /// the store names. Where the store can be seen to write one instruction, the fix lists it, and
+    /// where its bytes land in a labeled instruction, the fix names that label with a <c>.patch</c>.
     /// </summary>
-    private void CheckPatchVariants(IReadOnlyList<ControlFlow.Unit> units)
+    private void CheckPatches(IReadOnlyList<ControlFlow.Unit> units)
     {
-        if (flow.ListedVariants.Count == 0)
+        if (flow.ListedVariants.Count == 0 && flow.UnlistedPatches.Count == 0 && flow.MissedPatches.Count == 0)
             return;
         var keys = units.Select(unit => unit.Step.Key).ToHashSet();
         foreach (var variant in flow.ListedVariants)
@@ -156,47 +159,21 @@ internal sealed class FlowChecks
                     variant.Name.GetText().Trim(), SyntaxFacts.TextOf(variant.WrittenMnemonic), problem));
             }
         }
-    }
-
-    /// <summary>
-    /// Reports each store that may write the opcode of a patched instruction under a
-    /// <c>.patch</c> that lists no variants. Where the store can be seen to write one instruction,
-    /// the fix lists it.
-    /// </summary>
-    private void CheckUnlistedPatches(IReadOnlyList<ControlFlow.Unit> units)
-    {
-        if (flow.UnlistedPatches.Count == 0)
-            return;
-        var keys = units.Select(unit => unit.Step.Key).ToHashSet();
         foreach (var unlisted in flow.UnlistedPatches)
         {
             if (!keys.Contains(unlisted.Written.Key))
                 continue;
-            var patch = unlisted.Patch;
-            Report(patch, unlisted.Store.On, Catalogue.PatchVariantsRequired.Message(
+            Report(unlisted.Patch, unlisted.Store.On, Catalogue.PatchVariantsRequired.Message(
                     unlisted.Store.Statement.GetTextOnOneLine(), unlisted.Label.DisplayName),
                 unlisted.Inferred == MnemonicKind.None
                     ? null
                     : new DiagnosticFix(FixKind.Variant, SyntaxFacts.TextOf(unlisted.Inferred)));
         }
-    }
-
-    /// <summary>
-    /// Reports each store whose bytes reach outside the instruction its <c>.patch</c> names, into
-    /// something that no other <c>.patch</c> under the store names. Where they land in a labeled
-    /// instruction, the fix names that label with a <c>.patch</c>.
-    /// </summary>
-    private void CheckMissedPatches(IReadOnlyList<ControlFlow.Unit> units)
-    {
-        if (flow.MissedPatches.Count == 0)
-            return;
-        var keys = units.Select(unit => unit.Step.Key).ToHashSet();
         foreach (var missed in flow.MissedPatches)
         {
             if (!keys.Contains(missed.Written.Key))
                 continue;
-            var patch = missed.Patch;
-            Report(patch, missed.Store.On, Catalogue.PatchMissesStore.Message(
+            Report(missed.Patch, missed.Store.On, Catalogue.PatchMissesStore.Message(
                     missed.Store.Statement.GetTextOnOneLine(), missed.Before ? "before" : "past", missed.Label.DisplayName,
                     missed.Length == 1 ? "1 byte" : $"{missed.Length} bytes", missed.Into),
                 missed.Fix);
@@ -246,11 +223,12 @@ internal sealed class FlowChecks
 
     /// <summary>
     /// Reports each label that nothing falls into and nothing names, and each run of code that
-    /// nothing reaches, such as the code after a return or a jump that has no label. nt65 sees every reference in the source, so such a label can only be
-    /// reached in a way nt65 cannot see. This diagnostic pushes the programmer to declare how. A <c>.state</c> directly
-    /// after the label declares it an entry point, which acknowledges that it is reached from
-    /// somewhere nt65 cannot see. A label on data is read rather than run, so control never
-    /// reaching it is expected.
+    /// nothing reaches, such as the code after a return or a jump that has no label. nt65 sees
+    /// every reference in the source, so such a label can only be reached in a way nt65 cannot
+    /// see, and the diagnostic asks the programmer to declare how. A <c>.state</c> directly after
+    /// the label declares it an entry point, which acknowledges that it is reached from somewhere
+    /// nt65 cannot see. A label on data is read rather than run, so control never reaching it is
+    /// expected.
     /// </summary>
     private void CheckUnreachableLabels(FlowRegion region)
     {
