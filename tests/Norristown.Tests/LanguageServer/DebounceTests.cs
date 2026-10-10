@@ -6,7 +6,7 @@ namespace Norristown.Tests.LanguageServer;
 public sealed class DebounceTests
 {
     /// <summary>
-    /// Checks that work which has already started is cancelled when a later call replaces it.
+    /// Checks that work which has already started is canceled when a later call replaces it.
     /// Without this, a slow publish of the whole program keeps running after the next edit
     /// has made it out of date.
     /// </summary>

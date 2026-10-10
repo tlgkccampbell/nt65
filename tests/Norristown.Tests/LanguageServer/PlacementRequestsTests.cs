@@ -1,15 +1,11 @@
 using Norristown.LanguageServer;
-using Norristown.LanguageServer.Protocol;
 using Norristown.Semantics;
-
-// The protocol has a Range of its own, which is the one these tests mean.
-using Range = Norristown.LanguageServer.Protocol.Range;
 
 namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests what the editor reports about a <c>.place</c>, including the module its path names,
-/// where that module is declared, how the path is coloured, and the fix for placing a module that
+/// where that module is declared, how the path is colored, and the fix for placing a module that
 /// is not declared <c>placed</c>.
 /// </summary>
 public sealed class PlacementRequestsTests
@@ -18,12 +14,6 @@ public sealed class PlacementRequestsTests
     private const string PartUri = "file:///c:/work/part.nt65";
 
     private const string Main = ".module main\n\n.segment CODE\n.export .proc start {\n    rts\n}\n\n.place part\n";
-
-    /// <summary>
-    /// Gets a range covering the whole file, as a client sends when it asks for actions across all
-    /// of it.
-    /// </summary>
-    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
 
     /// <summary>
     /// A module is not a symbol, so hover and go to definition handle the path in a <c>.place</c>
@@ -50,7 +40,7 @@ public sealed class PlacementRequestsTests
         Assert.Equal(Locate.Span(Part, ".module |part"), definition.Range);
     }
 
-    /// <summary>The path is coloured as a module, which the grammar alone cannot tell from any other name.</summary>
+    /// <summary>The path is colored as a module, which the grammar alone cannot tell from any other name.</summary>
     [Fact]
     public void ThePathInAPlaceIsColouredAsAModule()
     {
@@ -74,7 +64,7 @@ public sealed class PlacementRequestsTests
 
         var refused = Assert.Single(analysis.DiagnosticsFor(model.Tree.Path));
         Assert.Equal("place-not-placeable", refused.Id);
-        var action = Assert.Single(CodeActions.In(analysis, model, Whole), action => action.Kind == "quickfix");
+        var action = Assert.Single(CodeActions.In(analysis, model, Locate.Whole), action => action.Kind == "quickfix");
         Assert.Equal("Declare `part` as placed", action.Title);
         Assert.Equal([PartUri], action.Edit!.Changes.Keys);
         Assert.Equal(".module part: placed\n" + Part[".module part\n".Length..], Editing.Apply(Part, action.Edit!.Changes[PartUri]));

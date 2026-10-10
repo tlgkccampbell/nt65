@@ -13,6 +13,12 @@ namespace Norristown.Tests.LanguageServer;
 internal static class Locate
 {
     /// <summary>
+    /// Gets a range covering a whole file, as a client sends when it asks for the actions across
+    /// all of it.
+    /// </summary>
+    public static Range Whole { get; } = new(new Position(0, 0), new Position(1000, 0));
+
+    /// <summary>
     /// Returns the position of the <paramref name="occurrence"/>th match of
     /// <paramref name="find"/> in <paramref name="text"/>. A <c>|</c> in
     /// <paramref name="find"/> marks the column within the match; without one, the position

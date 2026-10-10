@@ -7,8 +7,8 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests the <c>nt65/sources</c> request, which says where each value that the instruction at the
-/// caret reads was set, and where each value it writes is read. Every range in the answer covers one whole line of the caret's document,
-/// which is what the client highlights.
+/// caret reads was set, and where each value it writes is read. Every range in the answer covers
+/// one whole line of the caret's document, which is what the client highlights.
 /// </summary>
 public sealed class SourcesRequestsTests
 {

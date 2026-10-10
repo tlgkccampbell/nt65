@@ -15,9 +15,9 @@ namespace Norristown.Tests.LanguageServer;
 public sealed class CancellationTests
 {
     /// <summary>
-    /// Every handler takes a token except five: three manage the server's lifecycle, which a
-    /// client does not cancel, and the other two answer from state the server already holds —
-    /// the workspace's list of configurations, and which hints this session shows.
+    /// Every handler takes a token except five. Three manage the server's lifecycle, which a
+    /// client does not cancel. The other two answer from state the server already holds, which
+    /// is the workspace's list of configurations and which hints this session shows.
     /// </summary>
     [Fact]
     public void EveryRequestHandlerTakesACancellationToken()
@@ -32,7 +32,7 @@ public sealed class CancellationTests
         Assert.Equal(["Configurations", "Exit", "Initialize", "Shutdown", "ToggleCycleHints"], without);
     }
 
-    /// <summary>A cancelled search across a workspace of hundreds of files stops before the next file.</summary>
+    /// <summary>A canceled search across a workspace of hundreds of files stops before the next file.</summary>
     [Fact]
     public void ASearchAcrossTheWorkspaceStopsBetweenFiles()
     {

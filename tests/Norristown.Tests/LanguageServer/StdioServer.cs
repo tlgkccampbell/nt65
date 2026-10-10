@@ -67,23 +67,10 @@ internal sealed class StdioServer : IDisposable
     public async Task<JsonDocument> ReceiveAsync(CancellationToken cancellation)
     {
         var length = -1;
-        var header = new List<byte>();
-        while (true)
+        while (await HeaderLineAsync(cancellation) is { Length: > 0 } line)
         {
-            var next = await NextByteAsync(cancellation);
-            Assert.True(next >= 0, "the server closed its output before answering");
-            if (next != '\n')
-            {
-                if (next != '\r')
-                    header.Add((byte)next);
-                continue;
-            }
-            if (header.Count == 0)
-                break;
-            var line = Encoding.ASCII.GetString([.. header]);
             if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
                 length = int.Parse(line["Content-Length:".Length..].Trim(), null);
-            header.Clear();
         }
 
         var body = new byte[length];
@@ -126,6 +113,7 @@ internal sealed class StdioServer : IDisposable
         process.WaitForExit(10_000);
     }
 
+    /// <summary>Stops the process if it is still running, and releases it.</summary>
     public void Dispose()
     {
         try
@@ -138,6 +126,24 @@ internal sealed class StdioServer : IDisposable
             // The process was never started, or has already been reaped.
         }
         process.Dispose();
+    }
+
+    /// <summary>
+    /// Reads one line of a frame's header, without its line break. The empty line that ends the
+    /// header comes back empty.
+    /// </summary>
+    private async Task<string> HeaderLineAsync(CancellationToken cancellation)
+    {
+        var line = new List<byte>();
+        while (true)
+        {
+            var next = await NextByteAsync(cancellation);
+            Assert.True(next >= 0, "the server closed its output before answering");
+            if (next == '\n')
+                return Encoding.ASCII.GetString([.. line]);
+            if (next != '\r')
+                line.Add((byte)next);
+        }
     }
 
     private async ValueTask<int> NextByteAsync(CancellationToken cancellation)

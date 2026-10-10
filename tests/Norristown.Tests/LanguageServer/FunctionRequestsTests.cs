@@ -3,7 +3,7 @@ namespace Norristown.Tests.LanguageServer;
 /// <summary>
 /// Tests what an editor can do with a named argument. A named argument is a reference to the
 /// parameter it names, in a call to a <c>.func</c> and in a macro call alike, so going to the
-/// definition, finding every use, renaming and colouring all treat it as the parameter.
+/// definition, finding every use, renaming and coloring all treat it as the parameter.
 /// </summary>
 public sealed class FunctionRequestsTests
 {
@@ -78,7 +78,7 @@ public sealed class FunctionRequestsTests
         Assert.Equal([2, 3, 11], macro.Changes[MainUri].Select(change => change.Range.Start.Line).Order());
     }
 
-    /// <summary>A named argument is coloured as the parameter it names.</summary>
+    /// <summary>A named argument is colored as the parameter it names.</summary>
     [Fact]
     public async Task ANamedArgumentIsColouredAsAParameter()
     {

@@ -6,12 +6,12 @@ namespace Norristown.Tests.LanguageServer;
 /// Tests the rewrite of ca65 expressions as nt65 expressions with the same meaning, which reading
 /// a selection as nt65 uses for every line.
 /// <para>
-/// Each expected line is derived by hand from ca65's precedence table in its documentation, from
-/// loosest to tightest: <c>.not</c>; <c>.or</c>; <c>.and</c> and <c>.xor</c>; the comparisons,
-/// including <c>=</c> and <c>&lt;&gt;</c>; <c>+</c>, <c>-</c> and <c>|</c>; then <c>*</c>,
-/// <c>/</c>, <c>.mod</c>, <c>&amp;</c>, <c>^</c>, <c>&lt;&lt;</c> and <c>&gt;&gt;</c>, all left
-/// to right. The ca65 grouping is then written with nt65's C precedence, adding the parentheses
-/// that keep it and those nt65 requires.
+/// Each expected line is derived by hand from ca65's operator precedence. From loosest to
+/// tightest, ca65 binds <c>.not</c>; then <c>.or</c>; then <c>.and</c> and <c>.xor</c>; then the
+/// comparisons, including <c>=</c> and <c>&lt;&gt;</c>; then <c>+</c>, <c>-</c> and <c>|</c>; and
+/// then <c>*</c>, <c>/</c>, <c>.mod</c>, <c>&amp;</c>, <c>^</c>, <c>&lt;&lt;</c> and
+/// <c>&gt;&gt;</c>, all left to right. The ca65 grouping is then written with nt65's C
+/// precedence, adding the parentheses that keep it and those nt65 requires.
 /// </para>
 /// </summary>
 public sealed class Ca65ExpressionsTests

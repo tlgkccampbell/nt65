@@ -59,7 +59,7 @@ public sealed class SlowAnalysisTests
         var hover = client.HoverAsync(Uri, new Position(2, 16), giveUp.Token);
         await giveUp.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => hover);
-        Assert.False(held.Cancelled.Task.IsCompleted);
+        Assert.False(held.Canceled.Task.IsCompleted);
 
         held.Release();
         Assert.Empty((await client.NextDiagnosticsAsync(Uri, timeout)).Diagnostics);
@@ -67,7 +67,7 @@ public sealed class SlowAnalysisTests
 
     /// <summary>
     /// Cancelling the only request waiting for an analysis cancels the analysis, and the next
-    /// request starts a new one rather than waiting for the cancelled one.
+    /// request starts a new one rather than waiting for the canceled one.
     /// </summary>
     [Fact]
     public async Task ACancelledRequestCancelsItsAnalysis()
@@ -82,7 +82,7 @@ public sealed class SlowAnalysisTests
         await held.Started.Task.WaitAsync(timeout);
         await giveUp.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked);
-        await held.Cancelled.Task.WaitAsync(timeout);
+        await held.Canceled.Task.WaitAsync(timeout);
 
         held.Release();
         Assert.NotNull((await workspace.AnalysisForAsync(Path, timeout)).ModelFor(Path));
@@ -90,7 +90,7 @@ public sealed class SlowAnalysisTests
     }
 
     /// <summary>
-    /// An analysis two requests wait for keeps running when one of them is cancelled, and the
+    /// An analysis two requests wait for keeps running when one of them is canceled, and the
     /// other gets it.
     /// </summary>
     [Fact]
@@ -107,7 +107,7 @@ public sealed class SlowAnalysisTests
         await held.Started.Task.WaitAsync(timeout);
         await giveUp.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
-        Assert.False(held.Cancelled.Task.IsCompleted);
+        Assert.False(held.Canceled.Task.IsCompleted);
 
         held.Release();
         Assert.NotNull((await second).ModelFor(Path));

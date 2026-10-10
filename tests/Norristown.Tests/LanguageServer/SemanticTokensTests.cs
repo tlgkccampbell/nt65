@@ -8,7 +8,7 @@ namespace Norristown.Tests.LanguageServer;
 
 /// <summary>
 /// Tests semantic tokens, which classify the names in a document by what they refer to. The
-/// client draws them over the TextMate grammar's colours.
+/// client draws them over the TextMate grammar's colors.
 /// </summary>
 public sealed class SemanticTokensTests
 {
@@ -67,7 +67,7 @@ public sealed class SemanticTokensTests
     /// <summary>
     /// Every name is classified by what it refers to, including a member spelled like a register,
     /// with its declarations marked and its constants read-only. Registers, mnemonics and
-    /// directives are not names, and are left to the grammar to colour.
+    /// directives are not names, and are left to the grammar to color.
     /// </summary>
     [Fact]
     public async Task EachNameIsClassifiedByWhatItRefersTo()

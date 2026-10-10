@@ -11,10 +11,13 @@ namespace Norristown.Tests.LanguageServer;
 /// </summary>
 public sealed class ProtocolLifeTests
 {
-    /// <summary>LSP's own code for a request that arrives before <c>initialize</c>.</summary>
+    /// <summary>The protocol's error code for a request that arrives before <c>initialize</c>.</summary>
     private const int ServerNotInitialized = -32002;
 
+    /// <summary>The error code for a request that is not valid where it arrives, such as one after <c>shutdown</c>.</summary>
     private const int InvalidRequest = -32600;
+
+    /// <summary>The error code for a frame whose body is not JSON.</summary>
     private const int ParseError = -32700;
 
     [Fact]

@@ -401,8 +401,8 @@ public sealed class BuildCommandTests : IDisposable
     }
 
     /// <summary>
-    /// Colour highlights a diagnostic's severity and nothing else, so the position stays
-    /// selectable and does not compete with the message. Whether to use colour at all is the
+    /// Color highlights a diagnostic's severity and nothing else, so the position stays
+    /// selectable and does not compete with the message. Whether to use color at all is the
     /// caller's decision.
     /// </summary>
     [Fact]

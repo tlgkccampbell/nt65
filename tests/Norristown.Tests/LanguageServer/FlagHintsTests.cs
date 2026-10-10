@@ -25,8 +25,6 @@ public sealed class FlagHintsTests
     private const string Dispatch = ".export .proc main {\n    sec\n    lda table+1,x\n    pha\n    lda table,x\n    pha\n"
         + "    rts\n    .next table\nadd:\n    sec\n    sbc #1\n    sta $10\n    rts\nsub:\n    lda $11\n    sta $10\n    rts\n}\n";
 
-    private static Range Whole => new(new Position(0, 0), new Position(1000, 0));
-
     /// <summary>
     /// A <c>.next</c> that says a branch is always taken is not needed where the flags prove it,
     /// and the fix removes it.

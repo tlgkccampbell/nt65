@@ -231,7 +231,7 @@ public sealed class MacroRequestsTests
 
     /// <summary>
     /// A member passed by its bare name is a use of the member, even where the caller has a name
-    /// of its own spelled the same. It is coloured, hovered and found as the member.
+    /// of its own spelled the same. It is colored, hovered and found as the member.
     /// </summary>
     [Fact]
     public async Task AMemberPassedByItsBareNameIsTheMember()
@@ -257,7 +257,7 @@ public sealed class MacroRequestsTests
             client.Initialized.Capabilities.SemanticTokensProvider!.Legend, await client.SemanticTokensAsync(Uri, timeout));
         Assert.Equal("enumMember", at[(15, 10)]);
 
-        // A word a condition compares a parameter with is coloured as a member of the set the
+        // A word a condition compares a parameter with is colored as a member of the set the
         // parameter's kind names.
         Assert.Equal("enumMember", at[(6, 22)]);
         Assert.Equal("enumMember", at[(6, 36)]);

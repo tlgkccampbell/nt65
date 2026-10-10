@@ -56,7 +56,7 @@ public sealed class WatchCommandTests : IDisposable
     /// <summary>
     /// A binary that an <c>.incbin</c> in another directory reads is watched like a source. Its
     /// path joins the root's separator to the <c>/</c> that the logical path uses, and the watch
-    /// still recognises it.
+    /// still recognizes it.
     /// </summary>
     [Fact]
     public async Task ItBuildsAgainWhenAnIncludedBinaryChanges()
@@ -171,7 +171,7 @@ public sealed class WatchCommandTests : IDisposable
     /// Starts <c>nt65 build --watch</c> in <paramref name="directory"/> on a thread of its own,
     /// with any further <paramref name="arguments"/>, writing what it prints to
     /// <paramref name="printed"/>. The task ends with the exit code once <paramref name="stopping"/>
-    /// is cancelled, or at once when the command line is refused.
+    /// is canceled, or at once when the command line is refused.
     /// </summary>
     private static Task<ExitCode> WatchAsync(
         string directory, Lines printed, CancellationToken stopping, params string[] arguments) =>
