@@ -1,6 +1,6 @@
 namespace Norristown.LanguageServer.Protocol;
 
-/// <summary>Specifies the kind of an inlay hint, which determines how an editor colours it.</summary>
+/// <summary>Specifies the kind of an inlay hint, which determines how an editor colors it.</summary>
 internal enum InlayHintKind
 {
     /// <summary>Information about what a name holds that the line itself does not show.</summary>

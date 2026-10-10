@@ -27,7 +27,7 @@ namespace Norristown.LanguageServer.Protocol;
 /// </param>
 /// <param name="Disabled">
 /// The reason the change cannot be applied here, or null if it can. A change that would alter the
-/// meaning of the line is still offered, greyed out with the reason, so that a programmer looking
+/// meaning of the line is still offered, grayed out with the reason, so that a programmer looking
 /// for it finds the reason rather than nothing.
 /// </param>
 /// <param name="Data">
