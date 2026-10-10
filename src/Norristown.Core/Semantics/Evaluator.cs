@@ -344,7 +344,8 @@ internal sealed partial class Evaluator
     /// <summary>
     /// Returns whether the output can leave a part of a <c>.func</c> body to ld65 when an
     /// address flows into it. ld65 works out every operator but <c>.in</c>, so an operation, a
-    /// name, a number and a call to another function can be written for it to finish.
+    /// name, a number and a call to another function can be written for it to finish. So can
+    /// <c>.lobyte</c>, <c>.hibyte</c> and <c>.bankbyte</c>, which are ca65's byte operators.
     /// </summary>
     private bool IsLinkTime(SyntaxNode node) => node switch
     {
@@ -352,6 +353,9 @@ internal sealed partial class Evaluator
         NumberExpressionSyntax or CharacterExpressionSyntax => true,
         BinaryExpressionSyntax binary => !IsIn(binary.OperatorToken),
         CallExpressionSyntax { Callee: { } callee } => SymbolOf(callee)?.Kind == SymbolKind.Func,
+
+        // The output writes these as ca65's `<`, `>` and `^`, which ld65 works out.
+        CallExpressionSyntax { Callee: null, BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte } => true,
         _ => false,
     };
 

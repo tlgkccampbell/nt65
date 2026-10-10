@@ -701,7 +701,7 @@ internal sealed partial class Evaluator
                 {
                     Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere
                         ? "that address is declared in another file, which this file's output cannot name"
-                        : "ld65 works out only operators on an address, so that part of the body needs a constant"));
+                        : "ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant"));
                 }
             }
             finally

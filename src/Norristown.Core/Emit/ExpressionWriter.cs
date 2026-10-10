@@ -233,6 +233,17 @@ internal sealed class ExpressionWriter(
     private static string LowByteOf(string text) => IsWrapped(text) ? ".lobyte" + text : $".lobyte({text})";
 
     /// <summary>
+    /// Returns ca65's operator for <paramref name="kind"/>, which is <c>.lobyte</c>,
+    /// <c>.hibyte</c> or <c>.bankbyte</c>.
+    /// </summary>
+    private static string ByteOperator(BuiltinKind kind) => kind switch
+    {
+        BuiltinKind.Lobyte => "<",
+        BuiltinKind.Hibyte => ">",
+        _ => "^",
+    };
+
+    /// <summary>
     /// Writes <paramref name="text"/>, an operation, in place of a node that stands for a single
     /// value. Where the node is an operand of another operation, the text is parenthesized, so
     /// that <c>#&gt;player::hp</c> is <c>#&gt;(player+255)</c> rather than the high byte of
@@ -847,6 +858,16 @@ internal sealed class ExpressionWriter(
             case CallExpressionSyntax { Callee: { } callee } call
                 when model.SymbolOf(callee, Expansion) is { Kind: SymbolKind.Func }:
                 return LinkTime(call, parameters, writing, comments);
+
+            // A byte of a value is written as ca65's byte operator, which ld65 works out.
+            case CallExpressionSyntax
+            {
+                Callee: null, BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte,
+                Arguments.Arguments: [var argument],
+            } byteOf:
+                return Linked(argument, parameters, writing, comments) is { } of
+                    ? $"({ByteOperator(byteOf.BuiltinKind)}({of}))"
+                    : null;
             default:
                 break;
         }

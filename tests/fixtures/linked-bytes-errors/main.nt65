@@ -10,9 +10,9 @@
 
 .export start, other, line, pair
 
-.func low(n) = .lobyte(n)
+.func biggest(n) = .max(n, 2)
 .func inside(n) = n .in [1, 2]
-.func outer(n) = 1 + low(n)
+.func outer(n) = 1 + biggest(n)
 .func triple(n) = n * 3
 .func digit(n) = '0' + n .mod 10
 .func shifted(n) = (n << 16) .mod 10
@@ -28,9 +28,9 @@
 
 .segment CODE
 .data line {
-    .word low(start)        ;! error[func-not-linkable]: `low` is written for ld65 to work out, because its value depends on an address, and its body uses `.lobyte(n)`: ld65 works out only operators on an address, so that part of the body needs a constant
-    .word inside(start)     ;! error[func-not-linkable]: `inside` is written for ld65 to work out, because its value depends on an address, and its body uses `n .in [1, 2]`: ld65 works out only operators on an address, so that part of the body needs a constant
-    .word outer(start)      ;! error[func-not-linkable]: `outer` is written for ld65 to work out, because its value depends on an address, and its body uses `.lobyte(n)`: ld65 works out only operators on an address, so that part of the body needs a constant
+    .word biggest(start)    ;! error[func-not-linkable]: `biggest` is written for ld65 to work out, because its value depends on an address, and its body uses `.max(n, 2)`: ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant
+    .word inside(start)     ;! error[func-not-linkable]: `inside` is written for ld65 to work out, because its value depends on an address, and its body uses `n .in [1, 2]`: ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant
+    .word outer(start)      ;! error[func-not-linkable]: `outer` is written for ld65 to work out, because its value depends on an address, and its body uses `.max(n, 2)`: ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant
     .word offset(1)         ;! error[func-not-linkable]: `offset` is written for ld65 to work out, because its value depends on an address, and its body uses `table`: that address is declared in another file, which this file's output cannot name
     .byte triple(start)     ;! error[linked-value-may-not-fit]: `triple(start)` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(triple(start))` for its low byte
     .byte digit(start) + 300 ;! error[linked-value-may-not-fit]: `digit(start) + 300` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(digit(start) + 300)` for its low byte

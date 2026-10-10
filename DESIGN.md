@@ -2986,10 +2986,13 @@ A call given an address, such as the decimal digits of a routine's address that 
 }
 ```
 
-ld65 works out the operators, so a part of the body that uses such a parameter in anything
-else, such as a built-in function or `.in`, is an error. In a one-byte slot the call follows the
-rule for any value that names an address (§8): one that nt65 can show always fits a byte is
-written inside `.lobyte()`, and one that it cannot is an error that asks for `<`.
+ld65 works out the operators, and `.lobyte`, `.hibyte` and `.bankbyte` are written as its
+`<`, `>` and `^`, so `.func low(n) = .lobyte(n)` may be given a label. A part of the body that
+uses such a parameter in anything else, such as another built-in function or `.in`, is an
+error. In a one-byte slot the call follows the rule for any value that names an address (§8):
+one that nt65 can show always fits a byte is written inside `.lobyte()`, and one that it cannot
+is an error that asks for `<`. A byte function's result always fits, and an argument the body
+uses only inside a byte operator or a byte function needs no `.lobyte()` around the call.
 
 **Defaults and named arguments** work as a macro's do (§11.2). A parameter may have a default,
 whose names resolve where the function is declared, so a caller in another module gets the

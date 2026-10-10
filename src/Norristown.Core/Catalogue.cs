@@ -1199,7 +1199,8 @@ public static class Catalogue
             + "writes the function's body with the argument in place of the parameter and leaves ld65 to work it "
             + "out once the address is known. ld65 works out the arithmetic, bitwise, shift, comparison and "
             + "logical operators and `<`, `>` and `^`, so `.func digit(n, place) = '0' + (n / place) .mod 10` can "
-            + "be given a routine's address. A built-in function, `.in`, a charmap or text in the body is worked out "
+            + "be given a routine's address. `.lobyte`, `.hibyte` and `.bankbyte` are written as those operators, so "
+            + "they can be given one too. Any other built-in function, `.in`, a charmap or text in the body is worked out "
             + "by nt65 before the output is written, and so needs every parameter it uses to be given a constant. "
             + "The body is written into the output of the file that calls it, so an address it names has to be "
             + "declared in that file.");
