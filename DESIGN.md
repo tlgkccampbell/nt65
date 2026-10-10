@@ -3604,9 +3604,9 @@ inputs changed.
   has no meaning. An operand parameter may not be followed by an index, wrapped in
   parentheses or brackets, given an address-size prefix or `#`, or passed on that way in
   braces, as in `inner!({p,x})`: the operand it is given carries its own. The body line is
-  reported once, where the macro is declared. `.mode(p)` is the argument's mode as a word (`imm`, `acc`, `abs`, `absx`,
-  `absy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long` or `longy`), which a condition may
-  compare. `.byteof(p, n)` stands where the operand may and is byte n of its value: for
+  reported once, where the macro is declared. `.mode(p)` is the argument's mode as a word
+  (`imm`, `acc`, `abs`, `absx`, `absy`, `ind`, `indx`, `indy`, `sr`, `sry`, `long` or
+  `longy`), which a condition may compare. `.byteof(p, n)` stands where the operand may and is byte n of its value: for
   an immediate `#e` it is `#((e >> (8 * n)) & $FF)`, and for a mode that accepts
   `+ const` it is `p + n`. One macro then serves constants and memory alike:
 
