@@ -1,0 +1,48 @@
+; ca65 range-checks the pointer of `jmp (abs,x)` on the 65C02, as it does an absolute operand,
+; so a pointer table the linked config places past $ffff is written inside `.loword()`, which
+; gives ca65 the address within the bank. An operand given whole to a macro is written the same
+; way as one written in place.
+.module main
+
+.export start, dispatch, dispatch_given
+
+.macro jump(through: operand) {
+    jmp through
+}
+
+.macro load(source: operand) {
+    lda source
+}
+
+.macro load_from(source: operand) {
+    load!(source)
+}
+
+.segment BANK1
+.data vectors: .addr far_side, far_side
+
+.proc far_side {
+    rts
+}
+
+.segment CODE
+.proc start {
+    ldx #2
+    load!({vectors,x})                      ; the bank $01 cartridge window
+    load!(vectors)
+    load!(vectors + 2)
+    load_from!(vectors)                     ; through a parameter of an enclosing macro
+    rts
+}
+
+.proc dispatch {
+    ldx #2
+    jmp (vectors,x)                         ; a pointer in the bank $01 cartridge window
+    .next ?
+}
+
+.proc dispatch_given {
+    ldx #0
+    jump!({(vectors,x)})
+    .next ?
+}

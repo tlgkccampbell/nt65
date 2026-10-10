@@ -98,7 +98,7 @@ public sealed class CatalogueAreaTests
         [
             "code-in-a-data-space", "far-needs-65816", "instruction-in-data", "instruction-outside-a-routine",
             "linked-segments-disagree", "never-written", "operand-in-another-space", "outside-every-segment",
-            "padding-outside-a-routine", "segment-attribute-not-constant", "segment-attribute-out-of-range",
+            "padding-outside-a-routine", "pointer-outside-bank-zero", "segment-attribute-not-constant", "segment-attribute-out-of-range",
             "segment-attribute-twice", "segment-block-redundant", "segment-declared-twice", "segment-dp-not-zp",
             "segment-mirror-invalid", "segment-mirrors-need-a-bank", "segment-not-defined", "segment-not-linked",
             "segment-not-visible", "segment-standard-size", "segment-undeclared", "space-not-a-name",

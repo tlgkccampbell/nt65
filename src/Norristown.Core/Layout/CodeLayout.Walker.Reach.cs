@@ -23,7 +23,9 @@ public sealed partial class CodeLayout
         /// segment in another home bank is reported only for a near jump, call or branch on the
         /// 65816, because a long one reaches it and data goes through the data bank, which the
         /// processor-state analysis checks. On the other CPUs, a jump, call or branch to a target
-        /// placed in another bank is reported as <see cref="OutOfBank"/> decides.
+        /// placed in another bank is reported as <see cref="OutOfBank"/> decides. On the 65816, the
+        /// pointer of a <c>jmp (abs)</c> or <c>jml [abs]</c> is checked as
+        /// <see cref="PointerOutsideBankZero"/> decides.
         /// </summary>
         private void CheckReach(SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode mode)
         {
@@ -62,6 +64,8 @@ public sealed partial class CodeLayout
                 }
                 if (transfer && !reported && OutOfBank(mnemonic.Text, expression) is { } outOfBank)
                     Report(expression, outOfBank);
+                if (!reported && PointerOutsideBankZero(mnemonic.Text, expression, mode) is { } outside)
+                    Report(expression, outside);
             }
         }
 
@@ -156,6 +160,45 @@ public sealed partial class CodeLayout
                 return null;
             }
             return Catalogue.TargetInAnotherBank.Message(text, $"`{target.GetText().Trim()}`", StateValue.Hex(bank, 2));
+        }
+
+        /// <summary>
+        /// Returns the diagnostic for a <c>jmp (abs)</c> or <c>jml [abs]</c>, written
+        /// <paramref name="text"/> in <paramref name="mode"/>, whose <paramref name="pointer"/> is
+        /// placed outside bank <c>$00</c> on the 65816, or null when the processor reads the
+        /// pointer where it is placed. It is reported when the pointer's linked range, as
+        /// <see cref="LinkRange"/> bounds it, is not wholly in bank <c>$00</c> and some segment
+        /// the pointer names, or none, is not visible in bank <c>$00</c>.
+        /// </summary>
+        /// <remarks>
+        /// These two forms read the pointer from bank <c>$00</c> whatever the data bank and the
+        /// program bank are, and the output keeps the pointer's address within its bank so that it
+        /// links. A segment whose declared <c>bank</c> or <c>mirrors</c> make it visible in bank
+        /// <c>$00</c> is at that address there too. A pointer whose placement nt65 cannot bound is
+        /// not reported, because the linker decides where it lands. Neither is one whose range
+        /// starts below zero, which names no bank.
+        /// </remarks>
+        private DiagnosticMessage? PointerOutsideBankZero(string text, SyntaxNode pointer, AddressingMode mode)
+        {
+            if (cpu != Cpu.Wdc65816 || mode is not (AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectLong)
+                || LinkRange.Of(model, pointer, expansion) is not { } range
+                || range.Low < 0 || range.High <= 0xffff)
+            {
+                return null;
+            }
+            var named = Named(pointer).Select(found => model.Segments.Find(found.Segment)).ToList();
+            if (named.Count > 0 && named.All(segment => segment?.IsSeenFrom(0) == true))
+                return null;
+            var low = range.Low >> 16;
+            var high = range.High >> 16;
+            var banks = low == high
+                ? "bank " + StateValue.Hex(low, 2)
+                : $"banks {StateValue.Hex(low, 2)}-{StateValue.Hex(high, 2)}";
+            var written = pointer.GetText().Trim();
+            var fix = mode == AddressingMode.AbsoluteIndirect
+                ? $"place it in bank $00 or in memory mirrored there, or place it in this code's bank and use `jmp ({written},x)` with X at 0, which reads the pointer from the program bank"
+                : "place it in bank $00 or in memory mirrored there";
+            return Catalogue.PointerOutsideBankZero.Message(text, $"`{written}`", banks, fix);
         }
 
         /// <summary>

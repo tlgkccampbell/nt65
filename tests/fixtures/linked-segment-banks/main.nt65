@@ -3,13 +3,19 @@
 ; that bank. A value in a two-byte slot that names a far address, or an address placed past
 ; $ffff, is written inside `.loword()` where it always fits 16 bits, which loses nothing. ca65
 ; keeps the low 16 bits of an absolute or `(abs,x)` operand on the 65816, but range-checks the
-; pointer of `jmp (abs)` and `jml [abs]`, so that pointer is written inside `.loword()` too.
+; pointer of `jmp (abs)` and `jml [abs]`, so that pointer is written inside `.loword()` too. The
+; processor reads that pointer from bank $00, so it is placed in bank $00, or in a segment such as
+; CODE, whose memory area the project mirrors in bank $00.
 .module main
 
-.export start, offsets, dispatch, dispatch_indexed, dispatch_far
+.export start, offsets, dispatch, dispatch_indexed, dispatch_far, dispatch_hook, dispatch_far_hook
 
 .segment FARDATA
 .data far_table: .byte 1, 2, 3
+
+.segment LOWRAM
+.data hook:     .addr[1]
+.data far_hook: .faraddr[1]
 
 .segment DATA7E
 .data buffer: .byte[16]
@@ -51,5 +57,15 @@
 
 .proc dispatch_far: a16, i16, native {
     jml [far_vector]
+    .next ?
+}
+
+.proc dispatch_hook: a16, i16, native {
+    jmp (hook)                              ; placed in bank $00
+    .next ?
+}
+
+.proc dispatch_far_hook: a16, i16, native {
+    jml [far_hook]
     .next ?
 }

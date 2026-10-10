@@ -149,15 +149,8 @@ internal sealed class ExpressionWriter(
     /// </summary>
     internal void Immediate(StatementSyntax statement, int bytes, TokenRewriter rewriter)
     {
-        if (statement is not InstructionStatementSyntax { Operand: ImmediateOperandSyntax { Value: var value, SecondValue: null } }
-            || bytes is not (2 or 3))
-        {
-            return;
-        }
-        if (Datum(value, bytes - 1, bigEndian: false, rewriter.Comments) is { } text)
-            rewriter.Replace(value, text, around: false);
-        else
-            Narrow(value, bytes - 1, rewriter);
+        if (statement is InstructionStatementSyntax { Operand: ImmediateOperandSyntax { Value: var value, SecondValue: null } })
+            Immediate(value, bytes, rewriter);
     }
 
     /// <summary>
@@ -301,18 +294,36 @@ internal sealed class ExpressionWriter(
     /// would otherwise refuse it for an address it names. The low part loses nothing, because the
     /// value always fits the slot or the slot holds the address within its bank, as
     /// <paramref name="inBank"/> says. The edits <paramref name="rewriter"/>
-    /// already holds for the value are kept inside the call.
+    /// already holds for the value are kept inside the call. Returns whether the value was
+    /// written so.
     /// </summary>
-    private void Narrow(SyntaxNode value, int width, TokenRewriter rewriter, bool inBank = false)
+    private bool Narrow(SyntaxNode value, int width, TokenRewriter rewriter, bool inBank = false)
     {
         if (!Narrows(value, width, inBank))
-            return;
+            return false;
 
         // The comments stay with the line rather than going inside the call.
         List<string> comments = [];
         var text = rewriter.Inline(value, comments);
         rewriter.Comments.AddRange(comments);
         rewriter.Replace(value, LowPartOf(text, width), around: false);
+        return true;
+    }
+
+    /// <summary>
+    /// Rewrites <paramref name="value"/>, the value of an immediate in an instruction of
+    /// <paramref name="bytes"/> bytes, as its two's complement where it is a negative constant,
+    /// and inside <c>.lobyte()</c> or <c>.loword()</c> where <see cref="Narrows"/> says ca65 or
+    /// ld65 needs it there. Returns whether it rewrote the value.
+    /// </summary>
+    private bool Immediate(ExpressionSyntax value, int bytes, TokenRewriter rewriter)
+    {
+        if (bytes is not (2 or 3))
+            return false;
+        if (Datum(value, bytes - 1, bigEndian: false, rewriter.Comments) is not { } text)
+            return Narrow(value, bytes - 1, rewriter);
+        rewriter.Replace(value, text, around: false);
+        return true;
     }
 
     /// <summary>
@@ -959,18 +970,26 @@ internal sealed class ExpressionWriter(
     /// Writes an operand that names an <c>operand</c> parameter as the operand the call passed.
     /// Returns whether the operand named such a parameter.
     /// </summary>
-    private bool Given(AbsoluteOperandSyntax operand, TokenRewriter rewriter)
+    /// <param name="operand">The operand in the macro body.</param>
+    /// <param name="rewriter">The edits of the line being written.</param>
+    /// <param name="laid">
+    /// The layout of the instruction the operand ends up in, or null to take it from the
+    /// operand's own instruction. An argument that names a parameter of an enclosing macro passes
+    /// the layout on, so that the operand it stands for is narrowed for the instruction.
+    /// </param>
+    private bool Given(AbsoluteOperandSyntax operand, TokenRewriter rewriter, LineLayout? laid = null)
     {
         if (Semantics.Operands.Substituted(model, operand, Expansion) is not { } given)
             return false;
 
-        var text = Argument(given, rewriter.Comments);
+        var own = operand.Parent is { } instruction ? layout.Of(instruction, Expansion) : null;
+        var text = Argument(given, laid ?? own, rewriter.Comments);
         if (text is null)
             return false;
 
         // ca65 reads a `(` at the head of an operand as indirect addressing, so an expression
         // that starts with one gets a unary `+`, which changes nothing about what it is worth.
-        var prefix = operand.Parent is { } instruction ? layout.Of(instruction, Expansion)?.Prefix ?? "" : "";
+        var prefix = own?.Prefix ?? "";
         if (text.StartsWith('(') && (prefix.Length > 0 || given.IsAddress))
             text = "+" + text;
 
@@ -983,9 +1002,11 @@ internal sealed class ExpressionWriter(
 
     /// <summary>
     /// Returns the text of the operand a call passed, in the form the body asked for. That is the
-    /// operand as it stands, the byte after it, or one byte of an immediate value.
+    /// operand as it stands, the byte after it, or one byte of an immediate value. The operand as
+    /// it stands is narrowed for <paramref name="laid"/>, the layout of the instruction it ends
+    /// up in, as <see cref="Whole"/> narrows it.
     /// </summary>
-    private string? Argument(OperandSubstitution given, List<string> comments)
+    private string? Argument(OperandSubstitution given, LineLayout? laid, List<string> comments)
     {
         // `.byteof` on an immediate is a byte of the value. It is a number where nt65 knows the
         // value, and a shift and a mask where only the linker will.
@@ -1005,7 +1026,7 @@ internal sealed class ExpressionWriter(
         // whole, and with `+ n` on its expression when the body asked for a later byte.
         var offset = given.Offset;
         if (offset == 0)
-            return Substituted(given.Operand, comments);
+            return Whole(given.Operand, laid, comments);
         if (given.Expression is not { } addressed)
             return null;
         var index = given.Index is { } register ? "," + register.Text : "";
@@ -1014,33 +1035,61 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
-    /// Writes the address of an operand inside <c>.lobyte()</c> or <c>.loword()</c> where ca65 or
-    /// ld65 would otherwise refuse it. A one-byte address is written so where
-    /// <see cref="LinkRange.Narrows"/> says so, as the run address of a zero-page segment is,
-    /// which the output imports as absolute. A two-byte address is written so where it names an
-    /// address placed past $FFFF in a mode that <see cref="RangeChecksInBank"/> says ca65
-    /// range-checks.
+    /// Returns the text of an operand a call passed whole, written as an operand written in place
+    /// would be in the instruction laid out as <paramref name="laid"/>. Its immediate is
+    /// rewritten as <see cref="Immediate(StatementSyntax, int, TokenRewriter)"/> rewrites one,
+    /// and its address is narrowed as <see cref="NarrowAddress(SyntaxNode, AddressingMode, TokenRewriter)"/>
+    /// narrows one. An expression passed as the operand is parenthesized unless it is narrowed,
+    /// as <see cref="Substituted"/> parenthesizes it.
     /// </summary>
-    private void NarrowAddress(OperandSyntax operand, ExpressionSyntax address, TokenRewriter rewriter)
+    private string Whole(SyntaxNode operand, LineLayout? laid, List<string> comments)
     {
-        if (operand.Parent is not { } instruction || layout.Of(instruction, Expansion)?.Mode is not { } mode)
-            return;
-        switch (Instructions.Width(mode))
+        var rewriter = new TokenRewriter();
+        if (operand is AbsoluteOperandSyntax passedOn && Given(passedOn, rewriter, laid))
+            return rewriter.Inline(operand, comments);
+
+        Substitute(operand, rewriter, nested: false);
+        var narrowed = laid is { Mode: { } mode } && operand switch
         {
-            case AddressSize.ZeroPage:
-                Narrow(address, 1, rewriter);
-                break;
-            case AddressSize.Absolute when RangeChecksInBank(mode):
-                Narrow(address, 2, rewriter, inBank: true);
-                break;
-            default:
-                break;
-        }
+            ImmediateOperandSyntax { Value: var value, SecondValue: null } => Immediate(value, laid.Length, rewriter),
+            ImmediateOperandSyntax => false,
+            _ => CodeLayout.Expression(operand) is { } address && NarrowAddress(address, mode, rewriter),
+        };
+        var text = rewriter.Inline(operand, comments);
+        return !narrowed && operand is BinaryExpressionSyntax or UnaryExpressionSyntax ? "(" + text + ")" : text;
     }
 
     /// <summary>
+    /// Writes the address of an operand inside <c>.lobyte()</c> or <c>.loword()</c> where ca65 or
+    /// ld65 would otherwise refuse it, in the mode its instruction is laid out in, as
+    /// <see cref="NarrowAddress(SyntaxNode, AddressingMode, TokenRewriter)"/> decides.
+    /// </summary>
+    private void NarrowAddress(OperandSyntax operand, ExpressionSyntax address, TokenRewriter rewriter)
+    {
+        if (operand.Parent is { } instruction && layout.Of(instruction, Expansion)?.Mode is { } mode)
+            NarrowAddress(address, mode, rewriter);
+    }
+
+    /// <summary>
+    /// Writes the address of an operand in <paramref name="mode"/> inside <c>.lobyte()</c> or
+    /// <c>.loword()</c> where ca65 or ld65 would otherwise refuse it, and returns whether it did.
+    /// A one-byte address is written so where <see cref="LinkRange.Narrows"/> says so, as the run
+    /// address of a zero-page segment is, which the output imports as absolute. A two-byte
+    /// address is written so where it names an address placed past $FFFF in a mode that
+    /// <see cref="RangeChecksInBank"/> says ca65 range-checks.
+    /// </summary>
+    private bool NarrowAddress(SyntaxNode address, AddressingMode mode, TokenRewriter rewriter) =>
+        Instructions.Width(mode) switch
+        {
+            AddressSize.ZeroPage => Narrow(address, 1, rewriter),
+            AddressSize.Absolute when RangeChecksInBank(mode) => Narrow(address, 2, rewriter, inBank: true),
+            _ => false,
+        };
+
+    /// <summary>
     /// Records the edits for an indirect operand, whose <paramref name="address"/> is the address
-    /// of the pointer, as <see cref="NarrowAddress"/> narrows it.
+    /// of the pointer, as <see cref="NarrowAddress(OperandSyntax, ExpressionSyntax, TokenRewriter)"/>
+    /// narrows it.
     /// </summary>
     private void Pointer(OperandSyntax operand, ExpressionSyntax address, TokenRewriter rewriter)
     {

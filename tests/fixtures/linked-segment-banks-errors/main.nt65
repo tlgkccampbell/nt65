@@ -1,16 +1,19 @@
 ; A value worked out from a label in bank $7e is bounded by that bank, so it is refused in a
 ; one-byte slot where it may not fit, rather than wrapped. A value in a two-byte slot that names
 ; a far address, or an address placed past $ffff, is refused where it may not fit 16 bits,
-; since ca65 or ld65 would refuse it.
+; since ca65 or ld65 would refuse it. The pointer of `jmp (abs)` and `jml [abs]` is read from bank
+; $00, so one placed in bank $7e is refused.
 .module main
 
-.export start, offsets
+.export start, offsets, dispatch, dispatch_far
 
 .segment FARDATA
 .data far_table: .byte 1, 2, 3
 
 .segment DATA7E
-.data buffer: .byte[16]
+.data buffer:   .byte[16]
+.data hook:     .addr[1]
+.data far_hook: .faraddr[1]
 
 .segment RODATA
 .data offsets {
@@ -30,4 +33,14 @@
     lda #buffer >> 8                        ;! error[linked-value-may-not-fit]: `buffer >> 8` is worked out by the linker from an address, and an immediate is one byte, which nt65 cannot show it fits: use `<(buffer >> 8)` for its low byte
     rep #$20
     rts
+}
+
+.proc dispatch: a16, i16, native {
+    jmp (hook)                              ;! error[pointer-outside-bank-zero]: `jmp` reads its pointer from bank $00, but `hook` is placed in bank $7e: place it in bank $00 or in memory mirrored there, or place it in this code's bank and use `jmp (hook,x)` with X at 0, which reads the pointer from the program bank
+    .next ?
+}
+
+.proc dispatch_far: a16, i16, native {
+    jml [far_hook]                          ;! error[pointer-outside-bank-zero]: `jml` reads its pointer from bank $00, but `far_hook` is placed in bank $7e: place it in bank $00 or in memory mirrored there
+    .next ?
 }
