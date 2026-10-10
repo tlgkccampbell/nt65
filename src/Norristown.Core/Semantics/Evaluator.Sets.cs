@@ -122,7 +122,7 @@ internal sealed partial class Evaluator
         var (_, function, given) = calls[^1];
         var written = tested.GetText().Trim();
         if (calls.Count == 1 && tested is NameExpressionSyntax name
-            && function.ParameterSymbols.ToList().FindIndex(parameter => parameter.Name == name.GetText().Trim()) is var at and >= 0
+            && FunctionArguments.IndexOf(function.ParameterSymbols, written) is var at and >= 0
             && given[at] is { } argument && argument.Tree == outermost.Tree
             && argument.Position >= outermost.Position && argument.Position < outermost.FullSpan.End)
         {
