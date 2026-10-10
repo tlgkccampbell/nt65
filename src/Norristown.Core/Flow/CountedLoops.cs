@@ -94,7 +94,7 @@ internal static class CountedLoops
         {
             if (!loop.Inside[i])
                 continue;
-            if (MayWrite(blocks[i], loop, register, bodies))
+            if (MayWrite(layout, blocks[i], loop, register, bodies) || HiddenWrites(layout, blocks[i]).HasFlag(register))
                 return null;
             foreach (var step in InstructionsIn(blocks[i]))
             {
@@ -212,7 +212,7 @@ internal static class CountedLoops
                 ? (value, WidthOf(layout, step))
                 : null;
         }
-        var calls = CallMayWrite(before, register, bodies) || before.Successors.Any(edge => edge.Kind == EdgeKind.Call);
+        var calls = CallMayWrite(layout, before, register, bodies) || before.Successors.Any(edge => edge.Kind == EdgeKind.Call);
         return calls ? null : started;
     }
 
@@ -331,8 +331,9 @@ internal static class CountedLoops
     /// or to a label of this routine outside the loop, may write anything.
     /// </summary>
     private static bool MayWrite(
-        BasicBlock block, Loop loop, Registers register, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
-        CallMayWrite(block, register, bodies)
+        CodeLayout layout, BasicBlock block, Loop loop, Registers register,
+        IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
+        CallMayWrite(layout, block, register, bodies)
         || block.Successors.Any(edge => edge.Kind == EdgeKind.Call && !loop.Inside[edge.To]);
 
     /// <summary>
@@ -341,9 +342,9 @@ internal static class CountedLoops
     /// label of this routine is not counted here.
     /// </summary>
     private static bool CallMayWrite(
-        BasicBlock block, Registers register, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
+        CodeLayout layout, BasicBlock block, Registers register, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies) =>
         block.CallsUnknown
-        || block.Calls.Any(callee => !LeftAlone(callee, bodies, []).HasFlag(register));
+        || block.Calls.Any(callee => !LeftAlone(layout, callee, bodies, []).HasFlag(register));
 
     /// <summary>
     /// Returns the index registers that a call to <paramref name="callee"/> surely leaves as they
@@ -352,6 +353,7 @@ internal static class CountedLoops
     /// signature declares that it keeps a register, or where it has a body in this file that
     /// nothing in, and nothing it calls, writes that register.
     /// </summary>
+    /// <param name="layout">The layout of the file.</param>
     /// <param name="callee">The routine called.</param>
     /// <param name="bodies">The blocks of every routine in the file.</param>
     /// <param name="visiting">
@@ -359,7 +361,7 @@ internal static class CountedLoops
     /// trusted only as far as its signature says.
     /// </param>
     private static Registers LeftAlone(
-        Symbol callee, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies, HashSet<Symbol> visiting)
+        CodeLayout layout, Symbol callee, IReadOnlyDictionary<Symbol, IReadOnlyList<BasicBlock>> bodies, HashSet<Symbol> visiting)
     {
         var declared = callee.Signature?.Keeps ?? Registers.None;
         if (!bodies.TryGetValue(callee, out var body) || !visiting.Add(callee))
@@ -370,11 +372,12 @@ internal static class CountedLoops
             if (block.CallsUnknown || block.Successors.Any(edge => edge.Kind == EdgeKind.Call))
                 alone = Registers.None;
             foreach (var called in block.Calls)
-                alone &= LeftAlone(called, bodies, visiting);
+                alone &= LeftAlone(layout, called, bodies, visiting);
             if (block.RunsInto is { } into)
-                alone &= LeftAlone(into, bodies, visiting);
+                alone &= LeftAlone(layout, into, bodies, visiting);
             foreach (var step in InstructionsIn(block))
                 alone &= ~WrittenBy(Mnemonic(step));
+            alone &= ~HiddenWrites(layout, block);
         }
         visiting.Remove(callee);
         return declared | alone;
@@ -404,6 +407,26 @@ internal static class CountedLoops
         mnemonic is MnemonicKind.Rep or MnemonicKind.Sep or MnemonicKind.Plp or MnemonicKind.Xce or MnemonicKind.Rti
             ? Registers.X | Registers.Y
             : Instructions.Facts(mnemonic).Writes & (Registers.X | Registers.Y);
+
+    /// <summary>
+    /// Returns the index registers that the instructions the bytes of a <see cref="HiddenPath"/>
+    /// in <paramref name="block"/> decode as may change, as the same instructions written there
+    /// would. The layout refuses to decode a <c>rep</c>, a <c>sep</c> or anything that pulls, so
+    /// the mnemonic alone tells.
+    /// </summary>
+    private static Registers HiddenWrites(CodeLayout layout, BasicBlock block)
+    {
+        var written = Registers.None;
+        foreach (var step in block.Steps)
+        {
+            if (layout.HiddenPathAt(step) is { } hidden)
+            {
+                foreach (var decoded in hidden.Instructions)
+                    written |= WrittenBy(decoded.Mnemonic);
+            }
+        }
+        return written;
+    }
 
     /// <summary>Returns the instructions in a block, leaving out markers and directives.</summary>
     private static List<Step> InstructionsIn(BasicBlock block) =>
