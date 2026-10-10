@@ -705,13 +705,7 @@ internal static class Fixes
     /// Returns an edit that adds a <c>.use</c> of <paramref name="path"/> under the last
     /// <c>.use</c>, or under the <c>.module</c> if there is none.
     /// </summary>
-    private static Edit Used(SyntaxTree tree, string path)
-    {
-        var after = Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
-            ? use
-            : Edits.LastLine<ModuleDirectiveSyntax>(tree);
-        return Edits.InsertAfter(tree, after, $".use {path}");
-    }
+    private static Edit Used(SyntaxTree tree, string path) => Edits.InsertAfter(tree, Edits.UseLine(tree), $".use {path}");
 
     /// <summary>
     /// Returns the fixes that add a <c>.state</c> after a label that is entered from somewhere

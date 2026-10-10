@@ -92,7 +92,7 @@ internal static class InlayHints
         if (settings.StateChanges && states is not null && Changed(states, following, statement) is { } changed)
             yield return changed;
         if (settings.LongBranches && laid is { Inverted: true }
-            && Instruction(statement) is { } branch && Lengthened(branch, laid) is { } lengthened)
+            && Statements.InstructionOf(statement) is { } branch && Lengthened(branch, laid) is { } lengthened)
         {
             yield return lengthened;
         }
@@ -189,7 +189,7 @@ internal static class InlayHints
 
         // A call that changes the state is the surprising case: the change is made in the
         // called routine rather than on this line, and the arrow marks that it came from there.
-        var calls = Instruction(statement) is { } instruction
+        var calls = Statements.InstructionOf(statement) is { } instruction
             && Instructions.IsCall(instruction.MnemonicKind);
         return new Mark(
             (calls ? "→ " : "") + string.Join(" ", parts),
@@ -265,7 +265,7 @@ internal static class InlayHints
     private static Mark? Counted(
         SemanticModel model, ControlFlow? flow, LineLayout? laid, StatementSyntax statement)
     {
-        if (laid is { Cycles: { } cycles } && Instruction(statement) is not null)
+        if (laid is { Cycles: { } cycles } && Statements.InstructionOf(statement) is not null)
         {
             var why = laid.Causes is { Count: > 0 } causes && !cycles.IsExact
                 ? " " + string.Join(", ", causes) + "."
@@ -373,17 +373,6 @@ internal static class InlayHints
         argument is NameExpressionSyntax { SimpleName: { } word } && word.Text == parameter;
 
     /// <summary>
-    /// Returns the instruction a statement holds, including one after a label, or null for a
-    /// statement that holds none.
-    /// </summary>
-    private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
-    {
-        InstructionStatementSyntax instruction => instruction,
-        LabeledLineSyntax labeled => labeled.Statement as InstructionStatementSyntax,
-        _ => null,
-    };
-
-    /// <summary>
     /// Formats a value as a tooltip sentence shows it, in nt65's own form, followed by its
     /// decimal value from 10 upward, where the two differ.
     /// </summary>
@@ -391,6 +380,7 @@ internal static class InlayHints
         ? $"`{value}`, which is {number.ToString(CultureInfo.InvariantCulture)}"
         : $"`{value}`";
 
+    /// <summary>Formats a count with its noun, such as <c>1 byte</c> or <c>3 bytes</c>.</summary>
     private static string Plural(long count, string what) =>
         $"{count.ToString(CultureInfo.InvariantCulture)} {what}{(count == 1 ? "" : "s")}";
 

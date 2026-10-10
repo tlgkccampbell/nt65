@@ -45,11 +45,9 @@ internal static class LineBreaks
         var tree = model.Tree;
         if (WholeAt(tree, caret) is not { } whole || !CanLayOut(whole))
             yield break;
-        var source = tree.Text[whole.Span.Start..whole.Span.End];
-        var laid = Laid(tree, whole, lineLength, broken: true);
-        if (laid != source && laid.Contains('\n', StringComparison.Ordinal) && Rejoins(tree, whole, laid))
+        if (Broken(tree, whole, lineLength) is { } laid)
             yield return new Change("Lay out the expression across lines", CodeActionKinds.Rewrite, [new Edit(tree, whole.Span, laid)]);
-        if (source.AsSpan().ContainsAny('\r', '\n'))
+        if (tree.Text.AsSpan(whole.Span.Start, whole.Span.Length).ContainsAny('\r', '\n'))
         {
             var joined = Laid(tree, whole, 0, broken: false);
             yield return new Change("Join the expression onto one line", CodeActionKinds.Rewrite, [new Edit(tree, whole.Span, joined)]);
@@ -75,14 +73,24 @@ internal static class LineBreaks
             {
                 continue;
             }
-            var source = tree.Text[whole.Span.Start..whole.Span.End];
-            if (Laid(tree, whole, lineLength, broken: true) is var laid && laid != source
-                && laid.Contains('\n', StringComparison.Ordinal) && Rejoins(tree, whole, laid))
-            {
+            if (Broken(tree, whole, lineLength) is not null)
                 return whole.Span;
-            }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Returns the text of <paramref name="whole"/> laid out across lines within
+    /// <paramref name="lineLength"/>, or null where laying it out would change nothing, would
+    /// break no line, or would not read back as the one line it was.
+    /// </summary>
+    private static string? Broken(SyntaxTree tree, SyntaxNode whole, int lineLength)
+    {
+        var source = tree.Text[whole.Span.Start..whole.Span.End];
+        var laid = Laid(tree, whole, lineLength, broken: true);
+        return laid != source && laid.Contains('\n', StringComparison.Ordinal) && Rejoins(tree, whole, laid)
+            ? laid
+            : null;
     }
 
     /// <summary>

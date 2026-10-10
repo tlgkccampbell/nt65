@@ -332,7 +332,7 @@ internal static class CaretProcessor
                 foreach (var block in region.Blocks)
                 {
                     if (block.Steps is not [.., { On: null, Statement: InstructionStatementSyntax call }]
-                        || ReturnBytes(call) is null || !block.Calls.Any(callee => Same(callee, routine)))
+                        || ReturnBytes(call) is null || !block.Calls.Any(callee => Declarations.Same(callee, routine)))
                     {
                         continue;
                     }
@@ -352,14 +352,6 @@ internal static class CaretProcessor
         MnemonicKind.Jsl => 3,
         _ => null,
     };
-
-    /// <summary>
-    /// Checks whether two symbols are the same declaration. After an edit, the models kept for files
-    /// the edit did not touch may hold a different object for the same routine, so symbols are
-    /// compared by where they are declared.
-    /// </summary>
-    private static bool Same(Symbol a, Symbol b) =>
-        a.Tree.Path == b.Tree.Path && a.NameSpan.Start == b.NameSpan.Start && a.Name == b.Name;
 
     /// <summary>Checks whether two locations name the same call, which is one line of one document.</summary>
     private static bool Same(Protocol.Location a, Protocol.Location b) =>

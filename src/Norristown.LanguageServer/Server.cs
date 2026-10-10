@@ -842,11 +842,13 @@ internal sealed class Server : IDisposable
     public async Task<object> SemanticTokensDeltaAsync(SemanticTokensDeltaParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        var holding = classified.TryGetValue(request.TextDocument.Uri, out var before)
-            && before.Id == request.PreviousResultId;
-        var held = before.Data;
+
+        // The tokens the client holds are taken before the new ones replace them.
+        var held = classified.TryGetValue(request.TextDocument.Uri, out var before) && before.Id == request.PreviousResultId
+            ? before.Data
+            : null;
         var answer = await ClassifiedAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false);
-        return holding ? NameHighlighting.Changed(answer.ResultId!, held, answer.Data) : answer;
+        return held is null ? answer : NameHighlighting.Changed(answer.ResultId!, held, answer.Data);
     }
 
     /// <summary>

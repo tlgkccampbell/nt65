@@ -20,7 +20,10 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal static class Completion
 {
-    /// <summary>The processor-state items a signature may give for a point in the code, which a <c>.state</c> may give too.</summary>
+    /// <summary>
+    /// The processor-state items a signature may give for a point in the code, which a
+    /// <c>.state</c> may give too.
+    /// </summary>
     private static readonly string[] PointItems = ["a8", "a16", "a?", "i8", "i16", "i?", "native", "emu", "e?", "dp?", "dbr?"];
 
     /// <summary>
@@ -339,8 +342,9 @@ internal static class Completion
     /// <summary>
     /// Offers what may go where an expression or a macro's argument goes. An argument of a macro
     /// call is offered what its parameter takes. Where an argument of a macro call or of a
-    /// <c>.func</c> call starts, the parameters it may name are offered. A comparison with a parameter's argument is offered the words that parameter
-    /// accepts. Anywhere else a name may follow, the start of an expression is offered.
+    /// <c>.func</c> call starts, the parameters it may name are offered. A comparison with a
+    /// parameter's argument is offered the words that parameter accepts. Anywhere else a name
+    /// may follow, the start of an expression is offered.
     /// </summary>
     /// <returns>Always true, since this is the last handler and recognizes every place.</returns>
     private static bool TryExpression(Site site)
@@ -791,9 +795,7 @@ internal static class Completion
                 AddModules(program, prefix + "::", items);
             if (program.Symbols.ModuleNamed(prefix) is { } module)
             {
-                var own = module.Tree == model.Tree;
-                foreach (var declared in module.FileScope.Symbols.Where(declared => !declared.IsCheapLocal && (own || declared.IsExported)))
-                    Add(declared, items);
+                AddVisible(module.FileScope, module.Tree == model.Tree, items);
                 foreach (var reexport in module.Reexports)
                 {
                     items.TryAdd(reexport.Name, new Suggestion(
@@ -804,11 +806,17 @@ internal static class Completion
             return;
         }
         if (at.Symbol is { } symbol && BodyOf(symbol) is { } body)
-        {
-            var own = symbol.Tree == model.Tree;
-            foreach (var member in body.Symbols.Where(member => !member.IsCheapLocal && (own || member.IsExported)))
-                Add(member, items);
-        }
+            AddVisible(body, symbol.Tree == model.Tree, items);
+    }
+
+    /// <summary>
+    /// Offers the names a scope declares that a path into it may reach. A cheap local is never
+    /// reached by a path, and from another file only an exported name is.
+    /// </summary>
+    private static void AddVisible(Scope scope, bool own, Dictionary<string, Suggestion> items)
+    {
+        foreach (var declared in scope.Symbols.Where(declared => !declared.IsCheapLocal && (own || declared.IsExported)))
+            Add(declared, items);
     }
 
     /// <summary>
@@ -880,17 +888,15 @@ internal static class Completion
         }
     }
 
-    private static void AddDirectives(
-        IEnumerable<DirectiveKind> names,
-        Dictionary<string, Suggestion> items)
+    /// <summary>Offers each of <paramref name="names"/> as a directive, described as the language describes it.</summary>
+    private static void AddDirectives(IEnumerable<DirectiveKind> names, Dictionary<string, Suggestion> items)
     {
         foreach (var (name, detail) in Directives.Described(names))
             items.TryAdd(name, new Suggestion(SuggestionSource.Directive, Protocol.CompletionItemKind.Keyword, detail, name));
     }
 
-    private static void AddWords(
-        IEnumerable<string> words, string detail,
-        Dictionary<string, Suggestion> items)
+    /// <summary>Offers each of <paramref name="words"/> with the same <paramref name="detail"/> beside it.</summary>
+    private static void AddWords(IEnumerable<string> words, string detail, Dictionary<string, Suggestion> items)
     {
         foreach (var word in words)
             AddWord(word, detail, items);
@@ -900,21 +906,28 @@ internal static class Completion
     /// Offers a word, inserted with whatever must follow it (a space, <c>=</c> or <c>(</c>) but
     /// listed without it, since the label is what the client filters on.
     /// </summary>
-    private static void AddWord(
-        string word, string detail,
-        Dictionary<string, Suggestion> items)
+    private static void AddWord(string word, string detail, Dictionary<string, Suggestion> items)
     {
         var label = word.TrimEnd(' ', '=', '(');
         items.TryAdd(label.Length > 0 ? label : word, new Suggestion(
             SuggestionSource.Word, Protocol.CompletionItemKind.Keyword, detail, word));
     }
 
+    /// <summary>Offers a declared name under the name a reader writes for it.</summary>
     private static void Add(Symbol symbol, Dictionary<string, Suggestion> items) =>
         items.TryAdd(symbol.DisplayName, new Suggestion(
             SourceOf(symbol), KindOf(symbol), Detail(symbol), symbol.DisplayName, DocComments.Of(symbol), Suggestion.InScope));
 
-    private static string Detail(Symbol symbol) =>
-        symbol.IsSetting ? $"setting = {symbol.Value}" : symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
+    /// <summary>
+    /// Returns the short description shown beside a declared name, which is its kind, with its
+    /// value where that is known and is not an address.
+    /// </summary>
+    private static string Detail(Symbol symbol)
+    {
+        if (symbol.IsSetting)
+            return $"setting = {symbol.Value}";
+        return symbol.Value.IsKnown && !symbol.IsAddress ? $"{symbol.KindText} = {symbol.Value}" : symbol.KindText;
+    }
 
     /// <summary>
     /// Checks whether an item's text leaves the caret where something else must be typed, so that
@@ -968,18 +981,19 @@ internal static class Completion
     /// </summary>
     private static bool AfterValuedItem(IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> before)
     {
+        if (before.Count >= 2 && before[^1].Text.ToLowerInvariant() is "inline" or "pushed" or "pulls")
+            return true;
         for (var i = before.Count - 1; i >= 1; i--)
         {
             if (before[i].Kind == SyntaxKind.Comma)
                 return false;
             if (before[i].Kind == SyntaxKind.Equals)
                 return before[i - 1].Text.ToLowerInvariant() is "dp" or "dbr" or "pbr" or "inline" or "pushed" or "pulls";
-            if (i == before.Count - 1 && before[i].Text.ToLowerInvariant() is "inline" or "pushed" or "pulls")
-                return true;
         }
         return false;
     }
 
+    /// <summary>Returns the index of the last token of <paramref name="kind"/>, or -1 if there is none.</summary>
     private static int LastIndex(IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> tokens, SyntaxKind kind)
     {
         for (var i = tokens.Count - 1; i >= 0; i--)
@@ -997,6 +1011,7 @@ internal static class Completion
     private static SuggestionSource SourceOf(Symbol symbol) =>
         symbol.Kind == SymbolKind.Macro ? SuggestionSource.Macro : SuggestionSource.Symbol;
 
+    /// <summary>Returns the kind of item that stands for a declared name, which chooses its icon.</summary>
     private static Protocol.CompletionItemKind KindOf(Symbol symbol) => symbol.Kind switch
     {
         SymbolKind.Proc or SymbolKind.ExternProc or SymbolKind.Func => Protocol.CompletionItemKind.Function,
