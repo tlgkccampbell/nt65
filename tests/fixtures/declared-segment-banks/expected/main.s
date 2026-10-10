@@ -11,30 +11,19 @@
 .export main__offsets
 .export main__start
 
-.import __FARDATA_LOAD__: abs
-
-.segment "FARDATA": far
-far_table: .byte 1, 2, 3
-
-.segment "DATA7E": absolute
+.segment "WRAM": absolute
 buffer: .res 16
 
 .segment "RODATA": absolute
 main__offsets:
-    .byte .lobyte((buffer - $7e2000) / 256)
+    .byte .lobyte((buffer - $7e0000) >> 8)
     .word .loword(buffer - $7e0000)
-    .word .loword(__FARDATA_LOAD__ - $810000)
-    .word .loword((far_table - $810000) / 2)
-    .word .loword(buffer)
     .addr buffer
 
 .segment "CODE": absolute
-; .proc start: a16, i16, native  main.nt65:26
+; .proc start: a16, i16, native  main.nt65:19
 main__start:
     .i16
     ldx #.loword(buffer - $7e0000)
-    .a16
-    lda #.loword(__FARDATA_LOAD__ - $810000)
-    ldy #.loword(far_table)
     rts
 ; end of start

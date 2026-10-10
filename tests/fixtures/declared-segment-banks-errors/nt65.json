@@ -1,0 +1,8 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "segments": {
+    "WRAM":  { "size": "abs", "bank": "$7e" },
+    "LORAM": { "size": "abs", "bank": "$7e", "mirrors": ["$00-$3f"] }
+  }
+}

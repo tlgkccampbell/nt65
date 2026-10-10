@@ -95,9 +95,11 @@ public static class SegmentFunctions
     /// <summary>
     /// Returns the range of values what <paramref name="function"/> gives for
     /// <paramref name="segment"/> may take once linked, or null where nt65 cannot bound it. An
-    /// address is inside the memory areas the linked configurations put the segment in, or where
-    /// they say nothing, anywhere its address size reaches. A size is at most the room of the
-    /// smallest area it is placed in, because every link holds the same bytes of the segment.
+    /// address is inside the memory areas the linked configurations put the segment in. A run
+    /// address is otherwise in the banks the segment's declared <c>bank</c> names, as a label in
+    /// it is. Where nothing says, an address is anywhere its address size reaches. A size is at
+    /// most the room of the smallest area it is placed in, because every link holds the same bytes
+    /// of the segment.
     /// </summary>
     /// <param name="function">The function, which is <c>.loadof</c>, <c>.runof</c> or <c>.spanof</c>.</param>
     /// <param name="segment">The segment the function asks about.</param>
@@ -108,7 +110,9 @@ public static class SegmentFunctions
             IReadOnlyList<RunArea> areas = [.. segment.Runs, .. segment.Loads];
             return areas.Count > 0 ? (0, areas.Min(area => area.Last - area.First + 1)) : null;
         }
-        if (PlacedRange(function == BuiltinKind.Runof ? segment.Runs : segment.Loads, segment) is { } placed)
+        if (function == BuiltinKind.Runof && LinkRange.AreasOf(segment) is { Count: > 0 } runs)
+            return (runs.Min(area => area.First), runs.Max(area => area.Last));
+        if (function == BuiltinKind.Loadof && PlacedRange(segment.Loads, segment) is { } placed)
             return placed;
         return SizeOf(function, segment) switch
         {

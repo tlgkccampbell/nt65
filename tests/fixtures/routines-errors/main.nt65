@@ -92,7 +92,7 @@
     rts
 }
 
-.data vectors: .word handler, resumable::resume
+.data vectors: .addr handler, resumable::resume
 
 .proc tail: std, native {
     jmp handler                 ;! error[tail-call-to-handler]: `jmp handler` is a tail call into interrupt handler `handler`, whose `rti` would not return to this routine's caller

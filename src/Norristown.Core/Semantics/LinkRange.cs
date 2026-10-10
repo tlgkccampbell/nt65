@@ -6,8 +6,8 @@ namespace Norristown.Semantics;
 /// <summary>
 /// Works out the range of values an expression that only the linker can finish may take. A
 /// label, like a segment's linker symbol, is inside the memory areas the linked configurations
-/// place its segment in. Where they say nothing, an address is somewhere in the space its address
-/// size reaches. Each operator narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c>
+/// place its segment in, or else in the banks the segment's declared <c>bank</c> names. Where
+/// nothing says, an address is somewhere in the space its address size reaches. Each operator narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c>
 /// is always a digit wherever <c>main</c> lands. A call to a <c>.func</c> takes the range of its
 /// body, with each parameter taking the range of what it is given.
 /// </summary>
@@ -164,11 +164,11 @@ internal static class LinkRange
     /// <summary>
     /// Returns the range of values the address <paramref name="symbol"/>, of address size
     /// <paramref name="size"/>, may take once linked, or null where nt65 cannot bound it. A label
-    /// is inside the memory areas the linked configurations run its segment in, as
-    /// <c>.runof</c> of the segment is. A label in a segment placed in bank <c>$7e</c> is
-    /// therefore <c>$7e0000</c> or more, whatever its address size. Where the configurations do
-    /// not bound the segment, an address is anywhere its address size reaches. So is a name given
-    /// an address with <c>=</c>, which need not be in the segment it is declared in.
+    /// is inside the areas <see cref="AreasOf"/> gives for its segment, as <c>.runof</c> of the
+    /// segment is. A label in a segment placed in bank <c>$7e</c> is therefore <c>$7e0000</c> or
+    /// more, whatever its address size. Where nothing bounds the segment, an address is anywhere
+    /// its address size reaches. So is a name given an address with <c>=</c>, which need not be in
+    /// the segment it is declared in.
     /// </summary>
     /// <remarks>
     /// An absolute label is in the bank its area starts in, and a zero-page label in that page,
@@ -179,7 +179,7 @@ internal static class LinkRange
     private static (long Low, long High)? AddressRange(SemanticModel model, Symbol symbol, AddressSize size)
     {
         if (symbol is not { ValueExpression: null, Segment: { } name } || model.Segments.Find(name) is not { } segment
-            || SegmentFunctions.PlacedRange(segment.Runs, segment) is null)
+            || AreasOf(segment) is not { Count: > 0 } areas)
         {
             return Reach(size);
         }
@@ -189,8 +189,28 @@ internal static class LinkRange
             AddressSize.Absolute => 0xffff,
             _ => null,
         };
-        return (segment.Runs.Min(area => area.First),
-            segment.Runs.Max(area => reach is { } last ? Math.Min(area.Last, area.First | last) : area.Last));
+        return (areas.Min(area => area.First),
+            areas.Max(area => reach is { } last ? Math.Min(area.Last, area.First | last) : area.Last));
+    }
+
+    /// <summary>
+    /// Returns the address ranges <paramref name="segment"/> may run in, or an empty list where
+    /// nothing bounds it. These are the memory areas the linked configurations run it in, where
+    /// there is one for every configuration that places it. Otherwise they are the banks its
+    /// declared <c>bank</c> and <c>mirrors</c> name, one range for each bank, since the linker may
+    /// place it in any bank the same memory is seen in. A far segment starts in one of those banks
+    /// and may run on past it.
+    /// </summary>
+    internal static IReadOnlyList<(long First, long Last)> AreasOf(Segment segment)
+    {
+        if (SegmentFunctions.PlacedRange(segment.Runs, segment) is not null)
+            return [.. segment.Runs.Select(area => (area.First, area.Last))];
+        if (segment.Bank is not { } home)
+            return [];
+        return [.. segment.Mirrors.Prepend((First: home, Last: home))
+            .SelectMany(banks => Enumerable.Range((int)banks.First, (int)(banks.Last - banks.First + 1)))
+            .Distinct()
+            .Select(bank => ((long)bank << 16, segment.Size == AddressSize.Far ? 0xffffffL : ((long)bank << 16) | 0xffff))];
     }
 
     /// <summary>

@@ -489,6 +489,13 @@ public sealed class Emitter
     /// <c>.loadof</c>, <c>.runof</c> and <c>.spanof</c> calls ask about, including the calls in
     /// every macro the file may expand.
     /// </summary>
+    /// <remarks>
+    /// ld65 exports every one of these names as absolute, and warns about an import of another
+    /// size. A far one is therefore imported as absolute. That changes nothing ca65 writes,
+    /// because nt65 writes the <c>f:</c> of each operand that needs it, and the analysis still
+    /// takes the name as far. A zero-page one stays zero page, since ca65 would refuse an
+    /// absolute name in a one-byte slot or a zero-page-only operand.
+    /// </remarks>
     private IEnumerable<(string Name, AddressSize Size)> SegmentImports()
     {
         var calls = model.Tree.Root.DescendantNodes().OfType<MacroCallSyntax>()
@@ -499,7 +506,9 @@ public sealed class Emitter
             .Select(call => SegmentFunctions.Of(call, model))
             .OfType<(BuiltinKind Function, Segment Segment)>()
             .Select(about => (SegmentFunctions.LinkerName(about.Function, about.Segment),
-                SegmentFunctions.SizeOf(about.Function, about.Segment)))
+                SegmentFunctions.SizeOf(about.Function, about.Segment) is var size && size == AddressSize.Far
+                    ? AddressSize.Absolute
+                    : size))
             .Distinct()
             .OrderBy(import => import.Item1, StringComparer.Ordinal);
     }
@@ -1018,7 +1027,7 @@ public sealed class Emitter
         {
             var (width, bigEndian) = ElementFormat(directive);
             foreach (var value in list.Values)
-                expressions.InPlace(value, width, bigEndian, rewriter);
+                expressions.InPlace(value, width, bigEndian, rewriter, directive.Directive.DirectiveKind == DirectiveKind.Addr);
             rewriter.Replacements[list.OpenBraceToken.Position] = "";
             if (!list.CloseBraceToken.IsMissing)
                 rewriter.Replacements[list.CloseBraceToken.Position] = "";
@@ -1685,9 +1694,10 @@ public sealed class Emitter
         /// <param name="value">The value.</param>
         /// <param name="width">The width of the slot, in bytes.</param>
         /// <param name="bigEndian">Whether the slot's bytes are written high first.</param>
+        /// <param name="inBank">Whether the slot is an <c>.addr</c>, which holds the address within its bank.</param>
         /// <returns>The value as the output writes it.</returns>
-        public string ValueText(SyntaxNode value, int width, bool bigEndian) =>
-            emitter.expressions.SlotText(value, width, bigEndian);
+        public string ValueText(SyntaxNode value, int width, bool bigEndian, bool inBank) =>
+            emitter.expressions.SlotText(value, width, bigEndian, inBank);
     }
 
     /// <summary>
