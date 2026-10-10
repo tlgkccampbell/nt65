@@ -2,9 +2,14 @@
 ; on the 65816. ca65 range-checks both on the 6502, so one that names a label the linked config
 ; places past $ffff is written inside `.loword()`, which gives ca65 the address within the bank.
 ; ca65 range-checks the pointer of an indirect jump on every CPU, so it is written the same way.
+; So is the byte after an operand given whole to a macro, where the body offsets it.
 .module main
 
-.export start, pointers, dispatch
+.export start, pointers, dispatch, given
+
+.macro step(source: operand) {
+    lda source+1
+}
 
 .segment BANK1
 .data table:  .byte 1, 2, 3
@@ -39,4 +44,11 @@
 .proc dispatch {
     jmp (vector)                            ; a pointer in the bank $01 cartridge window
     .next ?
+}
+
+.proc given {
+    ldx #0
+    step!(table)                            ; the byte after a label in bank $01
+    step!({table,x})
+    rts
 }
