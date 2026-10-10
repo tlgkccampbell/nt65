@@ -686,7 +686,15 @@ public sealed class ControlFlow
             .SelectMany(node => node.DescendantTokens())
             .Select(token => token.Span)
             .ToHashSet();
-        var proved = Flags!.Prove(routine, blocks, edges);
+
+        // A `.next` under anything but a call hands control to its labels with the flags the
+        // statement leaves, as a jump does. A call enters them with the caller's flags but
+        // returns with others, so its labels are not counted among these.
+        var dispatches = units
+            .Where(unit => unit.Next is not null && !IsCall(unit.Step.Statement) && RelativeCallIn(relativeCalls, unit.Step) is null)
+            .Select(unit => (unit.Next!, unit.Step.On))
+            .ToList();
+        var proved = Flags!.Prove(routine, blocks, edges, dispatches);
         if (proved.Count == 0)
             return;
         foreach (var (index, branch) in proved)

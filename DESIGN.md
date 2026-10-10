@@ -1926,6 +1926,16 @@ Every item of `table` is a code label, so `.next table` says the same. A table i
 from data declared as addresses: a label on a line of `.addr` directives is a position, and
 names no targets.
 
+Data that names a label says nothing about which jump reaches it, so the flag analysis enters a
+label that data names with every flag unknown. A table that only this routine's `.next`
+annotations name is the exception, where every item names a label or a routine, the table is not
+exported, and the rest of the file only reads its bytes, as `lda table,x` does. Then only the
+jumps those annotations are under reach its labels, and the flags each jump leaves flow in as
+they do along a branch, so `sec` before an RTS dispatch leaves C known to be 1 in every entry. A
+`.next` under a call is not such a jump, since the call comes back with other flags. The register
+and processor-state analyses enter such a label only along the flow graph's edges, as they do
+any label that data outside every routine, or in the label's own routine, names.
+
 An interrupt handler, and a `plp` that restores a status byte saved elsewhere, so the
 analysis stack holds no saved P for it:
 
@@ -5011,7 +5021,9 @@ Recorded so the reasoning survives. None is open.
   before `->`. A call returns with what the callee returns with, declared or inferred (above);
   every other flag is unknown, and so is every flag at a
   label anything but the routine's own transfers names, a `.state` label, or an instruction the
-  program patches. A branch whose flag is known is then
+  program patches. A table that only the routine's own `.next` annotations name counts among its
+  transfers, so the jumps those annotations are under carry their flags into its labels (§7.4).
+  A branch whose flag is known is then
   a jump or nothing, and the edge it never takes is removed. Only what the CPU defines is used, so
   nothing about memory is assumed. The same facts give the editor's flag hints: a `.next` the
   flags prove, a branch never taken, a `jmp` that can be a branch, a branch over a `jmp`, and
