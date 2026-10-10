@@ -9,8 +9,6 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class PatchVariantTests
 {
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
-
     /// <summary>
     /// A flag that neither <c>inx</c> nor <c>dex</c> writes is still known after the patched
     /// instruction, so the branch on it is decided. Without <c>as</c>, the <c>.patch</c> is an
@@ -117,9 +115,7 @@ public sealed class PatchVariantTests
             Assert.Single(diagnostics, d => d.Id == "patch-variants-required").Message);
     }
 
-    private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Analyze("6502", text).Problems();
 
-    private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Diagnostics;
+    private static IReadOnlyList<Diagnostic> Diagnostics(string text) => FlowFragment.Analyze("6502", text).Diagnostics;
 }

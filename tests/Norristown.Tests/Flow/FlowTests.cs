@@ -335,8 +335,7 @@ public sealed class FlowTests
             """;
 
         Assert.Empty(Problems(Text));
-        var p = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + Text)).Files.Single().Flow.Regions
-            .Single(region => region.Routine.Name == "p");
+        var p = FlowFragment.Region(Analyze(Text), "p");
         Assert.All(p.Blocks.Skip(1), block => Assert.False(block.IsFallenInto));
     }
 
@@ -393,10 +392,8 @@ public sealed class FlowTests
     [InlineData(".import f: proc(keeps y)\n", false)]
     public void ACallThatMayWriteTheCounterStopsTheLoopBeingCounted(string callee, bool counted)
     {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
-            + callee + ".proc p {\n    ldx #4\n@loop:\n    jsr f\n    dex\n    bne @loop\n    rts\n}\n"));
-        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
-        var p = analysis.Files.Single().Flow.Regions.Single(region => region.Routine.Name == "p");
+        var analysis = AnalyzedWithoutErrors(callee + ".proc p {\n    ldx #4\n@loop:\n    jsr f\n    dex\n    bne @loop\n    rts\n}\n");
+        var p = FlowFragment.Region(analysis, "p");
 
         Assert.Equal(counted, p.Cost.Maximum is not null);
     }
@@ -413,10 +410,8 @@ public sealed class FlowTests
     [InlineData(".import f: proc(keeps x)\n", true)]
     public void ACallBeforeTheLoopThatMayWriteTheCounterStopsTheLoopBeingCounted(string callee, bool counted)
     {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
-            + callee + ".proc p {\n    ldx #10\n    jsr f\n@loop:\n    dex\n    bne @loop\n    rts\n}\n"));
-        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
-        var p = analysis.Files.Single().Flow.Regions.Single(region => region.Routine.Name == "p");
+        var analysis = AnalyzedWithoutErrors(callee + ".proc p {\n    ldx #10\n    jsr f\n@loop:\n    dex\n    bne @loop\n    rts\n}\n");
+        var p = FlowFragment.Region(analysis, "p");
 
         Assert.Equal(counted, p.Cost.Maximum is not null);
     }
@@ -464,14 +459,12 @@ public sealed class FlowTests
     [Fact]
     public void ABranchToAnotherRoutineIsAWayOut()
     {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n"
-            + ".proc other {\n    rts\n}\n"
+        var analysis = AnalyzedWithoutErrors(
+            ".proc other {\n    rts\n}\n"
             + ".proc p {\n    beq other\n    nop\n    nop\n    rts\n}\n"
-            + ".proc q {\n    ldx #4\n@loop:\n    lda $10\n    beq other\n    dex\n    bne @loop\n    rts\n}\n"));
-        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
-        var regions = analysis.Files.Single().Flow.Regions;
-        var p = regions.Single(region => region.Routine.Name == "p");
-        var q = regions.Single(region => region.Routine.Name == "q");
+            + ".proc q {\n    ldx #4\n@loop:\n    lda $10\n    beq other\n    dex\n    bne @loop\n    rts\n}\n");
+        var p = FlowFragment.Region(analysis, "p");
+        var q = FlowFragment.Region(analysis, "q");
 
         // Taken, the branch out costs 3 and ends the pass. Not taken, it costs 2 and the pass
         // 2 + 2 + 2 + 6 = 12.
@@ -494,19 +487,26 @@ public sealed class FlowTests
     }
 
     /// <summary>
-    /// Returns the problems reported for <paramref name="text"/>, compiled after two lines that
-    /// declare the module and select the code segment.
+    /// Returns the analysis of <paramref name="text"/>, compiled after two lines that declare
+    /// the module and select the code segment. The text chooses its own CPU, or takes the default.
     /// </summary>
-    private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text)).Problems();
+    private static ProgramAnalysis Analyze(string text) =>
+        Analysis.Program(Analysis.Fragment, (Analysis.Path, ".module main\n.segment CODE\n" + text));
+
+    /// <summary>Returns the analysis of <paramref name="text"/>, which must report no error.</summary>
+    private static ProgramAnalysis AnalyzedWithoutErrors(string text)
+    {
+        var analysis = Analyze(text);
+        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
+        return analysis;
+    }
+
+    /// <summary>Returns the problems reported for <paramref name="text"/>.</summary>
+    private static IReadOnlyList<string> Problems(string text) => Analyze(text).Problems();
 
     /// <summary>Returns the one region of the one routine in <paramref name="text"/>.</summary>
-    private static FlowRegion Region(string text)
-    {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.segment CODE\n" + text));
-        Assert.DoesNotContain(analysis.Problems(), problem => problem.Contains("error", StringComparison.Ordinal));
-        return Assert.Single(analysis.Files.Single().Flow.Regions);
-    }
+    private static FlowRegion Region(string text) =>
+        Assert.Single(FlowFragment.Flow(AnalyzedWithoutErrors(text)).Regions);
 
     private static BasicBlock Block(FlowRegion region, string label) =>
         region.Blocks.Single(block => block.Label?.DisplayName == label);

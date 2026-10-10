@@ -9,12 +9,9 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class FlagAnalysisTests
 {
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
-
     /// <summary>
     /// A routine that ends in a branch the flags decide needs no <c>.next</c>, because nt65 knows
-    /// the branch is always taken. These are the compo's own cases that need nothing but the code
-    /// just before the branch.
+    /// the branch is always taken. These cases need nothing but the code just before the branch.
     /// </summary>
     [Theory]
     [InlineData(".proc p {\n    lda #1\n    bne p\n}\n")]
@@ -52,8 +49,7 @@ public sealed class FlagAnalysisTests
     [Fact]
     public void RepAndSepSetTheFlagsTheyName()
     {
-        var program = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n"
-            + ".proc p: a8, i8, native {\n    sep #$01\n    bcs q\n}\n.proc q: a8, i8 {\n    rts\n}\n"));
+        var program = FlowFragment.Analyze("65816", ".proc p: a8, i8, native {\n    sep #$01\n    bcs q\n}\n.proc q: a8, i8 {\n    rts\n}\n");
 
         Assert.Empty(program.Problems());
     }
@@ -124,11 +120,11 @@ public sealed class FlagAnalysisTests
     [Fact]
     public void ALabelACallNamesIsEnteredWithTheFlagsAtTheCall()
     {
-        var program = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n"
-            + ".proc r: a8, i8, native {\n    sec\n    ldx #0\n    jsr (t,x)\n    .next inner\n    sec\n    rts\ninner:\n"
+        var program = FlowFragment.Analyze("65816",
+            ".proc r: a8, i8, native {\n    sec\n    ldx #0\n    jsr (t,x)\n    .next inner\n    sec\n    rts\ninner:\n"
             + "    .state a8, i8, native\n    rts\n}\n"
             + ".proc caller: a8, i8, native {\n    jsr r\n    bcs @done\n    nop\n@done:\n    rts\n}\n"
-            + ".segment RODATA\n.data t: .addr r::inner\n"));
+            + ".segment RODATA\n.data t: .addr r::inner\n");
 
         Assert.Equal(
             ["main.nt65:18: this code is never reached: `bcs @done` above is always taken, because C is 1 here, and nothing "
@@ -137,6 +133,5 @@ public sealed class FlagAnalysisTests
     }
 
     /// <summary>Returns the problems nt65 finds in <paramref name="text"/>, after a 6502 header.</summary>
-    private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Analyze("6502", text).Problems();
 }

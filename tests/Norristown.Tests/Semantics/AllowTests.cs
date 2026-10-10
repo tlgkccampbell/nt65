@@ -1,3 +1,4 @@
+using Norristown.Project;
 using Norristown.Tests.Flow;
 
 namespace Norristown.Tests.Semantics;
@@ -9,9 +10,6 @@ namespace Norristown.Tests.Semantics;
 public sealed class AllowTests
 {
     private const string Unused = ".proc helper {\n    rts\n}\n";
-
-    // The fragments of the flow tests turn `unused-symbol` off, and these tests need it on.
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
 
     /// <summary>The warning is reported without the <c>.allow</c> and hidden with it, reason or not.</summary>
     [Theory]
@@ -81,8 +79,13 @@ public sealed class AllowTests
         Assert.Equal("\"unused-symbol\"", diagnostic.Fix?.Text);
     }
 
-    /// <summary>Returns the analysis of <paramref name="text"/> after the header, with no project settings.</summary>
-    private static ProgramAnalysis Analyze(string text) => Analysis.Program((Analysis.Path, Header + text));
+    /// <summary>
+    /// Returns the analysis of <paramref name="text"/> after a 6502 header, with no project
+    /// settings. The fragments of the flow tests turn <c>unused-symbol</c> off, and these tests
+    /// need it on.
+    /// </summary>
+    private static ProgramAnalysis Analyze(string text) =>
+        FlowFragment.Analyze(ProjectSettings.None, "6502", (Analysis.Path, text));
 
     /// <summary>Returns the problems reported for <paramref name="text"/>, numbered from its first line.</summary>
     private static IReadOnlyList<string> Problems(string text) =>

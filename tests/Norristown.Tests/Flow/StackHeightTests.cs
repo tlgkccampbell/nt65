@@ -1,8 +1,6 @@
 using Norristown.Flow;
 using Norristown.Processor;
 using Norristown.Semantics;
-using Norristown.Syntax;
-using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
 
@@ -82,16 +80,6 @@ public sealed class StackHeightTests
     }
 
     /// <summary>Returns what the registers hold before the statement written as <paramref name="line"/>.</summary>
-    private static RegisterState RegistersAt(string text, string line, string cpu = "6502")
-    {
-        var analysis = FlowFragment.Analyze(cpu, text);
-        var model = analysis.File(Analysis.Path);
-        var statement = model.Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .First(statement => statement.GetText().Trim() == line);
-        var state = analysis.FlowFor(Analysis.Path)?.Registers?.Before(statement);
-        Assert.NotNull(state);
-        return state;
-    }
+    private static RegisterState RegistersAt(string text, string line, string cpu = "6502") =>
+        FlowFragment.RegistersAt(FlowFragment.Analyze(cpu, text), line);
 }

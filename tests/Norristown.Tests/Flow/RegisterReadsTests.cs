@@ -156,7 +156,7 @@ public sealed class RegisterReadsTests
     public void AnEightBitSaveStillKeepsTheAccumulator()
     {
         var analysis = FlowFragment.Analyze("65816", ".proc p: a8 {\n    pha\n    lda #1\n    pla\n    rts\n}\n");
-        var region = analysis.FlowFor("main.nt65")!.Regions.Single();
+        var region = FlowFragment.Flow(analysis).Regions.Single();
         Assert.True(region.Registers.Kept.HasFlag(Registers.A));
         Assert.Equal(Registers.None, region.Reads.Read);
     }
@@ -315,11 +315,6 @@ public sealed class RegisterReadsTests
     private static Registers Read(string cpu, string text, string routine) =>
         Found(cpu, text, routine).Read;
 
-    private static RoutineReads Found(string cpu, string text, string routine)
-    {
-        var analysis = FlowFragment.Analyze(cpu, text);
-        var flow = analysis.FlowFor("main.nt65");
-        Assert.NotNull(flow);
-        return flow.Regions.Single(region => region.Routine.DisplayName == routine).Reads;
-    }
+    private static RoutineReads Found(string cpu, string text, string routine) =>
+        FlowFragment.Region(FlowFragment.Analyze(cpu, text), routine).Reads;
 }

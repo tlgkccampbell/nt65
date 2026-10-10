@@ -309,9 +309,8 @@ public sealed class RegisterKeepsTests
     public void AnInstructionThatWritesTheStackPointerForgetsTheSaves(string instruction)
     {
         var analysis = FlowFragment.Analyze("6502x", $".proc p {{\n    pha\n    {instruction}\n    pla\n    rts\n}}\n");
-        var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
 
-        Assert.False(p.Registers.Kept.HasFlag(Registers.A));
+        Assert.False(FlowFragment.Region(analysis, "p").Registers.Kept.HasFlag(Registers.A));
     }
 
     /// <summary>
@@ -331,9 +330,8 @@ public sealed class RegisterKeepsTests
     {
         var analysis = FlowFragment.Analyze(
             "65816", $".proc p: a8, i8, {mode} {{\n    pha\n    tsx\n    pha\n    {between}\n    txs\n    pla\n    rts\n}}\n");
-        var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
 
-        Assert.Equal(kept, p.Registers.Kept.HasFlag(Registers.A));
+        Assert.Equal(kept, FlowFragment.Region(analysis, "p").Registers.Kept.HasFlag(Registers.A));
     }
 
     /// <summary>
@@ -350,9 +348,8 @@ public sealed class RegisterKeepsTests
     {
         var analysis = FlowFragment.Analyze(
             "65816", $".proc p: a8, i16, native {{\n    pha\n    tsx\n    pha\n    {between}\n    txs\n    pla\n    rts\n}}\n");
-        var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
 
-        Assert.Equal(kept, p.Registers.Kept.HasFlag(Registers.A));
+        Assert.Equal(kept, FlowFragment.Region(analysis, "p").Registers.Kept.HasFlag(Registers.A));
     }
 
     /// <summary>
@@ -392,7 +389,7 @@ public sealed class RegisterKeepsTests
 
         var analysis = FlowFragment.Analyze("6502", Text);
         Assert.Empty(analysis.Problems());
-        var region = analysis.FlowFor("main.nt65")!.Regions.Single();
+        var region = FlowFragment.Flow(analysis).Regions.Single();
         Assert.Empty(region.Scopes);
         Assert.Empty(region.ScopeRegisters);
     }
@@ -469,13 +466,8 @@ public sealed class RegisterKeepsTests
 
     private static Registers Kept(string text, string routine) => Found(text, routine).Kept;
 
-    private static RoutineRegisters Found(string text, string routine)
-    {
-        var analysis = FlowFragment.Analyze("6502", text);
-        var flow = analysis.FlowFor("main.nt65");
-        Assert.NotNull(flow);
-        return flow.Regions.Single(region => region.Routine.DisplayName == routine).Registers;
-    }
+    private static RoutineRegisters Found(string text, string routine) =>
+        FlowFragment.Region(FlowFragment.Analyze("6502", text), routine).Registers;
 
     private static IReadOnlyList<string> Problems(string text) => FlowFragment.Problems("6502", text);
 

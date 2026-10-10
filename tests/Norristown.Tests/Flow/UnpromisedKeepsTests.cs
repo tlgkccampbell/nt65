@@ -1,3 +1,4 @@
+using Norristown.Project;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -9,8 +10,6 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class UnpromisedKeepsTests
 {
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
-
     // A routine that keeps X and Y, and promises only X.
     private const string PrintDigit = ".proc print_digit: keeps x {\n    lda #'0'\n    sta $10\n    rts\n}\n";
 
@@ -130,7 +129,7 @@ public sealed class UnpromisedKeepsTests
     [InlineData("65C02", PrintDigit + ".export .proc main {\n    ldy #1\n    jsr print_digit\n    tya\n    sta $11\n    rts\n}\n", "phy")]
     public void TheRegisterCanBeSavedAroundTheCall(string cpu, string text, string push)
     {
-        var diagnostic = Assert.Single(Analysis.Program(("main.nt65", Header.Replace("6502", cpu, StringComparison.Ordinal) + text)).Diagnostics);
+        var diagnostic = Assert.Single(Diagnostics(cpu, text));
 
         Assert.Equal(new DiagnosticFix(FixKind.SaveAround, push), diagnostic.Also);
     }
@@ -183,11 +182,10 @@ public sealed class UnpromisedKeepsTests
     [Fact]
     public void ACallWithSeveralTargetsReliesOnEachOfThem()
     {
-        const string Text = ".module main\n.cpu 65816\n.segment CODE\n"
-            + ".proc b: a8, i8, native, keeps x {\n    inc $10\n    rts\n}\n.proc b2: a8, i8, native, keeps x {\n    inc $11\n    rts\n}\n"
+        const string Text = ".proc b: a8, i8, native, keeps x {\n    inc $10\n    rts\n}\n.proc b2: a8, i8, native, keeps x {\n    inc $11\n    rts\n}\n"
             + ".export .proc main: a8, i8, native {\n    lda #1\n    ldx #0\n    jsr ($2000,x)\n    .next b, b2\n    sta $12\n    rts\n}\n";
 
-        var diagnostics = Analysis.Program(("main.nt65", Text)).Diagnostics;
+        var diagnostics = Diagnostics("65816", Text);
 
         Assert.Equal(
             [
@@ -211,7 +209,16 @@ public sealed class UnpromisedKeepsTests
         Assert.Equal("this tail call relies on `b` keeping Y, which its `keeps x` does not promise", diagnostic.Message);
     }
 
-    /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>.</summary>
-    private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>
-        Analysis.Program(("main.nt65", Header + text)).Diagnostics;
+    /// <summary>
+    /// Returns the warnings and errors nt65 reports for <paramref name="text"/> on the 6502, with
+    /// the unused-symbol warning left on.
+    /// </summary>
+    private static IReadOnlyList<Diagnostic> Diagnostics(string text) => Diagnostics("6502", text);
+
+    /// <summary>
+    /// Returns the warnings and errors nt65 reports for <paramref name="text"/> on
+    /// <paramref name="cpu"/>, with the unused-symbol warning left on.
+    /// </summary>
+    private static IReadOnlyList<Diagnostic> Diagnostics(string cpu, string text) =>
+        FlowFragment.Analyze(ProjectSettings.None, cpu, (Analysis.Path, text)).Diagnostics;
 }

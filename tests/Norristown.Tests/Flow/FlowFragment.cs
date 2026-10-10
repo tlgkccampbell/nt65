@@ -1,6 +1,7 @@
 using System.Globalization;
 using Norristown.Flow;
 using Norristown.Project;
+using Norristown.Semantics;
 using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
@@ -8,7 +9,8 @@ namespace Norristown.Tests.Flow;
 
 /// <summary>
 /// Analyzes the text of a flow test as <c>main.nt65</c>, compiled after a header that declares
-/// the module, chooses the CPU and selects the code segment.
+/// the module, chooses the CPU and selects the code segment, and reads the answers of the flow
+/// analyses back in the form a test asks about them.
 /// </summary>
 internal static class FlowFragment
 {
@@ -20,7 +22,7 @@ internal static class FlowFragment
     /// settings of <see cref="Analysis.Fragment"/>.
     /// </summary>
     public static ProgramAnalysis Analyze(string cpu, string text) =>
-        Analysis.Program(Analysis.Fragment, (Analysis.Path, Header(cpu) + text));
+        Analyze(Analysis.Fragment, cpu, (Analysis.Path, text));
 
     /// <summary>
     /// Returns the analysis of <paramref name="files"/>, each given as its path and text, for
@@ -38,6 +40,13 @@ internal static class FlowFragment
         [.. Analyze(cpu, text).Problems().Select(Renumbered)];
 
     /// <summary>
+    /// Returns the ca65 source written for <paramref name="text"/> on <paramref name="cpu"/>,
+    /// compiled after the header with no project settings.
+    /// </summary>
+    public static string Output(string cpu, string text) =>
+        Analysis.Outputs((Analysis.Path, Header(cpu) + text))["main.s"];
+
+    /// <summary>
     /// Returns a problem, given as <c>file:line: message</c>, with its line number counted from
     /// the start of the test's own text rather than from the header.
     /// </summary>
@@ -47,20 +56,60 @@ internal static class FlowFragment
         return $"{parts[0]}:{int.Parse(parts[1], CultureInfo.InvariantCulture) - HeaderLines}:{parts[2]}";
     }
 
+    /// <summary>Returns the flow analysis of <c>main.nt65</c>, which must have one.</summary>
+    public static ControlFlow Flow(ProgramAnalysis analysis)
+    {
+        var flow = analysis.FlowFor(Analysis.Path);
+        Assert.NotNull(flow);
+        return flow;
+    }
+
+    /// <summary>Returns the region of the one routine of <c>main.nt65</c> named <paramref name="routine"/>.</summary>
+    public static FlowRegion Region(ProgramAnalysis analysis, string routine) =>
+        Flow(analysis).Regions.Single(region => region.Routine.DisplayName == routine);
+
+    /// <summary>Returns what the routine of <c>main.nt65</c> named <paramref name="routine"/> leaves on its caller's stack.</summary>
+    public static StackEffect EffectOf(ProgramAnalysis analysis, string routine)
+    {
+        var flow = Flow(analysis);
+        return flow.Effects.Of(flow.Regions.Single(region => region.Routine.DisplayName == routine).Routine);
+    }
+
+    /// <summary>
+    /// Returns the first statement of <c>main.nt65</c> whose text is <paramref name="line"/>,
+    /// which must exist.
+    /// </summary>
+    public static StatementSyntax Statement(SemanticModel model, string line)
+    {
+        var statement = model.Tree.Root.DescendantNodes()
+            .OfType<LineSyntax>()
+            .Select(node => node.Statement)
+            .FirstOrDefault(statement => statement.GetText().Trim() == line);
+        Assert.True(statement is not null, $"{Analysis.Path} has no statement \"{line}\"");
+        return statement;
+    }
+
     /// <summary>
     /// Returns the state reaching the first statement of <c>main.nt65</c> whose text is
     /// <paramref name="line"/>.
     /// </summary>
     public static FlowState StateAt(ProgramAnalysis analysis, string line)
     {
-        var model = analysis.File(Analysis.Path);
-        var statement = model.Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .FirstOrDefault(statement => statement.GetText().Trim() == line);
-        Assert.True(statement is not null, $"{Analysis.Path} has no statement \"{line}\"");
+        var statement = Statement(analysis.File(Analysis.Path), line);
         var state = analysis.StatesFor(Analysis.Path)?.Before(statement);
         Assert.True(state is not null, $"{Analysis.Path} has no state before \"{line}\"");
+        return state;
+    }
+
+    /// <summary>
+    /// Returns what the registers hold before the first statement of <c>main.nt65</c> whose text
+    /// is <paramref name="line"/>.
+    /// </summary>
+    public static RegisterState RegistersAt(ProgramAnalysis analysis, string line)
+    {
+        var statement = Statement(analysis.File(Analysis.Path), line);
+        var state = analysis.FlowFor(Analysis.Path)?.Registers?.Before(statement);
+        Assert.NotNull(state);
         return state;
     }
 
@@ -76,11 +125,7 @@ internal static class FlowFragment
     public static IReadOnlyList<string>? SourcesAt(ProgramAnalysis analysis, string line)
     {
         var model = analysis.File(Analysis.Path);
-        var statement = model.Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .FirstOrDefault(statement => statement.GetText().Trim() == line);
-        Assert.True(statement is not null, $"{Analysis.Path} has no statement \"{line}\"");
+        var statement = Statement(model, line);
         if (InputSources.At(analysis, model, statement.Span.Start) is not { } found)
             return null;
         return [.. found.Inputs.Select(input =>
@@ -99,6 +144,17 @@ internal static class FlowFragment
         })];
 
         static string Text(SyntaxTree tree, TextSpan span) => tree.Text[span.Start..span.End].Trim();
+    }
+
+    /// <summary>
+    /// Returns the text of the line holding <paramref name="span"/>, without its indentation.
+    /// </summary>
+    public static string LineText(SyntaxTree tree, TextSpan span)
+    {
+        var line = tree.GetLineIndex(span.Start);
+        var start = tree.LineStarts[line];
+        var end = line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
+        return tree.Text[start..end].Trim();
     }
 
     /// <summary>Returns the header's text for <paramref name="cpu"/>, which is <see cref="HeaderLines"/> lines long.</summary>

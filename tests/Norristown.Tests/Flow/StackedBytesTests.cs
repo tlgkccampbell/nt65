@@ -1,3 +1,4 @@
+using Norristown.Project;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -61,5 +62,5 @@ public sealed class StackedBytesTests
 
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/> on <paramref name="cpu"/>.</summary>
     private static IReadOnlyList<Diagnostic> Diagnostics(string cpu, string text) =>
-        Analysis.Program(("main.nt65", $".module main\n.cpu {cpu}\n.segment CODE\n{text}")).Diagnostics;
+        FlowFragment.Analyze(ProjectSettings.None, cpu, (Analysis.Path, text)).Diagnostics;
 }

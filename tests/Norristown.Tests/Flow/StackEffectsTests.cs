@@ -1,5 +1,4 @@
 using Norristown.Flow;
-using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -74,7 +73,7 @@ public sealed class StackEffectsTests
         var analysis = FlowFragment.Analyze("65816", Takes + Caller);
 
         Assert.Equal(StackEffect.Leaving(-1), EffectOf(analysis, "takes1"));
-        Assert.Null(RegistersAt(analysis, "nop").Stack);
+        Assert.Null(FlowFragment.RegistersAt(analysis, "nop").Stack);
         Assert.Equal(1, FlowFragment.StateAt(analysis, "nop").Stack?.Depth);
     }
 
@@ -95,21 +94,6 @@ public sealed class StackEffectsTests
         Assert.Equal(1, FlowFragment.StateAt(analysis, "nop").Stack?.Depth);
     }
 
-    private static StackEffect EffectOf(ProgramAnalysis analysis, string routine)
-    {
-        var flow = analysis.FlowFor(Analysis.Path);
-        Assert.NotNull(flow);
-        return flow.Effects.Of(flow.Regions.Single(region => region.Routine.DisplayName == routine).Routine);
-    }
-
-    private static RegisterState RegistersAt(ProgramAnalysis analysis, string line)
-    {
-        var statement = analysis.File(Analysis.Path).Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .First(statement => statement.GetText().Trim() == line);
-        var state = analysis.FlowFor(Analysis.Path)?.Registers?.Before(statement);
-        Assert.NotNull(state);
-        return state;
-    }
+    private static StackEffect EffectOf(ProgramAnalysis analysis, string routine) =>
+        FlowFragment.EffectOf(analysis, routine);
 }

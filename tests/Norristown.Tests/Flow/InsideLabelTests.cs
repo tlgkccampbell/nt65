@@ -1,7 +1,6 @@
 using Norristown.LanguageServer;
 using Norristown.Layout;
 using Norristown.Processor;
-using Norristown.Project;
 using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
@@ -14,8 +13,6 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class InsideLabelTests
 {
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
-
     /// <summary>
     /// A branch into the operand of <c>lda $E8</c> runs <c>inx</c>, so a routine that promises
     /// to keep X breaks its promise there, and not where the branch goes to the instruction's start.
@@ -47,8 +44,8 @@ public sealed class InsideLabelTests
     [Fact]
     public void TheNameIsWrittenAsALabel()
     {
-        var output = Analysis.Outputs(ProjectSettings.None, ("main.nt65",
-            Header + ".export .proc main {\n@top:\n    lda $E8\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n"))["main.s"];
+        var output = FlowFragment.Output(
+            "6502", ".export .proc main {\n@top:\n    lda $E8\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n");
 
         Assert.Contains(":= (main__top + $01)", output.Replace("main__main__top", "main__top", StringComparison.Ordinal), StringComparison.Ordinal);
     }
@@ -62,11 +59,11 @@ public sealed class InsideLabelTests
     [Fact]
     public void TheHoverShowsTheHiddenInstructions()
     {
-        const string Text = Header + ".export .proc main {\n@top:\n    sta $0606,x\n    .label in = @top + 2\n    sta ($D1),y\n"
-            + "    sec\n    lsr a\n    bcc in\n    rts\n}\n";
-        var analysis = Analysis.Program(Analysis.Fragment, (Analysis.Path, Text));
+        var analysis = FlowFragment.Analyze("6502", ".export .proc main {\n@top:\n    sta $0606,x\n    .label in = @top + 2\n    sta ($D1),y\n"
+            + "    sec\n    lsr a\n    bcc in\n    rts\n}\n");
+        var model = analysis.File(Analysis.Path);
 
-        var hover = Hovers.At(analysis, analysis.File(Analysis.Path), Text.IndexOf("bcc in", StringComparison.Ordinal) + 5);
+        var hover = Hovers.At(analysis, model, model.Offset("bcc in") + 5);
 
         Assert.NotNull(hover);
         Assert.Contains("asl $91 (5); cmp ($38),y (5-6)", hover.Contents.Value, StringComparison.Ordinal);
@@ -90,7 +87,7 @@ public sealed class InsideLabelTests
     [InlineData(16, null)]
     public void TheLimitAppliesToWhereTheLastInstructionStarts(int loads, int? cycles)
     {
-        var text = $".module main\n.cpu 6502\n.segment CODE\n.export .proc main {{\n    clc\n    bcc in\n@top:\n"
+        var text = ".export .proc main {\n    clc\n    bcc in\n@top:\n"
             + string.Concat(Enumerable.Repeat("    lda #$A9\n", loads))
             + "    .label in = @top + 1\n    lda $EAA5\n    rts\n}\n";
 
@@ -99,10 +96,9 @@ public sealed class InsideLabelTests
             Assert.Equal(new CycleCount(count), HiddenCycles(Cpu.Mos6502, text));
             return;
         }
-        var diagnostics = Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", text)).Diagnostics;
         Assert.Contains(
             "nt65 cannot follow the bytes from `in`: they do not reach the start of an instruction",
-            diagnostics.Select(d => d.Message));
+            Diagnostics(text).Select(d => d.Message));
     }
 
     /// <summary>
@@ -112,11 +108,10 @@ public sealed class InsideLabelTests
     [Fact]
     public void ABranchIntoAnInstructionIsNotABranchOverTheJump()
     {
-        const string Text = Header + ".export .proc main {\n@top:\n    lda $E8\n    .label in = @top + 1\n    lsr a\n"
-            + "    bcc in\n    jmp main\n}\n";
-        var analysis = Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", Text));
+        var analysis = Analyze(Cpu.Mos6502, ".export .proc main {\n@top:\n    lda $E8\n    .label in = @top + 1\n    lsr a\n"
+            + "    bcc in\n    jmp main\n}\n");
 
-        Assert.DoesNotContain(analysis.SuggestionsFor("main.nt65"), suggestion => suggestion.Id == "branch-over-jump");
+        Assert.DoesNotContain(analysis.SuggestionsFor(Analysis.Path), suggestion => suggestion.Id == "branch-over-jump");
     }
 
     /// <summary>A position that is not inside an instruction, and bytes nt65 cannot follow, are errors.</summary>
@@ -148,8 +143,7 @@ public sealed class InsideLabelTests
     [InlineData("a16", 4)]
     public void TheHiddenInstructionsAreCountedInTheProcessorState(string width, int cycles)
     {
-        var text = ".module main\n.cpu 65816\n.segment CODE\n"
-            + $".export .proc main: native, {width}, i8, dp = 0 {{\n    clc\n    bcc in\n@top:\n    lda $10A5\n"
+        var text = $".export .proc main: native, {width}, i8, dp = 0 {{\n    clc\n    bcc in\n@top:\n    lda $10A5\n"
             + "    .label in = @top + 1\n    rts\n}\n";
 
         Assert.Equal(new CycleCount(cycles), HiddenCycles(Cpu.Wdc65816, text));
@@ -168,8 +162,7 @@ public sealed class InsideLabelTests
     [InlineData("sed", "@top + 2", 3)]
     public void HiddenArithmeticFollowsTheDecimalFlag(string flag, string position, int cycles)
     {
-        var text = ".module main\n.cpu 65c02\n.segment CODE\n"
-            + $".export .proc main {{\n    {flag}\n    clc\n    bcc in\n@top:\n    lda $69D8\n"
+        var text = $".export .proc main {{\n    {flag}\n    clc\n    bcc in\n@top:\n    lda $69D8\n"
             + $"    .label in = {position}\n    nop\n    sta $10\n    rts\n}}\n";
 
         Assert.Equal(new CycleCount(cycles), HiddenCycles(Cpu.Wdc65C02, text));
@@ -183,7 +176,7 @@ public sealed class InsideLabelTests
     [Fact]
     public void AHiddenReturnIsCountedAsAWrittenOne()
     {
-        var text = Header + ".export .proc main {\n@top:\n    lda $60E8\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n";
+        var text = ".export .proc main {\n@top:\n    lda $60E8\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n";
 
         Assert.Equal(new CycleCount(8), HiddenCycles(Cpu.Mos6502, text));
     }
@@ -195,12 +188,11 @@ public sealed class InsideLabelTests
     [Fact]
     public void AHiddenReturnLeavesTheRoutine()
     {
-        var text = Header + ".export .proc main {\n@top:\n    lda $60\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n";
-        var analysis = Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", text));
+        var analysis = Analyze(Cpu.Mos6502, ".export .proc main {\n@top:\n    lda $60\n    .label in = @top + 1\n    lsr a\n    bcc in\n    rts\n}\n");
         Assert.Empty(analysis.Diagnostics);
 
-        var model = analysis.File("main.nt65");
-        var hidden = analysis.LayoutFor("main.nt65")!.HiddenInstructionsOf(model.Symbol("in"));
+        var model = analysis.File(Analysis.Path);
+        var hidden = analysis.LayoutFor(Analysis.Path)!.HiddenInstructionsOf(model.Symbol("in"));
 
         Assert.Equal(["rts"], hidden!.Select(instruction => instruction.ToString()));
     }
@@ -208,13 +200,19 @@ public sealed class InsideLabelTests
     /// <summary>Returns what the bytes from the one <c>.label</c> of <paramref name="text"/> cost to run.</summary>
     private static CycleCount? HiddenCycles(Cpu cpu, string text)
     {
-        var analysis = Analysis.Program(Analysis.Fragment with { Cpu = cpu }, ("main.nt65", text));
+        var analysis = Analyze(cpu, text);
         Assert.Empty(analysis.Diagnostics);
-        var tree = analysis.File("main.nt65").Tree;
+        var tree = analysis.File(Analysis.Path).Tree;
         var label = tree.Root.DescendantNodes().OfType<LabelDirectiveSyntax>().Single();
-        return analysis.LayoutFor("main.nt65")!.Of(label)!.Cycles;
+        return analysis.LayoutFor(Analysis.Path)!.Of(label)!.Cycles;
     }
 
-    private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>
-        Analysis.Program(Analysis.Fragment with { Cpu = Cpu.Mos6502 }, ("main.nt65", Header + text)).Diagnostics;
+    /// <summary>
+    /// Returns the analysis of <paramref name="text"/> after a header that names
+    /// <paramref name="cpu"/>, with the project set to the same CPU.
+    /// </summary>
+    private static ProgramAnalysis Analyze(Cpu cpu, string text) =>
+        FlowFragment.Analyze(Analysis.Fragment with { Cpu = cpu }, CpuNames.Format(cpu), (Analysis.Path, text));
+
+    private static IReadOnlyList<Diagnostic> Diagnostics(string text) => Analyze(Cpu.Mos6502, text).Diagnostics;
 }
