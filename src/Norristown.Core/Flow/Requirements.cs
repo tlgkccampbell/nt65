@@ -7,7 +7,7 @@ namespace Norristown.Flow;
 
 /// <summary>
 /// Checks that each construct the analysis cannot follow has the annotation it needs beside it.
-/// Each such construct can be recognised from its syntax, such as an indirect jump, a computed
+/// Each such construct can be recognized from its syntax, such as an indirect jump, a computed
 /// target, a label used as data, or a store into code. Each needs an annotation that says what
 /// the analysis cannot see. A <c>.next</c> says where flow goes, a <c>.state</c> declares the
 /// state at a label, and a <c>.patch</c> acknowledges a store. What each routine reads and keeps

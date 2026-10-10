@@ -52,8 +52,9 @@ public sealed class FlagExits
     /// <summary>Returns the flags among C, Z, N and V that <paramref name="registers"/> names.</summary>
     internal static StatusFlags FlagsOf(Registers registers)
     {
+        // D and I are not followed as registers, so they add nothing here.
         var flags = StatusFlags.None;
-        foreach (var flag in new[] { StatusFlags.Carry, StatusFlags.Zero, StatusFlags.Negative, StatusFlags.Overflow })
+        foreach (var flag in FlagValues.Named)
         {
             if ((RegisterEffects.Of(flag) & registers) != Registers.None)
                 flags |= flag;

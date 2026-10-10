@@ -99,7 +99,6 @@ public static class CallCosts
         return false;
     }
 
-
     /// <summary>
     /// Returns what <paramref name="region"/>'s routine costs with its calls, working out what
     /// each callee costs first. <paramref name="walking"/> holds the routines being worked out, so

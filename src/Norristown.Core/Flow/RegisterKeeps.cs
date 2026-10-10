@@ -9,7 +9,7 @@ namespace Norristown.Flow;
 /// across the program. A 6502 programmer's first question about someone else's routine is which
 /// registers survive it, and without this analysis the answer lives only in a comment.
 /// <para>
-/// A routine is analysed the same way as the 65816's processor state. Its blocks are run to a
+/// A routine is analyzed the same way as the 65816's processor state. Its blocks are run to a
 /// fixed point over what each register may hold, and a save and its restore cancel through the
 /// stack, so <c>pha</c> … <c>pla</c> around a call needs no annotation. What its calls do is
 /// worked out alongside it, over the whole program. Every routine starts out keeping every
@@ -81,7 +81,10 @@ public static class RegisterKeeps
         {
             keeping = entry;
             if (!entry.IsLabel)
-                return Narrow(found, entry.Key, Declared(regions[entry.Key].Routine, KeepsAnalysis.Of(walks[entry.Key], regions[entry.Key], Of, null)));
+            {
+                var region = regions[entry.Key];
+                return Narrow(found, entry.Key, Declared(region.Routine, KeepsAnalysis.Of(walks[entry.Key], region, Of, null)));
+            }
             var (owner, start) = labels[entry.Key];
             return Narrow(foundAt, entry.Key, KeepsAnalysis.Of(walks[owner], regions[owner], Of, null, start));
         });
@@ -235,7 +238,7 @@ public static class RegisterKeeps
         // ever sees what it leaves in them. A path that calls it or jumps into it ends there.
         RoutineRegisters Of(Symbol target)
         {
-            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            var routine = RegisterWalk.RoutineOf(target);
             if (routine.Signature is { NeverReturns: true })
                 return RoutineRegisters.Everything;
             if (routine != target && foundAt.TryGetValue(RoutineKey.Of(target), out var there))
@@ -255,13 +258,13 @@ public static class RegisterKeeps
         Symbol Declining(Symbol target, Registers register)
         {
             var seen = new HashSet<Symbol>();
-            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            var routine = RegisterWalk.RoutineOf(target);
             while (routine.Signature?.Keeps is null or Registers.None
                 && regions.TryGetValue(RoutineKey.Of(routine), out var region) && seen.Add(routine)
                 && region.Blocks.SelectMany(block => block.Calls)
                     .FirstOrDefault(callee => (Of(callee).Unbacked & register) != Registers.None) is { } next)
             {
-                routine = next is { Kind: SymbolKind.Label, Routine: { } inside } ? inside : next;
+                routine = RegisterWalk.RoutineOf(next);
             }
             return routine;
         }
@@ -275,7 +278,7 @@ public static class RegisterKeeps
         // ones its own code wrote before the label.
         RoutineReads ReadsOf(Symbol target)
         {
-            var routine = target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+            var routine = RegisterWalk.RoutineOf(target);
             if (routine != target)
             {
                 if (!readsAt.TryGetValue(RoutineKey.Of(target), out var there))

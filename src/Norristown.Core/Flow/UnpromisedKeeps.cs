@@ -1,3 +1,4 @@
+using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -91,7 +92,7 @@ internal static class UnpromisedKeeps
                 // cannot be told from a read of its low byte alone.
                 var after = walk.Solve(
                     region, of, start, fromOutside: false, RegisterState.Entered with { AHigh = RegisterValue.Written });
-                var sites = new Dictionary<Registers, (Layout.Step Step, Symbol? Through)>();
+                var sites = new Dictionary<Registers, (Step Step, Symbol? Through)>();
                 ReadsAnalysis.Of(walk, region, of, reads, readers, sites, start, after);
                 foreach (var (register, (step, _)) in sites)
                 {
@@ -137,12 +138,12 @@ internal static class UnpromisedKeeps
                 Report("tail call", register, null, null, null);
 
             // Each routine the call may reach that declines to promise the register is warned about.
-            void Report(string how, Registers register, Layout.Step? used, string? where, Func<Symbol, DiagnosticFix?>? also)
+            void Report(string how, Registers register, Step? used, string? where, Func<Symbol, DiagnosticFix?>? also)
             {
                 var name = RegisterEffects.Format(register);
-                var related = used is { } step && where is not null
+                RelatedSpan[] related = used is { } step && where is not null
                     ? [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), where)]
-                    : Array.Empty<RelatedSpan>();
+                    : [];
                 foreach (var callee in targets)
                 {
                     if ((of(callee).Unbacked & register) == Registers.None)
@@ -204,7 +205,7 @@ internal static class UnpromisedKeeps
                 {
                     after |= block.CallsUnknown ? Registers.All : Registers.None;
                     foreach (var callee in block.Calls)
-                        after |= reads(callee).Complete ? reads(callee).Read : Registers.All;
+                        after |= reads(callee).Assumed;
                 }
                 for (var j = block.Steps.Count - 1; j >= 0; j--)
                     after = Before(walk, block.Steps[j], after);
@@ -222,7 +223,7 @@ internal static class UnpromisedKeeps
     /// Returns the registers used before <paramref name="step"/>, from those used after it. A
     /// statement that is not an instruction may be run as data and do anything.
     /// </summary>
-    private static Registers Before(RegisterWalk walk, Layout.Step step, Registers after)
+    private static Registers Before(RegisterWalk walk, Step step, Registers after)
     {
         if (step.Statement is not InstructionStatementSyntax instruction)
         {
@@ -267,7 +268,7 @@ internal static class UnpromisedKeeps
     /// either.
     /// </summary>
     private static DiagnosticFix? SaveAround(
-        RegisterWalk walk, Registers register, Layout.Step call, Symbol callee, BasicBlock following,
+        RegisterWalk walk, Registers register, Step call, Symbol callee, BasicBlock following,
         IReadOnlySet<RoutineKey> readers)
     {
         MnemonicKind? push = register switch
@@ -297,7 +298,6 @@ internal static class UnpromisedKeeps
     /// </summary>
     private static bool SetsNAndZFirst(BasicBlock block)
     {
-        const StatusFlags NZ = StatusFlags.Negative | StatusFlags.Zero;
         var set = StatusFlags.None;
         foreach (var step in block.Steps)
         {
@@ -309,21 +309,21 @@ internal static class UnpromisedKeeps
             }
             var mnemonic = instruction.MnemonicKind;
             if (Instructions.IsCall(mnemonic) || mnemonic == MnemonicKind.Php
-                || (FlagEffects.Read(mnemonic) & NZ & ~set) != StatusFlags.None)
+                || (FlagEffects.Read(mnemonic) & FlagState.NZ & ~set) != StatusFlags.None)
             {
                 return false;
             }
 
             // An immediate `bit` sets Z alone, and nothing here says which form this one is.
-            set |= mnemonic == MnemonicKind.Bit ? StatusFlags.Zero : FlagEffects.Written(mnemonic, null, null) & NZ;
-            if (set == NZ)
+            set |= mnemonic == MnemonicKind.Bit ? StatusFlags.Zero : FlagEffects.Written(mnemonic, null, null) & FlagState.NZ;
+            if (set == FlagState.NZ)
                 return true;
         }
         return false;
     }
 
     /// <summary>Returns the registers a use was already found for.</summary>
-    private static Registers Used(Dictionary<Registers, (Layout.Step Step, Symbol? Through)> sites)
+    private static Registers Used(Dictionary<Registers, (Step Step, Symbol? Through)> sites)
     {
         var used = Registers.None;
         foreach (var register in sites.Keys)

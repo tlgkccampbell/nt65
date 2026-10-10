@@ -13,10 +13,11 @@ internal static class KeepsAnalysis
 {
     /// <summary>
     /// Returns what <paramref name="region"/>'s routine keeps, following it with
-    /// <paramref name="walk"/>, with <paramref name="of"/> giving what each routine it calls keeps. <paramref name="report"/> collects what is wrong with
-    /// the routine on the final walk, once the answer has reached a fixed point. Earlier rounds
-    /// pass null and report nothing. <paramref name="start"/> is the index of the block the
-    /// routine is entered at, which is a label's where another routine calls or jumps to it.
+    /// <paramref name="walk"/>, with <paramref name="of"/> giving what each routine it calls
+    /// keeps. <paramref name="report"/> collects what is wrong with the routine on the final walk,
+    /// once the answer has reached a fixed point. Earlier rounds pass null and report nothing.
+    /// <paramref name="start"/> is the index of the block the routine is entered at, which is a
+    /// label's where another routine calls or jumps to it.
     /// </summary>
     public static RoutineRegisters Of(
         RegisterWalk walk, FlowRegion region, Func<Symbol, RoutineRegisters> of, List<Diagnostic>? report,
@@ -97,7 +98,8 @@ internal static class KeepsAnalysis
     /// path leaves it, saying what to change. <paramref name="into"/> is the routine or
     /// label the path passes control to, if any, and <paramref name="kept"/> the registers
     /// that routine returns unchanged. A path that leaves on a line of a macro body is reported
-    /// at the call in <paramref name="file"/>, as <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+    /// at the call in <paramref name="file"/>, as
+    /// <see cref="Expansion.Problem(SyntaxTree, SyntaxNode, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
     /// describes.
     /// </summary>
     private static void Check(
@@ -116,7 +118,7 @@ internal static class KeepsAnalysis
 
         // This routine cannot promise registers that the routine the path passes control to
         // makes no promise about. The promise belongs on the routine whose code has to
-        // honour it.
+        // honor it.
         var missing = into is not null ? broken & ~kept : Registers.None;
 
         // When the stack is unknown, that is why the restore could not be seen. Saying what

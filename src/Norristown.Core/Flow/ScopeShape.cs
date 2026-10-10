@@ -1,3 +1,4 @@
+using Norristown.Layout;
 using Norristown.Syntax;
 
 namespace Norristown.Flow;
@@ -58,10 +59,17 @@ internal sealed record ScopeShape(int Entry, bool[] Inside, bool IsStraight)
     }
 
     /// <summary>
+    /// Returns whether <paramref name="step"/> lies inside <paramref name="whole"/>, where
+    /// <paramref name="before"/> is the answer for the step above it. A statement in this file
+    /// decides by its position. A statement from an expansion counts as being wherever the call
+    /// that expanded it was, so it keeps the answer for the step above it.
+    /// </summary>
+    public static bool Within(TextSpan whole, Step step, bool before) =>
+        step.On is null ? whole.Contains(step.Statement.Position) : before;
+
+    /// <summary>
     /// Returns how many of each block's statements lie inside <paramref name="whole"/>, and how
-    /// many it has. A statement in this file decides by its position whether the walk is inside
-    /// the span. A statement from an expansion counts as being wherever the call that expanded it
-    /// was, so the walk keeps the last answer over it.
+    /// many it has.
     /// </summary>
     private static (int Inside, int Total)[] Held(IReadOnlyList<BasicBlock> blocks, TextSpan whole)
     {
@@ -72,8 +80,7 @@ internal sealed record ScopeShape(int Entry, bool[] Inside, bool IsStraight)
             var inside = 0;
             foreach (var step in blocks[i].Steps)
             {
-                if (step.On is null)
-                    within = step.Statement.Position >= whole.Start && step.Statement.Position < whole.End;
+                within = Within(whole, step, within);
                 if (within)
                     inside++;
             }

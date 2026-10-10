@@ -1,3 +1,4 @@
+using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -159,7 +160,7 @@ internal static class CallerStack
 
         // On the 65816 the state analysis counts the bytes pushed, which the registers' stack of
         // saves cannot do across a push of one width pulled at another.
-        static bool Pushed(FileAnalysis file, Layout.Step step) => file.State is { } states
+        static bool Pushed(FileAnalysis file, Step step) => file.State is { } states
             ? states.Before(step.Statement, step.On)?.Stack is { IsAnchored: true, Depth: > 0 }
             : file.Flow.Registers?.Before(step.Statement, step.On)?.Stack is { Depth: > 0 };
 
@@ -167,7 +168,7 @@ internal static class CallerStack
         // the routine it is in.
         void Add(Symbol target)
         {
-            var owner = target is { Kind: SymbolKind.Label, Routine: { } routine } ? routine : target;
+            var owner = RegisterWalk.RoutineOf(target);
             if (owner.Signature is null || owner == region.Routine)
                 return;
             targets.Add(owner != target && labels.ContainsKey(RoutineKey.Of(target))

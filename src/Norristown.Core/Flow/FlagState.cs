@@ -28,6 +28,9 @@ internal sealed class FlagState : IEquatable<FlagState>
     public const StatusFlags Followed = StatusFlags.Negative | StatusFlags.Zero | StatusFlags.Carry | StatusFlags.Overflow
         | StatusFlags.Decimal | StatusFlags.InterruptDisable;
 
+    /// <summary>The negative and zero flags, which most instructions set together from one result.</summary>
+    public const StatusFlags NZ = StatusFlags.Negative | StatusFlags.Zero;
+
     private static readonly ImmutableDictionary<StatusFlags, ImmutableHashSet<Symbol>> NoSources =
         ImmutableDictionary<StatusFlags, ImmutableHashSet<Symbol>>.Empty;
 
@@ -144,7 +147,6 @@ internal sealed class FlagState : IEquatable<FlagState>
         var through = returned.Kept & ~values.Known;
         var known = (Known & through) | values.Known;
         var set = (Set & through) | values.Set;
-        var nz = StatusFlags.Negative | StatusFlags.Zero;
 
         // A flag's value that came before the call is unbacked where the callee keeps it without
         // promising to. One the callee gives is unbacked where it gives it without promising to.
@@ -169,7 +171,7 @@ internal sealed class FlagState : IEquatable<FlagState>
             }
             sources = builder.ToImmutable();
         }
-        return new(known, set, Shared && (through & nz) == nz, Kept & through, unbacked, quiet, sources, origins,
+        return new(known, set, Shared && (through & NZ) == NZ, Kept & through, unbacked, quiet, sources, origins,
             (Held with { NzFrom = Registers.None }).Forget(Registers.All & ~held));
     }
 
@@ -190,9 +192,9 @@ internal sealed class FlagState : IEquatable<FlagState>
     /// <paramref name="value"/>, which says nothing about how N and Z relate.
     /// </summary>
     public FlagState With(StatusFlags flag, bool value) =>
-        new(Known | flag, value ? Set | flag : Set & ~flag, Shared && (flag & (StatusFlags.Negative | StatusFlags.Zero)) == 0,
+        new(Known | flag, value ? Set | flag : Set & ~flag, Shared && (flag & NZ) == 0,
             Kept & ~flag, Unbacked & ~flag, Quiet & ~flag, Without(sources, flag), Without(origins, flag),
-            (flag & (StatusFlags.Negative | StatusFlags.Zero)) == 0 ? Held : Held with { NzFrom = Registers.None });
+            (flag & NZ) == 0 ? Held : Held with { NzFrom = Registers.None });
 
     /// <summary>
     /// Returns the state after an instruction sets N and Z from one result whose value is
@@ -201,16 +203,15 @@ internal sealed class FlagState : IEquatable<FlagState>
     /// </summary>
     public FlagState Loaded(long value, int bits)
     {
-        var nz = StatusFlags.Negative | StatusFlags.Zero;
         var mask = (1L << bits) - 1;
         var negative = (value & (1L << (bits - 1))) != 0;
         var zero = (value & mask) == 0;
-        var set = Set & ~nz;
+        var set = Set & ~NZ;
         if (negative)
             set |= StatusFlags.Negative;
         if (zero)
             set |= StatusFlags.Zero;
-        return new(Known | nz, set, true, Kept & ~nz, Unbacked & ~nz, Quiet & ~nz, Without(sources, nz), Without(origins, nz),
+        return new(Known | NZ, set, true, Kept & ~NZ, Unbacked & ~NZ, Quiet & ~NZ, Without(sources, NZ), Without(origins, NZ),
             Held with { NzFrom = Registers.None });
     }
 
@@ -221,13 +222,12 @@ internal sealed class FlagState : IEquatable<FlagState>
     /// </summary>
     public FlagState Forget(StatusFlags written, bool shared)
     {
-        var nz = StatusFlags.Negative | StatusFlags.Zero;
-        var keepsShared = (written & nz) == 0 ? Shared : shared && (written & nz) == nz;
+        var keepsShared = (written & NZ) == 0 ? Shared : shared && (written & NZ) == NZ;
         return written == StatusFlags.None
             ? this
             : new(Known & ~written, Set, keepsShared, Kept & ~written, Unbacked & ~written, Quiet & ~written,
                 Without(sources, written), Without(origins, written),
-                (written & nz) == 0 ? Held : Held with { NzFrom = Registers.None });
+                (written & NZ) == 0 ? Held : Held with { NzFrom = Registers.None });
     }
 
     /// <summary>

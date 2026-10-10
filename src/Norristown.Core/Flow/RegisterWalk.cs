@@ -55,25 +55,6 @@ internal sealed class RegisterWalk
     /// <summary>Gets the layout of the file the walk goes through.</summary>
     internal CodeLayout Layout => layout;
 
-    /// <summary>
-    /// Returns the registers an instruction uses the value of, including the index register its
-    /// mode adds, and the registers it certainly writes. A <c>rep</c> or <c>sep</c> whose mask
-    /// nt65 cannot work out certainly writes nothing. An instruction in
-    /// <see cref="ControlFlow.RewrittenOpcodes"/> uses every register and certainly writes none.
-    /// </summary>
-    internal (Registers Read, Registers Written) EffectsOf(Step step, InstructionStatementSyntax instruction)
-    {
-        if (flow.RewrittenOpcodes.Contains(step.Key))
-            return (Registers.All, Registers.None);
-        var mnemonic = instruction.MnemonicKind;
-        var mode = layout.Of(instruction, step.On)?.Mode;
-        var constant = Immediate(step);
-        var written = mnemonic is MnemonicKind.Rep or MnemonicKind.Sep && constant is null
-            ? Registers.None
-            : RegisterEffects.Written(mnemonic, mode, constant);
-        return (RegisterEffects.Read(mnemonic, mode), written);
-    }
-
     /// <summary>Gets the semantic model of the file the walk goes through.</summary>
     internal SemanticModel Model => model;
 
@@ -105,11 +86,7 @@ internal sealed class RegisterWalk
         // anything any one of them may have left.
         RegisterState? reached = null;
         foreach (var callee in block.Calls)
-        {
-            var kept = of(callee);
-            reached = RegisterState.Merge(
-                reached, state.WithEach(Registers.All & ~kept.Kept, RegisterValue.Unknown).Unbacking(kept.Unbacked));
-        }
+            reached = RegisterState.Merge(reached, Handed(state, of(callee)));
         return reached!;
     }
 
@@ -129,6 +106,13 @@ internal sealed class RegisterWalk
             : null;
 
     /// <summary>
+    /// Returns the routine that <paramref name="target"/> is a label inside, or
+    /// <paramref name="target"/> itself where it is anything else.
+    /// </summary>
+    public static Symbol RoutineOf(Symbol target) =>
+        target is { Kind: SymbolKind.Label, Routine: { } owner } ? owner : target;
+
+    /// <summary>
     /// Returns what reaches each block of <paramref name="region"/>, where the routine is entered
     /// at the block at <paramref name="start"/>, with <paramref name="of"/> giving what each
     /// routine it calls keeps. With <paramref name="fromOutside"/> false, a declared label the
@@ -146,12 +130,12 @@ internal sealed class RegisterWalk
         solver.Enter(start, (entered ?? RegisterState.Entered) with { Stack = called });
 
         // A label a `.state` declares, or one that another routine names, may be jumped into
-        // from another routine, so the registers there hold nothing this routine put in them. The stack there is what
-        // entering the routine leaves, which is empty but for the bytes a `pulls n` hands it. Code that jumps in has made none of
-        // this routine's saves, so a save that the path above the label leaves on the stack
-        // cannot be shown to be the one a pull below the label takes back. Entered at a label,
-        // the routine's other entry points are not part of the answer unless the path from
-        // that label reaches them.
+        // from another routine, so the registers there hold nothing this routine put in them.
+        // The stack there is what entering the routine leaves, which is empty but for the bytes
+        // a `pulls n` hands it. Code that jumps in has made none of this routine's saves, so a
+        // save that the path above the label leaves on the stack cannot be shown to be the one
+        // a pull below the label takes back. Entered at a label, the routine's other entry
+        // points are not part of the answer unless the path from that label reaches them.
         solver.EnterEntries(
             outside, declaredOnly: false, start == 0 && fromOutside ? _ => RegisterState.Outside with { Stack = called } : null,
             (block, state) => Entered(state, called, block, region.Routine));
@@ -293,12 +277,40 @@ internal sealed class RegisterWalk
     internal static long? Immediate(HiddenInstruction instruction) =>
         instruction.Mode == AddressingMode.Immediate ? instruction.Operand : null;
 
+    /// <summary>Returns the flags an <c>.ensure</c> names, as registers.</summary>
+    internal static Registers Ensured(SyntaxNode ensure)
+    {
+        var flags = Registers.None;
+        foreach (var item in StateItem.Read(ensure))
+            flags |= RegisterEffects.Of(item.Flags);
+        return flags;
+    }
+
     /// <summary>
     /// Returns the instructions a store can turn <paramref name="step"/>'s instruction into, from
     /// a <c>.patch … as</c>, or an empty list where it names none.
     /// </summary>
     internal IReadOnlyList<MnemonicKind> VariantsOf(Step step) =>
         flow.Variants.TryGetValue(step.Key, out var variants) ? variants : [];
+
+    /// <summary>
+    /// Returns the registers an instruction uses the value of, including the index register its
+    /// mode adds, and the registers it certainly writes. A <c>rep</c> or <c>sep</c> whose mask
+    /// nt65 cannot work out certainly writes nothing. An instruction in
+    /// <see cref="ControlFlow.RewrittenOpcodes"/> uses every register and certainly writes none.
+    /// </summary>
+    internal (Registers Read, Registers Written) EffectsOf(Step step, InstructionStatementSyntax instruction)
+    {
+        if (flow.RewrittenOpcodes.Contains(step.Key))
+            return (Registers.All, Registers.None);
+        var mnemonic = instruction.MnemonicKind;
+        var mode = layout.Of(instruction, step.On)?.Mode;
+        var constant = Immediate(step);
+        var written = mnemonic is MnemonicKind.Rep or MnemonicKind.Sep && constant is null
+            ? Registers.None
+            : RegisterEffects.Written(mnemonic, mode, constant);
+        return (RegisterEffects.Read(mnemonic, mode), written);
+    }
 
     /// <summary>
     /// Returns what the registers hold after <paramref name="step"/>'s instruction runs as
@@ -375,7 +387,7 @@ internal sealed class RegisterWalk
                 : state.With(moved.To, moved.From == Registers.A ? Taken(step, mnemonic, state) : state.Of(moved.From));
         }
         var after = state.WithEach(written & ~Registers.A, RegisterValue.Written);
-        if (!written.HasFlag(Registers.A))
+        if ((written & Registers.A) == Registers.None)
             return after;
 
         // `xba` swaps the two halves of the accumulator. Each half still holds part of the
@@ -391,15 +403,6 @@ internal sealed class RegisterWalk
             MnemonicKind.Tdc or MnemonicKind.Tsc => after.With(Registers.A, RegisterValue.Written),
             _ => Accumulator(step, after, RegisterValue.Written),
         };
-    }
-
-    /// <summary>Returns the flags an <c>.ensure</c> names, as registers.</summary>
-    internal static Registers Ensured(SyntaxNode ensure)
-    {
-        var flags = Registers.None;
-        foreach (var item in StateItem.Read(ensure))
-            flags |= RegisterEffects.Of(item.Flags);
-        return flags;
     }
 
     /// <summary>
