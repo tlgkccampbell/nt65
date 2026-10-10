@@ -239,3 +239,25 @@
     lda #1
     rts
 }
+
+; In emulation mode the high byte of the stack pointer is always $01, so an 8-bit X copies it
+; exactly there as well, and the `pld` finds the direct page the `phd` saved. Where the mode is
+; not known, an 8-bit copy holds only the low byte, and nothing is known about the stack after
+; the `txs`.
+.proc moved_back_emulation: a8, i8, emu, dp* {
+    phd
+    tsx
+    pha
+    txs
+    pld
+    rts
+}
+
+.proc moved_back_mode_unknown: a8, i8, e?, dp* {
+    phd
+    tsx
+    pha
+    txs
+    pld
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_back_mode_unknown` declares `dp*`, so D must be what it was on entry, but here it may not be
+}
