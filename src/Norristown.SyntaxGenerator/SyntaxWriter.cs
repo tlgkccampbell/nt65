@@ -62,24 +62,20 @@ public static class SyntaxWriter
                 .Select(slot => Property(slot, -1, "")));
         }
 
-        var text = new StringBuilder();
-        text.Append(Header).Append('\n');
+        var usings = new List<string>();
         if (!node.IsHandWritten)
         {
             if (members.Any(member => member.IndexOf("ImmutableArray<", StringComparison.Ordinal) >= 0))
-                text.Append("using System.Collections.Immutable;\n");
-            text.Append("using Norristown.Syntax.InternalSyntax;\n");
+                usings.Add("System.Collections.Immutable");
+            usings.Add("Norristown.Syntax.InternalSyntax");
         }
-        text.Append('\n');
-        text.Append("namespace Norristown.Syntax;\n");
-        text.Append('\n');
+        var text = new StringBuilder(Preamble("Norristown.Syntax", [.. usings]));
 
         var access = node.IsInternal ? "internal" : "public";
-        var sealing = node.IsAbstract ? "abstract " : table.HasHeirs(node) ? "" : "sealed ";
         var partial = node.IsPartial || node.IsHandWritten ? "partial " : "";
         if (!node.IsHandWritten)
             text.Append(Summary(node.Summary, ""));
-        text.Append($"{access} {sealing}{partial}class {node.Name} : {node.Base}\n");
+        text.Append($"{access} {Sealing(table, node)}{partial}class {node.Name} : {node.Base}\n");
         text.Append("{\n");
 
         var ordered = new List<string>();
@@ -270,11 +266,7 @@ public static class SyntaxWriter
     /// </summary>
     private static string FactoryFile(NodeTree table)
     {
-        var text = new StringBuilder();
-        text.Append(Header).Append('\n');
-        text.Append('\n');
-        text.Append("namespace Norristown.Syntax;\n");
-        text.Append('\n');
+        var text = new StringBuilder(Preamble("Norristown.Syntax"));
         text.Append("public static partial class SyntaxFactory\n");
         text.Append('{');
 
@@ -313,11 +305,7 @@ public static class SyntaxWriter
     /// </summary>
     private static string RewriterFile(NodeTree table)
     {
-        var text = new StringBuilder();
-        text.Append(Header).Append('\n');
-        text.Append('\n');
-        text.Append("namespace Norristown.Syntax;\n");
-        text.Append('\n');
+        var text = new StringBuilder(Preamble("Norristown.Syntax"));
         text.Append("public abstract partial class SyntaxRewriter\n");
         text.Append('{');
 
@@ -355,17 +343,11 @@ public static class SyntaxWriter
     private static string GreenFile(NodeTree table, NodeRow node)
     {
         var slots = node.IsAbstract ? ImmutableArray<LaidOutSlot>.Empty : table.Layout(node);
-        var text = new StringBuilder();
-        text.Append(Header).Append('\n');
-        if (!node.IsAbstract)
-            text.Append("using Red = Norristown.Syntax;\n");
-        text.Append('\n');
-        text.Append("namespace Norristown.Syntax.InternalSyntax;\n");
-        text.Append('\n');
+        var text = new StringBuilder(
+            Preamble("Norristown.Syntax.InternalSyntax", node.IsAbstract ? [] : ["Red = Norristown.Syntax"]));
         text.Append(Summary(
             [$"Represents the green node of <see cref=\"Norristown.Syntax.{node.Name}\"/>.", .. node.Summary], ""));
-        var sealing = node.IsAbstract ? "abstract " : table.HasHeirs(node) ? "" : "sealed ";
-        text.Append($"internal {sealing}class {node.Name} : {table.GreenBase(node)}\n");
+        text.Append($"internal {Sealing(table, node)}class {node.Name} : {table.GreenBase(node)}\n");
         text.Append("{\n");
 
         if (node.IsAbstract)
@@ -479,11 +461,7 @@ public static class SyntaxWriter
     {
         var name = generic ? "SyntaxVisitor<TResult>" : "SyntaxVisitor";
         var result = generic ? "TResult?" : "void";
-        var text = new StringBuilder();
-        text.Append(Header).Append('\n');
-        text.Append('\n');
-        text.Append("namespace Norristown.Syntax;\n");
-        text.Append('\n');
+        var text = new StringBuilder(Preamble("Norristown.Syntax"));
         text.Append("/// <summary>\n");
         text.Append("/// Dispatches on a node's type. <see cref=\"Visit\"/> calls the <c>Visit…</c> method for the\n");
         text.Append("/// node's class, and each of those calls <see cref=\"DefaultVisit\"/> unless it is overridden.\n");
@@ -539,6 +517,27 @@ public static class SyntaxWriter
         text.Append("}\n");
         return text.ToString();
     }
+
+    /// <summary>
+    /// Returns the start of a generated file, which is the header, one <c>using</c> directive per
+    /// entry of <paramref name="usings"/>, and the declaration of the namespace
+    /// <paramref name="ns"/>, with the blank lines the hand-written files put between them.
+    /// </summary>
+    private static string Preamble(string ns, params string[] usings)
+    {
+        var text = new StringBuilder(Header).Append('\n');
+        foreach (var directive in usings)
+            text.Append("using ").Append(directive).Append(";\n");
+        return text.Append('\n').Append("namespace ").Append(ns).Append(";\n").Append('\n').ToString();
+    }
+
+    /// <summary>
+    /// Returns the modifier that fixes how far a node's classes can be derived from, which is
+    /// <c>abstract</c> for an abstract node, nothing for a node another node derives from, and
+    /// <c>sealed</c> otherwise. Each is followed by the space that separates it from the next word.
+    /// </summary>
+    private static string Sealing(NodeTree table, NodeRow node) =>
+        node.IsAbstract ? "abstract " : table.HasHeirs(node) ? "" : "sealed ";
 
     private static string Summary(ImmutableArray<string> summary, string indent)
     {

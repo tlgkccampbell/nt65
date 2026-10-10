@@ -232,8 +232,8 @@ public readonly record struct SyntaxToken
         var (found, beside) = Beside(owner, direction, token => token == self);
         if (!found)
             return null;
-        if (beside is { } neighbour)
-            return neighbour;
+        if (beside is { } neighbor)
+            return neighbor;
         if (owner is not LineSyntax line)
             return null;
 
@@ -253,15 +253,15 @@ public readonly record struct SyntaxToken
     }
 
     /// <summary>
-    /// Finds the neighbour of the token that <paramref name="chosen"/> picks out among
+    /// Finds the neighbor of the token that <paramref name="chosen"/> picks out among
     /// <paramref name="owner"/>'s tokens. The search makes one pass without building a list,
-    /// because an editor asks for a token's neighbour very often.
+    /// because an editor asks for a token's neighbor very often.
     /// </summary>
     /// <param name="owner">The node whose tokens to walk, which is a line.</param>
     /// <param name="direction">1 for the token after the chosen token, −1 for the token before it.</param>
-    /// <param name="chosen">The test that identifies the token whose neighbour to find.</param>
+    /// <param name="chosen">The test that identifies the token whose neighbor to find.</param>
     /// <returns>
-    /// Whether the chosen token was among the owner's tokens, and its neighbour. The neighbour is
+    /// Whether the chosen token was among the owner's tokens, and its neighbor. The neighbor is
     /// null when the chosen token is the first or the last of them.
     /// </returns>
     private static (bool Found, SyntaxToken? Beside) Beside(

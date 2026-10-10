@@ -6,12 +6,20 @@
   src/Norristown.Core/Generated, where they are git-ignored but available to read.
 
   The table has one block per node, in alphabetical order of class name, so that two people adding
-  kinds edit different places. Where a concept also appears in Roslyn's own Syntax.xml, the names
-  are the ones Roslyn uses:
+  kinds edit different places. The elements and attributes are:
 
     <Node Name="X" Base="Y">          declares the class and the class it derives from
     <AbstractNode Name="X" Base="Y">  declares an abstract class, which has no kind, no Accept and
                                       no visitor method
+      Internal="true"                 makes the class internal; it gets an Accept, but no visitor
+                                      method
+      HandWritten="true"              marks a class written by hand; only its Accept is generated
+      Partial="true"                  marks a class whose hand-written partial part adds members
+                                      the table cannot describe
+      Missing="true"                  marks a kind whose node fills a required position that the
+                                      source leaves empty
+      Layout="A B C"                  gives the field order, when it is not the base's fields
+                                      followed by this node's own
       <Kind Name="K"/>                names the SyntaxKind (or kinds) whose nodes are of this class
       <TypeComment><summary>          holds the class's summary, as the XML it becomes
       <Field Name="N" Type="T">       declares a child of the node, as the property that reads it
@@ -19,18 +27,6 @@
                                       absent
         <Kind Name="K"/>              names a kind that a token field may hold
         <PropertyComment><summary>    holds the property's summary, as the XML it becomes
-
-  The remaining attributes and elements are nt65's own:
-
-    ... Internal="true"               makes the class internal; it gets an Accept, but no visitor
-                                      method
-    ... HandWritten="true"            marks a class written by hand; only its Accept is generated
-    ... Partial="true"                marks a class whose hand-written partial part adds members
-                                      the table cannot describe
-    ... Missing="true"                marks a kind whose node fills a required position that the
-                                      source leaves empty
-    ... Layout="A B C"                gives the field order, when it is not the base's fields
-                                      followed by this node's own
       <Member Name="N" Type="T">      declares a property that is not a child of the node
         <Read><![CDATA[expr]]>        gives the expression that property returns
 

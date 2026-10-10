@@ -43,20 +43,21 @@ internal sealed partial class Parser
     /// <c>.const</c> that starts it, which is reported. The rest of the line is read as the
     /// declaration it would be, so that what uses the name is not reported as well.
     /// </summary>
-    private GreenNode ParseConstantDeclaration()
-    {
-        var keyword = ConstMissing();
-        var name = Advance();
-        var equals = Advance();
-        return Finish(new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression()));
-    }
+    private GreenNode ParseConstantDeclaration() => Finish(ParseUnmarkedConstant());
 
     /// <summary>
-    /// Returns a missing <c>.const</c> at the name the current token is, which reports that it is
-    /// missing and offers to insert it.
+    /// Parses the <c>NAME = expr</c> or <c>NAME ?= expr</c> at the current token as the declaration
+    /// it would be with <c>.const</c> in front, whose place a missing token takes. The missing token
+    /// reports that <c>.const</c> is missing and offers to insert it.
     /// </summary>
-    private GreenToken ConstMissing() =>
-        Missing(SyntaxKind.Directive, Catalogue.ConstMissing.Message(Current.Text), new DiagnosticFix(FixKind.Const, ".const"));
+    private ConstantDeclarationSyntax ParseUnmarkedConstant()
+    {
+        var keyword = Missing(
+            SyntaxKind.Directive, Catalogue.ConstMissing.Message(Current.Text), new DiagnosticFix(FixKind.Const, ".const"));
+        var name = Advance();
+        var equals = Advance();
+        return new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression());
+    }
 
     /// <summary>
     /// Parses the opener of an <c>.enum</c>, <c>.struct</c>, <c>.union</c>, <c>.charmap</c> or
@@ -289,19 +290,14 @@ internal sealed partial class Parser
     {
         if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors") && !AtWord("space"))
         {
-            return new SegmentAttributeSyntax(
+            return Valueless(
                 Missing(SyntaxKind.Identifier, Catalogue.ExpectedSegmentAttribute.Message("`dp`, `bank`, `mirrors` or `space`")),
-                GreenToken.Missing(SyntaxKind.Equals),
-                value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
+                GreenToken.Missing(SyntaxKind.Equals));
         }
         var mirrors = AtWord("mirrors");
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
-        {
-            return new SegmentAttributeSyntax(
-                name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`")),
-                value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
-        }
+            return Valueless(name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`")));
         var equals = Advance();
         if (!mirrors)
         {
@@ -312,8 +308,7 @@ internal sealed partial class Parser
         if (Kind != SyntaxKind.OpenBracket)
         {
             Report(Catalogue.ExpectedBracket.Message("`[` and the banks: `mirrors = [$00..$3f, $80..$bf]`"));
-            return new SegmentAttributeSyntax(
-                name, equals, value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
+            return Valueless(name, equals);
         }
         var openBracket = Advance();
         var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseRange) : null;
@@ -323,6 +318,10 @@ internal sealed partial class Parser
         else
             Report(Catalogue.ExpectedBracket.Message("`]`"));
         return new SegmentAttributeSyntax(name, equals, null, openBracket, ranges, closeBracket);
+
+        // An attribute that stops short of its value still has slots for the name and the `=`.
+        static SegmentAttributeSyntax Valueless(GreenToken name, GreenToken equals) =>
+            new(name, equals, value: null, openBracketToken: null, ranges: null, closeBracketToken: null);
     }
 
     /// <summary>
@@ -424,10 +423,7 @@ internal sealed partial class Parser
         if (AtName && Next is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
         {
             exportKeyword = export;
-            var keyword = ConstMissing();
-            var name = Advance();
-            var equals = Advance();
-            return new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression());
+            return ParseUnmarkedConstant();
         }
 
         if (Kind == SyntaxKind.OpenBrace)

@@ -59,7 +59,7 @@ public static class Outline
                     block.Span, bound.Span, children);
 
             case ScopeDeclarationSyntax scope:
-                // `.scope { }` is anonymous, so the item is labelled with the directive itself.
+                // `.scope { }` is anonymous, so the item is labeled with the directive itself.
                 return new OutlineItem(OutlineKind.Scope, scope.Name?.Text ?? ".scope", null,
                     block.Span, scope.Name?.Span ?? scope.Keyword.Span, children);
 

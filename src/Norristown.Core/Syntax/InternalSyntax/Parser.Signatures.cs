@@ -47,7 +47,7 @@ internal sealed partial class Parser
         // name followed by `=` as a misspelled item that takes a value.
         if (Kind == SyntaxKind.ColonColon
             || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsStateWord(Current.Text) && !LooksLikeAWidth(Current.Text)
-                && (index + 1 >= tokens.Length || tokens[index + 1].Kind != SyntaxKind.Equals)))
+                && Next != SyntaxKind.Equals))
         {
             return new StateSetItemSyntax(ParseName());
         }
@@ -70,7 +70,7 @@ internal sealed partial class Parser
         // `dp = e` and `dbr = e` are the parts given a value with an `=`, and `dbr = [...]` a set
         // of banks. The value is parsed before the word is checked, so that a misspelled name is
         // the last diagnostic reported for the item. Which words may take a set of banks is
-        // checked when the signature is analysed, not here.
+        // checked when the signature is analyzed, not here.
         if (Kind == SyntaxKind.Equals)
         {
             var equals = Advance();
@@ -99,23 +99,21 @@ internal sealed partial class Parser
             Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
             return Own(new StateFlagItemSyntax(name, suffix));
         }
-        else if (name.Text.ToLowerInvariant() is "pushed" or "pulls")
-        {
-            // `pushed n` gives how many bytes the caller pushes before the call, and `pulls n`
-            // how many the routine is entered with above its return address.
+
+        // `pushed n` gives how many bytes the caller pushes before the call, and `pulls n` how
+        // many the routine is entered with above its return address.
+        if (name.Text.ToLowerInvariant() is "pushed" or "pulls")
             return new StateValueItemSyntax(name, null, ParseExpression());
-        }
-        else if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
+
+        // `inline n` or `inline .strz` gives how much data follows each call.
+        if (name.Text.Equals("inline", StringComparison.OrdinalIgnoreCase))
         {
-            // `inline n` or `inline .strz` gives how much data follows each call.
             return Current.DirectiveKind == DirectiveKind.Strz
                 ? new StateInlineItemSyntax(name, Advance())
                 : new StateValueItemSyntax(name, null, ParseExpression());
         }
-        else if (name.Text.ToLowerInvariant() is "keeps" or "reads" or "saves")
-        {
+        if (name.Text.ToLowerInvariant() is "keeps" or "reads" or "saves")
             return new StateRegistersItemSyntax(name, ParseRegisters(name.Text.ToLowerInvariant()));
-        }
         return new StateFlagItemSyntax(name, suffix);
     }
 

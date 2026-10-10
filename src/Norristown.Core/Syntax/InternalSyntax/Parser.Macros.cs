@@ -72,19 +72,11 @@ internal sealed partial class Parser
         // A name that is not one of the parameter-kind words names an enum, and the parameter
         // takes that enum's members.
         if (Kind == SyntaxKind.ColonColon || (Kind == SyntaxKind.Identifier && !SyntaxFacts.IsParameterKind(Current.Text)))
-        {
-            return new ParameterKindSyntax(
-                keyword: null, type: ParseName(), openParenToken: null, words: null, element: null,
-                low: null, dotDotToken: null, high: null, closeParenToken: null);
-        }
+            return Bare(keyword: null, ParseName());
         if (Kind != SyntaxKind.Identifier)
         {
-            return new ParameterKindSyntax(
-                Missing(SyntaxKind.Identifier,
-                    Catalogue.ExpectedParameterKind.Message(
-                        "`expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)`, `block` or an enum's name")),
-                type: null, openParenToken: null, words: null, element: null,
-                low: null, dotDotToken: null, high: null, closeParenToken: null);
+            return Bare(Missing(SyntaxKind.Identifier, Catalogue.ExpectedParameterKind.Message(
+                "`expr`, `const`, `ident`, `operand`, `one(...)`, `list(...)`, `block` or an enum's name")));
         }
 
         var listed = AtWord("one");
@@ -96,17 +88,11 @@ internal sealed partial class Parser
         // A `one` and a `list` must say what they take, in parentheses after the word; a `const`
         // and an `operand` may.
         if (!listed && !nested && !((ranged || moded) && Kind == SyntaxKind.OpenParen))
-        {
-            return new ParameterKindSyntax(
-                keyword, type: null, openParenToken: null, words: null, element: null,
-                low: null, dotDotToken: null, high: null, closeParenToken: null);
-        }
+            return Bare(keyword);
         if (Kind != SyntaxKind.OpenParen)
         {
             Report(Catalogue.ExpectedParenthesis.Message("`(`"));
-            return new ParameterKindSyntax(
-                keyword, type: null, openParenToken: null, words: null, element: null,
-                low: null, dotDotToken: null, high: null, closeParenToken: null);
+            return Bare(keyword);
         }
 
         var openParen = Advance();
@@ -136,6 +122,11 @@ internal sealed partial class Parser
         return new ParameterKindSyntax(
             keyword, type: null, openParen, words, element, low: null, dotDotToken: null, high: null,
             Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`")));
+
+        // A kind with no parentheses is a word alone, an enum's name alone, or a missing word.
+        static ParameterKindSyntax Bare(GreenToken? keyword, NameExpressionSyntax? type = null) =>
+            new(keyword, type, openParenToken: null, words: null, element: null,
+                low: null, dotDotToken: null, high: null, closeParenToken: null);
     }
 
     /// <summary>

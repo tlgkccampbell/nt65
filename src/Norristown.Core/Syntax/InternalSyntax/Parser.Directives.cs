@@ -92,20 +92,9 @@ internal sealed partial class Parser
     /// count as well as the word, so that fix is offered only for the plain form with no comma.
     /// </summary>
     private DiagnosticFix? Spelling((DiagnosticMessage Message, string? Replacement) instead, bool wholeLine) =>
-        instead.Replacement is { } word && (word != "}" || wholeLine) && (word != ".type" || !RestHasComma())
+        instead.Replacement is { } word && (word != "}" || wholeLine) && (word != ".type" || !Ahead(SyntaxKind.Comma))
             ? new DiagnosticFix(FixKind.Spelling, word)
             : null;
-
-    /// <summary>Returns a value indicating whether a comma appears on the rest of the line.</summary>
-    private bool RestHasComma()
-    {
-        for (var at = index; at < tokens.Length; at++)
-        {
-            if (tokens[at].Kind == SyntaxKind.Comma)
-                return true;
-        }
-        return false;
-    }
 
     /// <summary>
     /// Parses <c>.if expr {</c>, or, with <paramref name="closeBrace"/>, the

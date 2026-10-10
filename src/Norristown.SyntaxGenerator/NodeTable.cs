@@ -7,8 +7,8 @@ namespace Norristown.SyntaxGenerator;
 
 /// <summary>
 /// Reads the node table from <c>src/Norristown.Core/Syntax/Syntax.xml</c>, which is a <c>Tree</c>
-/// of <c>Node</c> and <c>AbstractNode</c> elements modeled on Roslyn's own <c>Syntax.xml</c>. The
-/// table's own header describes what the elements and attributes mean.
+/// of <c>Node</c> and <c>AbstractNode</c> elements. The table's own header describes what the
+/// elements and attributes mean.
 /// </summary>
 public static class NodeTable
 {

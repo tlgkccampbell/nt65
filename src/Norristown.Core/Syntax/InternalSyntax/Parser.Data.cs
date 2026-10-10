@@ -107,7 +107,7 @@ internal sealed partial class Parser
         // Tokens between the name and a `:` later on the line are reported once and skipped, and
         // the line is read on from the `:`, so the element type and the body it opens still count.
         SkippedTokensSyntax? skipped = null;
-        if (Kind is not (SyntaxKind.Colon or SyntaxKind.OpenBrace) && ColonAhead())
+        if (Kind is not (SyntaxKind.Colon or SyntaxKind.OpenBrace) && Ahead(SyntaxKind.Colon))
         {
             skipped = SkipUntil(
                 () => Kind == SyntaxKind.Colon,
@@ -151,17 +151,6 @@ internal sealed partial class Parser
             ReportOnce(Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
         }
         return new DataDeclarationSyntax(keyword, name, skipped, colon, element, null, null, brace);
-    }
-
-    /// <summary>Returns a value indicating whether a <c>:</c> appears from the current token on.</summary>
-    private bool ColonAhead()
-    {
-        for (var at = index; at < tokens.Length; at++)
-        {
-            if (tokens[at].Kind == SyntaxKind.Colon)
-                return true;
-        }
-        return false;
     }
 
     /// <summary>
