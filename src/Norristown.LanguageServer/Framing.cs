@@ -66,10 +66,13 @@ internal sealed class Framing : MessageHandlerBase
     /// </summary>
     public ServerPhase Phase { get; private set; }
 
+    /// <inheritdoc/>
     public override bool CanRead => true;
 
+    /// <inheritdoc/>
     public override bool CanWrite => true;
 
+    /// <inheritdoc/>
     protected override async ValueTask<JsonRpcMessage?> ReadCoreAsync(CancellationToken cancellationToken)
     {
         while (true)
@@ -93,6 +96,7 @@ internal sealed class Framing : MessageHandlerBase
         }
     }
 
+    /// <inheritdoc/>
     protected override async ValueTask WriteCoreAsync(JsonRpcMessage content, CancellationToken cancellationToken)
     {
         var written = new ArrayBufferWriter<byte>();
@@ -102,11 +106,14 @@ internal sealed class Framing : MessageHandlerBase
         await output.WriteAsync(written.WrittenMemory, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
     protected override ValueTask FlushAsync(CancellationToken cancellationToken) =>
         new(output.FlushAsync(cancellationToken));
 
+    /// <inheritdoc/>
     protected override void DisposeReader() => input.Dispose();
 
+    /// <inheritdoc/>
     protected override void DisposeWriter() => output.Dispose();
 
     /// <summary>
