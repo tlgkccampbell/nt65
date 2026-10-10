@@ -746,10 +746,10 @@ public static class Compiler
     }
 
     /// <summary>
-    /// Returns a value indicating whether some line of <paramref name="layout"/> assembles
-    /// differently depending on what the flag analysis finds. An <c>.ensure</c> that names a flag
-    /// emits nothing where the flags already hold. On the 65C02 variants, arithmetic pays a cycle
-    /// in decimal mode, and on the 65816 a block move's cycles depend on how many bytes it moves.
+    /// Returns a value indicating whether some line of <paramref name="layout"/> depends on what
+    /// the flag analysis finds. An <c>.ensure</c> that names a flag emits nothing where the flags
+    /// already hold. On the 65C02 variants the analysis also settles whether arithmetic pays the
+    /// decimal-mode cycle, and on the 65816 how many bytes a block move moves.
     /// </summary>
     private static bool DependsOnFlags(CodeLayout layout, Cpu target)
     {
