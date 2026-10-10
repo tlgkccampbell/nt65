@@ -121,6 +121,11 @@ public sealed class UnitLayout
         return now;
     }
 
+    /// <summary>
+    /// Records that the part of <paramref name="tree"/>'s run <paramref name="fileRun"/> starting
+    /// at offset <paramref name="from"/> lies in the unit's run <paramref name="run"/> at offset
+    /// <paramref name="at"/>.
+    /// </summary>
     private void Add(SyntaxTree tree, int fileRun, int from, int run, int at)
     {
         if (!pieces.TryGetValue((tree.Path, fileRun), out var list))

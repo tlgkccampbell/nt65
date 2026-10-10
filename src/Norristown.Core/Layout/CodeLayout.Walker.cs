@@ -130,8 +130,8 @@ public sealed partial class CodeLayout
 
         /// <summary>
         /// Gets a value indicating whether a statement named a cycle span, or anything asked for
-        /// one, while there was no completed walk to count over. When it is set, the file is laid out once more, with this
-        /// walk's steps to count over.
+        /// one, while there was no completed walk to count over. When it is set, the file is laid
+        /// out once more, with this walk's steps to count over.
         /// </summary>
         public bool WantsCycles { get; private set; }
 
@@ -172,6 +172,11 @@ public sealed partial class CodeLayout
             return layout;
         }
 
+        /// <summary>
+        /// Lays out one block as its kind requires. <paramref name="kind"/> is passed apart from
+        /// the block, because a <c>.multiproc</c> lays its body out once per member as a
+        /// <c>.proc</c>.
+        /// </summary>
         private void WalkBlock(BlockSyntax block, BlockKind kind)
         {
             // A macro body generates nothing where it is declared. It is laid out at every call that
@@ -207,19 +212,14 @@ public sealed partial class CodeLayout
                 // iteration counts towards the bound, which is checked before any is laid out.
                 if (expansion?.NearestCall is { } call && Exceeds(iterations.Count * (block.Members.Length - 1), call))
                     return;
-                var saved = Save();
-                try
+                InContext(() =>
                 {
                     foreach (var iteration in iterations)
                     {
                         expansion = iteration;
                         Walk(block.Members, from: 1);
                     }
-                }
-                finally
-                {
-                    Restore(saved);
-                }
+                });
                 return;
             }
 
@@ -229,31 +229,19 @@ public sealed partial class CodeLayout
             {
                 if (model.FamilyAt(block.Opener.Statement) is null)
                     return;
-                var saved = Save();
-                try
+                var iterations = Repetitions.Of(model, block, expansion, diagnostics);
+                InContext(() =>
                 {
-                    foreach (var iteration in Repetitions.Of(model, block, saved.Expansion, diagnostics))
+                    foreach (var iteration in iterations)
                     {
                         expansion = iteration;
                         WalkBlock(block, BlockKind.Proc);
                     }
-                }
-                finally
-                {
-                    Restore(saved);
-                }
+                });
                 return;
             }
 
-            var context = Save();
-            try
-            {
-                LayOutBody(block, kind);
-            }
-            finally
-            {
-                Restore(context);
-            }
+            InContext(() => LayOutBody(block, kind));
         }
 
         /// <summary>
@@ -321,22 +309,8 @@ public sealed partial class CodeLayout
 
             // A macro with a state signature is checked where its expansion starts and where it
             // ends, so both are steps of their own.
-            var outer = expansion;
             var marked = cpu == Cpu.Wdc65816 && model.MacroAt(call) is { MacroSignature: not null };
-            if (marked)
-                layout.steps.Add(new Step(call, outer, routine, Stream, segment, null));
-            var saved = Save();
-            try
-            {
-                expansion = Expansion.Of(outer, call, definition);
-                Walk(definition.Members, from: 1);
-            }
-            finally
-            {
-                Restore(saved);
-            }
-            if (marked)
-                layout.steps.Add(new Step(call, outer, routine, Stream, segment, null, Closes: true));
+            LayOutExpansion(call, marked, Expansion.Of(expansion, call, definition), () => Walk(definition.Members, from: 1));
         }
 
         /// <summary>
@@ -372,22 +346,29 @@ public sealed partial class CodeLayout
             // A block spliced into a macro with a state signature has to leave the state as it
             // found it, which is checked across the two ends of the splice. The macro is the one
             // whose body has the splice, which a block given to another macro there passes over.
-            var outer = expansion;
             var marked = cpu == Cpu.Wdc65816
-                && Expansion.Enclosing(outer).FirstOrDefault(level => level.Call is not null)?.Call is { } call
+                && Expansion.Enclosing(expansion).FirstOrDefault(level => level.Call is not null)?.Call is { } call
                 && model.MacroAt(call) is { MacroSignature: not null };
+            LayOutExpansion(statement, marked, Expansion.Spliced(expansion, statement, block), () => Walk(Macros.LinesOf(block), 0));
+        }
+
+        /// <summary>
+        /// Lays out the lines an expansion or a splice stands for by running <paramref name="body"/>
+        /// in the expansion <paramref name="inner"/>, and puts the walk's context back afterwards.
+        /// Where the expansion is <paramref name="marked"/>, the statement that opens it gets a
+        /// step where its lines start and another where they end, so that the analysis can check
+        /// the state at both.
+        /// </summary>
+        private void LayOutExpansion(StatementSyntax statement, bool marked, Expansion inner, Action body)
+        {
+            var outer = expansion;
             if (marked)
                 layout.steps.Add(new Step(statement, outer, routine, Stream, segment, null));
-            var saved = Save();
-            try
+            InContext(() =>
             {
-                expansion = Expansion.Spliced(outer, statement, block);
-                Walk(Macros.LinesOf(block), 0);
-            }
-            finally
-            {
-                Restore(saved);
-            }
+                expansion = inner;
+                body();
+            });
             if (marked)
                 layout.steps.Add(new Step(statement, outer, routine, Stream, segment, null, Closes: true));
         }
@@ -463,21 +444,7 @@ public sealed partial class CodeLayout
             var available = Instructions.Modes(cpu, statement.MnemonicKind);
             if (available.Count == 0)
             {
-                var having = CpuNames.All.Where(other => Instructions.Has(other, statement.MnemonicKind)).ToList();
-                var formatted = having.Select(CpuNames.Format).ToList();
-
-                // The only CPU with it is the 6502 with its undocumented opcodes, so the reader is
-                // looking at one of those rather than at an instruction they have misplaced.
-                var undocumented = having is [Cpu.Mos6502X];
-                Report(mnemonic, Catalogue.InstructionNotOnCpu.Message(
-                    mnemonic.Text,
-                    CpuNames.Format(cpu),
-                    formatted.Count == 0 ? ""
-                        : undocumented
-                            ? $"; it is an undocumented NMOS 6502 opcode, which needs the {CpuNames.Format(Cpu.Mos6502X)}"
-                            : "; it needs the " + (formatted.Count == 1
-                                ? formatted[0]
-                                : string.Join(", ", formatted.SkipLast(1)) + " or " + formatted[^1])));
+                ReportNotOnCpu(mnemonic);
                 Unlayable();
                 return;
             }
@@ -504,16 +471,12 @@ public sealed partial class CodeLayout
             var operand = substituted?.Operand ?? sourceOperand;
 
             var candidates = Plausible(operand).Where(available.Contains).ToArray();
-            if (candidates.Length == 0 && operand is null)
-            {
-                Report(mnemonic, Catalogue.OperandMissing.Message(mnemonic.Text));
-                Unlayable();
-                return;
-            }
             if (candidates.Length == 0)
             {
-                Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
-                    Catalogue.OperandNotTaken.Message(mnemonic.Text, CpuNames.Format(cpu)));
+                if (operand is null)
+                    Report(mnemonic, Catalogue.OperandMissing.Message(mnemonic.Text));
+                else
+                    Report(operand, Catalogue.OperandNotTaken.Message(mnemonic.Text, CpuNames.Format(cpu)));
                 Unlayable();
                 return;
             }
@@ -533,14 +496,13 @@ public sealed partial class CodeLayout
             {
                 layout.narrow.Add(StepKey.Of(statement, expansion));
             }
-            int? bits = cpu == Cpu.Wdc65816 && Instructions.SizedBy(statement.MnemonicKind) is { } register
-                ? state?.Of(register) == Width.Sixteen ? 16 : 8
-                : null;
+            var sized = cpu == Cpu.Wdc65816 ? Instructions.SizedBy(statement.MnemonicKind) : null;
+            var width = sized is { } register ? state?.Of(register) : null;
+            int? bits = sized is null ? null : width == Width.Sixteen ? 16 : 8;
 
             // An unknown width has already been reported, so a value too large for a byte is not
             // reported as a second error, because nobody knows the immediate really is one byte.
-            var sizeUnknown = cpu == Cpu.Wdc65816 && Instructions.SizedBy(statement.MnemonicKind) is { } sized
-                && state?.Of(sized) is not (Width.Eight or Width.Sixteen);
+            var sizeUnknown = sized is not null && width is not (Width.Eight or Width.Sixteen);
 
             var mode = Choose(mnemonic, operand, candidates, substituted, bits, sizeUnknown);
             var prefix = candidates.Length > 1 ? Instructions.Prefix(mode) : null;
@@ -574,6 +536,26 @@ public sealed partial class CodeLayout
                 if (target is not null)
                     branches.Add(new Branch(statement, expansion, target, Long: false));
             }
+        }
+
+        /// <summary>
+        /// Reports an instruction the target CPU does not have, naming the CPUs that do. When the
+        /// only one that does is the 6502 with its undocumented opcodes, the reader is looking at
+        /// one of those rather than at an instruction they have misplaced, and the message says so.
+        /// </summary>
+        private void ReportNotOnCpu(SyntaxToken mnemonic)
+        {
+            var having = CpuNames.All.Where(other => Instructions.Has(other, mnemonic.MnemonicKind)).ToList();
+            var formatted = having.Select(CpuNames.Format).ToList();
+            var needs = formatted.Count switch
+            {
+                0 => "",
+                _ when having is [Cpu.Mos6502X] =>
+                    $"; it is an undocumented NMOS 6502 opcode, which needs the {CpuNames.Format(Cpu.Mos6502X)}",
+                1 => "; it needs the " + formatted[0],
+                _ => "; it needs the " + string.Join(", ", formatted.SkipLast(1)) + " or " + formatted[^1],
+            };
+            Report(mnemonic, Catalogue.InstructionNotOnCpu.Message(mnemonic.Text, CpuNames.Format(cpu), needs));
         }
 
         /// <summary>
@@ -651,14 +633,15 @@ public sealed partial class CodeLayout
             if (operand is null || Expression(operand) is not { } target
                 || !Plausible(operand).Contains(AddressingMode.Relative))
             {
-                Report(operand?.Tree ?? mnemonic.Parent.Tree, operand?.Span ?? mnemonic.Span,
-                    Catalogue.BranchOperandNotTaken.Message(mnemonic.Text));
+                if (operand is null)
+                    Report(mnemonic, Catalogue.BranchOperandNotTaken.Message(mnemonic.Text));
+                else
+                    Report(operand, Catalogue.BranchOperandNotTaken.Message(mnemonic.Text));
                 return;
             }
             if (Operands.PrefixSize(operand) is not null)
             {
-                Report(operand,
-                    Catalogue.TransferPrefix.Message(mnemonic.Text));
+                Report(operand, Catalogue.TransferPrefix.Message(mnemonic.Text));
                 return;
             }
             if (model.AddressSizeOf(target, segment, expansion) == AddressSize.Far)
@@ -756,6 +739,10 @@ public sealed partial class CodeLayout
             return Constructs.AssertionOf(directive, message => model.ValueOf(message, expansion).Text);
         }
 
+        /// <summary>
+        /// Lays out a data directive or a line of a data body as the bytes it generates, and
+        /// reports bytes that a macro expands where no declaration or segment holds them.
+        /// </summary>
         private void Data(StatementSyntax directive)
         {
             if (DataLengths.Of(directive, model, diagnostics, expansion) is not { } length)
@@ -798,6 +785,24 @@ public sealed partial class CodeLayout
         /// </summary>
         private long? SpanOf(Symbol symbol) => layout.SpanOf(symbol);
 
+        /// <summary>
+        /// Runs <paramref name="body"/> and then puts the walk's context back as it was before,
+        /// however the body ends. Every block, iteration and expansion is laid out this way, so
+        /// what it changes for the lines inside it never leaks to the lines after it.
+        /// </summary>
+        private void InContext(Action body)
+        {
+            var saved = Save();
+            try
+            {
+                body();
+            }
+            finally
+            {
+                Restore(saved);
+            }
+        }
+
         /// <summary>Returns the walk's current context, for <see cref="Restore"/> to go back to.</summary>
         private Context Save() => new(segment, routine, inData, expansion, streams.Count);
 
@@ -820,12 +825,20 @@ public sealed partial class CodeLayout
         /// </summary>
         private Symbol? NameOf(SyntaxNode declaration) => model.DeclaredBy(declaration, expansion);
 
+        /// <summary>Reports a problem at <paramref name="node"/>, in the expansion the walk is in.</summary>
         private void Report(SyntaxNode node, DiagnosticMessage message, Severity? severity = null) =>
             Report(node.Tree, node.Span, message, severity);
 
+        /// <summary>Reports a problem at <paramref name="token"/>, in the expansion the walk is in.</summary>
         private void Report(SyntaxToken token, DiagnosticMessage message, Severity? severity = null) =>
             Report(token.Parent.Tree, token.Span, message, severity);
 
+        /// <summary>
+        /// Reports a problem at <paramref name="span"/> of <paramref name="tree"/>, in the
+        /// expansion the walk is in. A span in a macro body is reported at the call, as
+        /// <see cref="Expansion.Problem(SyntaxTree, SyntaxTree, TextSpan, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+        /// describes.
+        /// </summary>
         private void Report(SyntaxTree tree, TextSpan span, DiagnosticMessage message, Severity? severity = null) =>
             diagnostics.Add(Expansion.Problem(model.Tree, tree, span, expansion, severity, message));
 

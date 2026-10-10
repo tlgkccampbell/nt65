@@ -279,6 +279,7 @@ public sealed partial class CodeLayout
                 names.Count == 1 ? names[0] : string.Join(", ", names.SkipLast(1)) + " and " + names[^1];
         }
 
+        /// <summary>Returns a byte count as a message states it, with the unit in agreement.</summary>
         private static string Bytes(int count) => count == 1 ? "1 byte" : $"{count} bytes";
 
         /// <summary>Represents a <c>.label</c> the walk reached, with where it stood.</summary>

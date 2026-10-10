@@ -10,9 +10,9 @@ namespace Norristown.Layout;
 /// Provides the cycle count of each instruction on each CPU. The count is an interval, because
 /// some of what it depends on is not in the program. That includes whether an indexed read
 /// crosses a page, whether a branch is taken and crosses one, and, on the 65C02, whether the
-/// decimal flag is set where the flag analysis does not know it. Every count that is an interval carries the causes of the extra cycles
-/// at its top, so a reader never has to guess what decides where in the interval their line
-/// falls.
+/// decimal flag is set where the flag analysis does not know it. Every count that is an interval
+/// carries the causes of the extra cycles at its top, so a reader never has to guess what decides
+/// where in the interval their line falls.
 /// <para>
 /// On the 65816 most counts depend on the register widths and the processor mode, so they are
 /// worked out from the state the analysis found reaching the instruction. Where the analysis
