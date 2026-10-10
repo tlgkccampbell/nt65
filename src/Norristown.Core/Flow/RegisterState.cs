@@ -74,6 +74,14 @@ public sealed record RegisterState(
     public Registers FromStackPointer { get; init; }
 
     /// <summary>
+    /// Gets the stack as it was where the registers in <see cref="FromStackPointer"/> copied the
+    /// stack pointer, or null where that is not known. A <c>txs</c> or <c>tcs</c> from such a
+    /// register moves the stack back to it, which drops what was pushed since. It is null once
+    /// anything has been pulled, or anything else may have changed what the copy holds.
+    /// </summary>
+    public SavedStack? Pointed { get; init; }
+
+    /// <summary>
     /// Gets the registers that hold exactly their own entry value here without relying on a keep
     /// nobody promised. See <see cref="RoutineRegisters.Backed"/>.
     /// </summary>
@@ -130,6 +138,7 @@ public sealed record RegisterState(
                 : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
                 : Cause.StacksDiffer(depths: true),
             FromStackPointer = known.FromStackPointer & arriving.FromStackPointer,
+            Pointed = Equals(known.Pointed, arriving.Pointed) ? known.Pointed : null,
         };
     }
 

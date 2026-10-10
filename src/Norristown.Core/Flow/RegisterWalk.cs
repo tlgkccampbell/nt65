@@ -245,7 +245,7 @@ internal sealed class RegisterWalk
         {
             foreach (var instruction in hidden.Instructions)
                 state = Instruction(step, instruction.Mnemonic, instruction.Mode, Immediate(instruction), state, use, saved, null);
-            return state with { FromStackPointer = Registers.None };
+            return state with { FromStackPointer = Registers.None, Pointed = null };
         }
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
@@ -256,7 +256,7 @@ internal sealed class RegisterWalk
         {
             if (use is not null)
                 UsedByAnything(state, use);
-            return state.WithEach(Registers.All, RegisterValue.Unknown) with { FromStackPointer = Registers.None };
+            return state.WithEach(Registers.All, RegisterValue.Unknown) with { FromStackPointer = Registers.None, Pointed = null };
         }
 
         // A store may turn the instruction into another, and then the registers hold what either
@@ -265,12 +265,19 @@ internal sealed class RegisterWalk
         var immediate = StepOperands.Immediate(model, layout, step);
         var after = Instruction(step, statement.MnemonicKind, mode, immediate, state, use, saved, next);
         var pointing = StackWrites.Pointing(statement.MnemonicKind, mode, immediate, state.FromStackPointer);
-        foreach (var variant in VariantsOf(step))
+        var variants = VariantsOf(step);
+        foreach (var variant in variants)
         {
             after = RegisterState.Merge(after, Instruction(step, variant, mode, immediate, state, use, saved, next));
             pointing &= StackWrites.Pointing(variant, mode, immediate, state.FromStackPointer);
         }
-        return after with { FromStackPointer = pointing };
+        return after with
+        {
+            FromStackPointer = pointing,
+            Pointed = pointing == Registers.None || after.Stack is null || variants.Count > 0
+                ? null
+                : PointedAfter(step, statement.MnemonicKind, state, pointing),
+        };
     }
 
     /// <summary>Returns the value of an instruction's immediate, or null where it has none.</summary>
@@ -339,9 +346,10 @@ internal sealed class RegisterWalk
         if (facts.Pulls is { } pull)
             return Restored(step, state.WithEach(written & OtherFlags, RegisterValue.Written), facts, pull, use);
 
-        // Moving the stack pointer leaves nothing known about the saves on the stack.
+        // Moving the stack pointer leaves nothing known about the saves on the stack, unless it
+        // moves back to a copy taken with only pushes since.
         if (RegisterEffects.SetsStackPointer(mnemonic))
-            state = state with { Stack = null };
+            state = state with { Stack = MovedBack(step, mnemonic, state) };
 
         if (RegisterEffects.Moved(mnemonic) is { } moved)
         {
@@ -637,8 +645,10 @@ internal sealed class RegisterWalk
             use((register == Registers.A ? Taken(step, mnemonic, state) : state.Of(register)).Entry);
 
         // Reading the stack pointer, moving it, or addressing the stack by offset reaches the
-        // pushes in some way other than pulling them back in order.
-        if (RegisterEffects.ReadsStackPointer(mnemonic) || RegisterEffects.SetsStackPointer(mnemonic)
+        // pushes in some way other than pulling them back in order. Moving it back to a copy
+        // drops the pushes since without reading them.
+        if (RegisterEffects.ReadsStackPointer(mnemonic)
+            || (RegisterEffects.SetsStackPointer(mnemonic) && MovedBack(step, mnemonic, state) is null)
             || mode is AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
         {
             use(state.Stack?.Entries ?? Registers.None);
@@ -727,5 +737,61 @@ internal sealed class RegisterWalk
             Registers.C => pulled with { C = value, Z = flags.Z, N = flags.N, V = flags.V },
             _ => pulled.With(facts.Held, value),
         };
+    }
+
+    /// <summary>
+    /// Returns the stack as it was where the registers that hold the stack pointer after
+    /// <paramref name="step"/> copied it, or null where that cannot be relied on. A <c>tsx</c>
+    /// or <c>tsc</c> copies the stack as it is. Any other instruction keeps the copy, unless it
+    /// pulls, or on the 65816 may change the index width, which can clear the high byte of X.
+    /// </summary>
+    /// <param name="step">The step the instruction is in.</param>
+    /// <param name="mnemonic">The instruction.</param>
+    /// <param name="before">The state before the instruction.</param>
+    /// <param name="pointing">The registers that hold the stack pointer after it.</param>
+    /// <returns>The stack the copy was taken from, or null.</returns>
+    private SavedStack? PointedAfter(Step step, MnemonicKind mnemonic, RegisterState before, Registers pointing)
+    {
+        if (mnemonic is MnemonicKind.Tsx or MnemonicKind.Tsc)
+        {
+            // A copy taken earlier, at another depth, is still held in another register, and one
+            // stack cannot describe both.
+            var copied = mnemonic == MnemonicKind.Tsx ? Registers.X : Registers.A;
+            if ((pointing & ~copied) != Registers.None && !Equals(before.Pointed, before.Stack))
+                return null;
+
+            // An 8-bit X holds only the low byte of the stack pointer on the 65816.
+            return mnemonic == MnemonicKind.Tsx && layout.Cpu == Cpu.Wdc65816 && Wide(step, index: true) != true
+                ? null
+                : before.Stack;
+        }
+        if (Instructions.Facts(mnemonic).Pulls is not null
+            || (layout.Cpu == Cpu.Wdc65816 && mnemonic is MnemonicKind.Sep or MnemonicKind.Rep or MnemonicKind.Xce))
+        {
+            return null;
+        }
+        return before.Pointed;
+    }
+
+    /// <summary>
+    /// Returns the stack after a <c>txs</c> or <c>tcs</c> moves the stack pointer back to a copy
+    /// a <c>tsx</c> or <c>tsc</c> took, or null where nothing is known about it. Only pushes may
+    /// have happened since the copy, so moving back drops exactly those. Any other way of setting
+    /// the stack pointer leaves the stack unknown.
+    /// </summary>
+    private SavedStack? MovedBack(Step step, MnemonicKind mnemonic, RegisterState state)
+    {
+        var from = mnemonic switch
+        {
+            MnemonicKind.Txs => Registers.X,
+            MnemonicKind.Tcs => Registers.A,
+            _ => Registers.None,
+        };
+        if ((state.FromStackPointer & from) == Registers.None || state.Pointed is not { } pointed
+            || state.Stack is not { } stack || !stack.Extends(pointed))
+        {
+            return null;
+        }
+        return mnemonic == MnemonicKind.Txs && layout.Cpu == Cpu.Wdc65816 && Wide(step, index: true) != true ? null : pointed;
     }
 }

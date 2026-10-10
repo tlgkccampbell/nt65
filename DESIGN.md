@@ -2348,7 +2348,12 @@ entering the routine leaves (§7.3), so a pull below such a label finds no push 
 and a save and its restore belong on one side of it. A pull of more than the routine has pushed
 takes bytes its caller put there, as a routine that returns past data after its call pulls its
 return address to read the data. What that pull gets is unknown, but the stack is not: what the
-routine pushes and pulls after it cancels as it would anywhere else.
+routine pushes and pulls after it cancels as it would anywhere else. A `txs` or `tcs` from the
+register a `tsx` or `tsc` filled, with nothing but pushes between them, moves the stack back to
+where the copy was taken and drops exactly those pushes, so `pha`, `tsx`, `pha`, `pha`, `txs`,
+`pla` keeps A. A pull between them, a change to the register, or a store into the stack leaves
+the stack unknown, as any other `txs` does. So does an X on the 65816 that is not 16 bits
+throughout, since an 8-bit X holds only the low byte of S.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
