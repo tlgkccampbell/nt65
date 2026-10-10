@@ -52,7 +52,7 @@ internal static class CallHierarchy
         var callers = new Dictionary<Symbol, List<Protocol.Range>>();
         foreach (var (caller, callee, at) in Calls(analysis, cancellation))
         {
-            if (Same(callee, asked))
+            if (Declarations.Same(callee, asked))
                 Note(callers, caller, at);
         }
         return [.. Ordered(callers).Select(found =>
@@ -76,7 +76,7 @@ internal static class CallHierarchy
         var callees = new Dictionary<Symbol, List<Protocol.Range>>();
         foreach (var (caller, callee, at) in Calls(analysis, cancellation))
         {
-            if (Same(caller, asked))
+            if (Declarations.Same(caller, asked))
                 Note(callees, callee, at);
         }
         return [.. Ordered(callees).Select(found =>
@@ -116,14 +116,7 @@ internal static class CallHierarchy
     private static SyntaxNode? CallingStatement(BasicBlock block) =>
         block.Steps.Count == 0 ? null : block.Steps[^1].Statement;
 
-    /// <summary>
-    /// Checks whether two symbols are the same declaration. After an edit, the models kept for
-    /// files the edit did not touch may hold a different object for the same routine, so symbols
-    /// are compared by where they are declared.
-    /// </summary>
-    private static bool Same(Symbol a, Symbol b) =>
-        a.Tree.Path == b.Tree.Path && a.NameSpan.Start == b.NameSpan.Start && a.Name == b.Name;
-
+    /// <summary>Records one call of or to <paramref name="routine"/>, once per range.</summary>
     private static void Note(Dictionary<Symbol, List<Protocol.Range>> found, Symbol routine, Protocol.Range at)
     {
         if (!found.TryGetValue(routine, out var ranges))
@@ -163,6 +156,7 @@ internal static class CallHierarchy
                 IsRoutine(symbol) && symbol.Tree.Path == path && symbol.NameSpan.Start == start && symbol.Name == item.Name);
     }
 
+    /// <summary>Returns the item the client shows for a routine, which it sends back to ask about its calls.</summary>
     private static Protocol.CallHierarchyItem Describe(Symbol routine)
     {
         // The item's range is the whole declaration, which the client reveals when the item is

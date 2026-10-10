@@ -1,3 +1,6 @@
+using System.Globalization;
+using Norristown.Layout;
+using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -116,6 +119,13 @@ internal static class Edits
         }
         return found;
     }
+
+    /// <summary>
+    /// Returns the line after which a new <c>.use</c> goes, which is the last <c>.use</c> the
+    /// file has, or its <c>.module</c> line where it has none.
+    /// </summary>
+    public static int UseLine(SyntaxTree tree) =>
+        LastLine<UseDirectiveSyntax>(tree) is var use and >= 0 ? use : LastLine<ModuleDirectiveSyntax>(tree);
 
     /// <summary>
     /// Returns the line on which the block that <paramref name="line"/> opens ends, or
@@ -266,9 +276,7 @@ internal static class Edits
     /// null for a line that opens no routine.
     /// </summary>
     public static Edit? RegistersItem(SyntaxTree tree, int line, string name, string item) =>
-        RoutineHead(tree, line) is ({ } signature, _)
-            && signature.Entry.DescendantNodes().OfType<StateRegistersItemSyntax>()
-                .FirstOrDefault(given => given.Name.Text.Equals(name, StringComparison.OrdinalIgnoreCase)) is { } replaced
+        RoutineHead(tree, line) is ({ } signature, _) && RegistersItemNamed(signature, name) is { } replaced
             ? new Edit(tree, replaced.Span, item)
             : SignatureItem(tree, line, item);
 
@@ -311,8 +319,7 @@ internal static class Edits
     public static Edit? AddedRegister(SyntaxTree tree, int line, string item, string register)
     {
         if (RoutineHead(tree, line) is not ({ } signature, _)
-            || signature.Entry.DescendantNodes().OfType<StateRegistersItemSyntax>()
-                .FirstOrDefault(each => each.Name.Text.Equals(item, StringComparison.OrdinalIgnoreCase)) is not { } found
+            || RegistersItemNamed(signature, item) is not { } found
             || found.Registers.Count == 0)
         {
             return null;
@@ -343,6 +350,24 @@ internal static class Edits
                 return $"{wanted}{n}";
         }
     }
+
+    /// <summary>
+    /// Returns the instructions an <c>.ensure</c> assembles to, as <c>rep #$20</c> and
+    /// <c>sep #$10</c>, for the flags it has to reset and then the flags it has to set. An
+    /// <c>.ensure</c> whose widths already hold assembles to none.
+    /// </summary>
+    public static IReadOnlyList<string> WidthInstructions(Ensured ensured) =>
+        [.. new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
+            .Where(pair => pair.Flags != StatusFlags.None)
+            .Select(pair => $"{pair.Mnemonic} #${((int)pair.Flags).ToString("x2", CultureInfo.InvariantCulture)}")];
+
+    /// <summary>
+    /// Returns the item of <paramref name="signature"/>'s entry that lists registers under
+    /// <paramref name="name"/>, such as <c>keeps</c> or <c>reads</c>, or null where it has none.
+    /// </summary>
+    private static StateRegistersItemSyntax? RegistersItemNamed(ProcSignatureSyntax signature, string name) =>
+        signature.Entry.DescendantNodes().OfType<StateRegistersItemSyntax>()
+            .FirstOrDefault(item => item.Name.Text.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Returns the line break a file uses, which is the first one in it, or <c>\n</c> for a file

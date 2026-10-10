@@ -83,12 +83,14 @@ internal sealed class HoverCard(string headline, IReadOnlySet<string> asked)
             above.Add(prose);
         if (lead.Count > 0)
             above.Add(Table(lead, column));
+        if (rest.Count == 0)
+            return string.Join("\n\n", above);
+
         // The rule separates the leading rows from the rest, so without leading rows there is
         // nothing for it to separate, and the rest follows as the leading rows would.
         if (lead.Count == 0)
-            return string.Join("\n\n", rest.Count == 0 ? above : [.. above, Table(rest, column)]);
-        var answer = string.Join("\n\n", above);
-        return rest.Count == 0 ? answer : $"{answer}\n---\n{Table(rest, column)}";
+            return string.Join("\n\n", [.. above, Table(rest, column)]);
+        return $"{string.Join("\n\n", above)}\n---\n{Table(rest, column)}";
     }
 
     private static IReadOnlyList<(string Key, string Value)?> Trimmed(

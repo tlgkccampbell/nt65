@@ -20,10 +20,16 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal static class Hovers
 {
-    /// <summary>The column on the <c>cycles</c> row where the enclosing block's count starts, after the line's own.</summary>
+    /// <summary>
+    /// The column on the <c>cycles</c> row where the enclosing block's count starts, after the
+    /// line's own.
+    /// </summary>
     private const int BlockColumn = 10;
 
-    /// <summary>The width allowed for the block's count, so the reason after it always starts in the same column.</summary>
+    /// <summary>
+    /// The width allowed for the block's count, so that the reason after it always starts in the
+    /// same column.
+    /// </summary>
     private const int ReasonColumn = 14;
 
     /// <summary>
@@ -32,22 +38,19 @@ internal static class Hovers
     /// sized its operand. The flags it changes, the register contents and the stack are
     /// supporting detail and go below the rule.
     /// </summary>
-    private static readonly IReadOnlySet<string> TimingAsked =
-        new HashSet<string>(["cycles", "state"], StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> TimingAsked = Keys("cycles", "state");
 
     /// <summary>
     /// The keys of the rows that lead an <c>.ensure</c>'s hover, which a reader hovers to see
     /// what it became. The line states the requirement, not the instructions it emits.
     /// </summary>
-    private static readonly IReadOnlySet<string> EnsureAsked =
-        new HashSet<string>(["writes", "state"], StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> EnsureAsked = Keys("writes", "state");
 
     /// <summary>
     /// The keys of the rows that lead an inline <c>.scope</c>'s hover, which are the only rows it
     /// has.
     /// </summary>
-    private static readonly IReadOnlySet<string> ScopeAsked =
-        new HashSet<string>(["cost", "excluding", "preserves"], StringComparer.Ordinal);
+    private static readonly IReadOnlySet<string> ScopeAsked = Keys("cost", "excluding", "preserves");
 
     /// <summary>
     /// Returns what to show at <paramref name="position"/>, or null where there is nothing to say.
@@ -204,7 +207,7 @@ internal static class Hovers
         if (Lsp.PlacedAt(analysis, model, position) is not { } placed)
             return null;
         var placements = analysis.Placements;
-        var card = new HoverCard($"module {placed.Path}", new HashSet<string>(["declared", "written in"], StringComparer.Ordinal));
+        var card = new HoverCard($"module {placed.Path}", Keys("declared", "written in"));
         card.Row("declared", placements.DeclaredFor(placed.Tree) switch
         {
             ModulePlacement.Placed => "placed (its bytes are emitted where another module places it with `.place`)",
@@ -217,7 +220,7 @@ internal static class Hovers
             card.Row("written in", $"the output of `{unit}`");
         }
         card.Row("file", placed.Tree.Path);
-        return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, placed.Span));
+        return Hover(card, model.Tree, placed.Span);
     }
 
     /// <summary>
@@ -232,7 +235,7 @@ internal static class Hovers
         {
             return null;
         }
-        var card = new HoverCard(allow.GetText().Trim(), new HashSet<string>(["covers", "reason"], StringComparer.Ordinal));
+        var card = new HoverCard(allow.GetText().Trim(), Keys("covers", "reason"));
         card.Prose(descriptor.Explanation);
         if (model.Allowances.FirstOrDefault(allowance => allowance.Directive == allow) is { Covered: var covered })
         {
@@ -241,7 +244,7 @@ internal static class Hovers
                 : $"lines {covered.StartLine + 1}-{covered.EndLine + 1}");
         }
         card.Row("reason", allow.Reason is { IsMissing: false } reason ? Literals.Text(reason.Text) : null);
-        return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, token.Span));
+        return Hover(card, model.Tree, token.Span);
     }
 
     /// <summary>
@@ -256,7 +259,7 @@ internal static class Hovers
             return null;
         var (word, isMode) = (compared.Word, compared.IsMode);
         var text = word.Text.ToLowerInvariant();
-        var card = new HoverCard(isMode ? $"mode {text}" : $"word {word.Text}", new HashSet<string>(["mode", "never"], StringComparer.Ordinal));
+        var card = new HoverCard(isMode ? $"mode {text}" : $"word {word.Text}", Keys("mode", "never"));
         if (isMode)
             card.Row("mode", ParameterKinds.Mode(text) is { } meaning ? $"{text}: {meaning}" : null);
         card.Row("compared with", compared.Compared);
@@ -267,7 +270,7 @@ internal static class Hovers
                 ? $"{text} is not a mode .mode gives: {string.Join(", ", ComparedWord.Modes)}"
                 : $"{compared.Name} is never {word.Text}: it may be {string.Join(", ", compared.Choices)}");
         }
-        return new Protocol.Hover(Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, word.Span));
+        return Hover(card, model.Tree, word.Span);
     }
 
     /// <summary>
@@ -424,19 +427,21 @@ internal static class Hovers
             SymbolKind.Constant => ["value", "known", "setting"],
             _ => ["value"],
         };
-        return new HashSet<string>(["from", "private to", .. kind], StringComparer.Ordinal);
+        return Keys(["from", "private to", .. kind]);
     }
 
+    /// <summary>Returns the keys of the rows that lead a hover, compared as they are written.</summary>
+    private static IReadOnlySet<string> Keys(params string[] keys) => new HashSet<string>(keys, StringComparer.Ordinal);
+
+    /// <summary>Returns a hover that shows <paramref name="card"/> over <paramref name="span"/> of <paramref name="tree"/>.</summary>
+    private static Protocol.Hover Hover(HoverCard card, SyntaxTree tree, TextSpan span) =>
+        new(Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(tree, span));
+
     /// <summary>
-    /// Returns the value of the call a function's name appears in, which may be text, or an unknown
-    /// value when the name is not called there or nt65 cannot evaluate the call, as in a macro
-    /// body whose parameters have no arguments yet.
-    /// </summary>
-    /// <summary>
-    /// Adds what the configuration makes of a constant at file level: whether the build set a
-    /// setting or left it at its default, and whether an <c>.if</c> may test any other constant.
-    /// The program's configuration is asked rather than a file's, because a file an edit did not
-    /// reach keeps the configuration of the analysis before the edit.
+    /// Adds what the configuration makes of a constant at file level, which is whether the build
+    /// set a setting or left it at its default, and whether an <c>.if</c> may test any other
+    /// constant. The program's configuration is asked rather than a file's, because a file an
+    /// edit did not reach keeps the configuration of the analysis before the edit.
     /// </summary>
     private static void Stage(HoverCard card, Configuration configuration, Symbol symbol)
     {
@@ -451,6 +456,11 @@ internal static class Hovers
             card.Row("known", decided ? "decided by the configuration" : "once the declarations are read");
     }
 
+    /// <summary>
+    /// Returns the value of the call a function's name appears in, which may be text, or an unknown
+    /// value when the name is not called there or nt65 cannot evaluate the call, as in a macro
+    /// body whose parameters have no arguments yet.
+    /// </summary>
     private static Value Called(SemanticModel model, SymbolReference reference)
     {
         var token = model.Tree.Root.FindToken(reference.Span.Start);
@@ -678,8 +688,7 @@ internal static class Hovers
                 var cost = region.Scopes.FirstOrDefault(costed => costed.Opener == scope.Opener).Cost;
                 card.Row("cost", CodeLenses.Format(cost, null, null, false));
                 card.Row("preserves", Format(scope.Kept, scope.Complete));
-                return new Protocol.Hover(
-                    Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, scope.Opener));
+                return Hover(card, model.Tree, scope.Opener);
             }
         }
         return null;
@@ -708,8 +717,8 @@ internal static class Hovers
             return null;
         }
 
-        // Show the instruction's full datasheet name as a trailing comment, since a reader who
-        // already knows what `xba` stands for is not the one hovering it.
+        // Show the instruction's full name as a trailing comment, since a reader who already
+        // knows what `xba` stands for is not the one hovering it.
         var mnemonic = (statement as InstructionStatementSyntax)?.MnemonicKind;
         var line = Headline(model.Tree.Text[statement.Span.Start..statement.Span.End]);
         var card = new HoverCard(
@@ -724,16 +733,12 @@ internal static class Hovers
         var causes = counts.Count > 1 ? [.. laid.Causes ?? [], "the expansions differ"] : laid.Causes;
         card.Row("cycles", Cost(Spread(counts) ?? cycles, Spread(Around(flow, statement)), causes));
 
-        // An `.ensure` emits whatever `rep`/`sep` the analysis found it needs; show what that is.
+        // An `.ensure` emits whatever `rep` and `sep` the analysis found it needs, which is what
+        // a reader hovers it to see.
         if (laid.Ensured is { } ensured)
         {
-            var written = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
-                .Where(pair => pair.Flags != StatusFlags.None)
-                .Select(pair => $"{pair.Mnemonic} #${((int)pair.Flags).ToString("x2", CultureInfo.InvariantCulture)}")
-                .ToList();
-            card.Row("writes", written.Count == 0
-                ? "nothing: the widths already hold"
-                : string.Join(" and ", written));
+            var written = Edits.WidthInstructions(ensured);
+            card.Row("writes", written.Count == 0 ? "nothing: the widths already hold" : string.Join(" and ", written));
         }
 
         // The processor state the analysis found on entry to the line, which determined the
@@ -768,8 +773,7 @@ internal static class Hovers
                 card.Row(RegisterEffects.Format(register), Held(held.Of(register), register));
         }
         StackRows.Add(card, analysis, registers, state);
-        return new Protocol.Hover(
-            Protocol.MarkupContent.Markdown(card.ToString()), Lsp.ToRange(model.Tree, statement.Span));
+        return Hover(card, model.Tree, statement.Span);
     }
 
     /// <summary>

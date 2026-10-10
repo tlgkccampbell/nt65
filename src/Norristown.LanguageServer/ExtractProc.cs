@@ -69,7 +69,7 @@ internal static class ExtractProc
     /// gives these lines.
     /// </summary>
     private static string? Called(SyntaxTree tree, int first) =>
-        Edits.StatementOn(tree, first) is LabeledLineSyntax labelled ? labelled.Label.Name.Text.TrimStart('@') : null;
+        Edits.StatementOn(tree, first) is LabeledLineSyntax labeled ? labeled.Label.Name.Text.TrimStart('@') : null;
 
     /// <summary>
     /// Returns the lines of the selection, provided each is code a call can replace, which means
@@ -91,7 +91,7 @@ internal static class ExtractProc
             {
                 return null;
             }
-            if (Instruction(statement) is { } instruction)
+            if (Statements.InstructionOf(statement) is { } instruction)
             {
                 if (Instructions.Facts(instruction.MnemonicKind).Control == Control.Returns)
                     return null;
@@ -128,7 +128,7 @@ internal static class ExtractProc
 
         for (var line = first; line <= last; line++)
         {
-            if (Instruction(Edits.StatementOn(tree, line)) is not { } jump
+            if (Statements.InstructionOf(Edits.StatementOn(tree, line)) is not { } jump
                 || Instructions.Facts(jump.MnemonicKind).Control != Control.Jumps)
             {
                 continue;
@@ -169,7 +169,7 @@ internal static class ExtractProc
     {
         if (analysis.Cpu != Cpu.Wdc65816 || analysis.StatesFor(model.Tree.Path) is not { } states)
             return "";
-        if (Statements(model.Tree, lines).FirstOrDefault() is not { } start
+        if (InstructionsIn(model.Tree, lines).FirstOrDefault() is not { } start
             || states.AnyBefore(start)?.Processor is not { } entry)
         {
             return "";
@@ -194,11 +194,11 @@ internal static class ExtractProc
         tree.Text[tree.LineStarts[line]..tree.GetLineEnd(line)].TrimEnd();
 
     /// <summary>Returns the instruction statements of the selected lines, in order.</summary>
-    private static IEnumerable<InstructionStatementSyntax> Statements(SyntaxTree tree, IReadOnlyList<int> lines)
+    private static IEnumerable<InstructionStatementSyntax> InstructionsIn(SyntaxTree tree, IReadOnlyList<int> lines)
     {
         foreach (var line in lines)
         {
-            if (Instruction(Edits.StatementOn(tree, line)) is { } statement)
+            if (Statements.InstructionOf(Edits.StatementOn(tree, line)) is { } statement)
                 yield return statement;
         }
     }
@@ -213,21 +213,9 @@ internal static class ExtractProc
         var end = block is not null ? tree.GetLineIndex(block.FullSpan.End - 1) : tree.LineStarts.Length - 1;
         for (var next = line + 1; next <= end; next++)
         {
-            if (Instruction(Edits.StatementOn(tree, next)) is { } statement)
+            if (Statements.InstructionOf(Edits.StatementOn(tree, next)) is { } statement)
                 return statement;
         }
         return null;
     }
-
-    /// <summary>
-    /// Returns the instruction a statement holds, including one after a label, or null for a
-    /// statement that holds none.
-    /// </summary>
-    private static InstructionStatementSyntax? Instruction(StatementSyntax? statement) => statement switch
-    {
-        InstructionStatementSyntax instruction => instruction,
-        LabeledLineSyntax labelled => labelled.Statement as InstructionStatementSyntax,
-        _ => null,
-    };
-
 }

@@ -94,11 +94,7 @@ internal static class Refactors
             }
             if (edits.Count > 0)
             {
-                edits.Add(Edits.InsertAfter(tree,
-                    Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
-                        ? use
-                        : Edits.LastLine<ModuleDirectiveSyntax>(tree),
-                    $"{SyntaxFacts.TextOf(DirectiveKind.Use)} {path}"));
+                edits.Add(Edits.InsertAfter(tree, Edits.UseLine(tree), $"{SyntaxFacts.TextOf(DirectiveKind.Use)} {path}"));
                 yield return new Change($"Bring in `{path}` with `.use`", CodeActionKinds.Rewrite, edits);
             }
             yield break;
@@ -330,10 +326,7 @@ internal static class Refactors
         if (statement is EnsureDirectiveSyntax
             && analysis.LayoutFor(tree.Path)?.AnyOf(statement) is { Ensured: { } ensured })
         {
-            var lines = new[] { (Mnemonic: "rep", Flags: ensured.Reset), (Mnemonic: "sep", Flags: ensured.Set) }
-                .Where(pair => pair.Flags != StatusFlags.None)
-                .Select(pair => $"{pair.Mnemonic} #${(int)pair.Flags:x2}")
-                .ToList();
+            var lines = Edits.WidthInstructions(ensured);
             if (lines.Count == 0)
                 yield break;
             var indent = Edits.IndentOf(tree, line);

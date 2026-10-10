@@ -65,6 +65,10 @@ internal static class WorkspaceSymbols
         return at == query.Length ? 3 : null;
     }
 
+    /// <summary>
+    /// Adds the outline items that match <paramref name="query"/>, at this level and beneath it,
+    /// each named with the scope that holds it as <paramref name="container"/> gives it.
+    /// </summary>
     private static void Collect(
         SyntaxTree tree, IReadOnlyList<OutlineItem> items, string? container, string query,
         List<(int Score, Protocol.SymbolInformation Symbol)> found)

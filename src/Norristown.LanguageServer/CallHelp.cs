@@ -1,3 +1,4 @@
+using System.Text;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
@@ -11,11 +12,12 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal static class CallHelp
 {
-    // The built-in functions that get signature help, with their parameter names and a
-    // description of what each returns. A parameter named `...` stands for any number of
-    // further arguments, and is last for a built-in whose row of SyntaxFacts.Builtins sets no
-    // most arguments.
-    private static readonly Dictionary<BuiltinKind, (string[] Parameters, string Documentation)> builtins =
+    /// <summary>
+    /// The built-in functions that get signature help, with their parameter names and a
+    /// description of what each returns. A parameter named <c>...</c> stands for any number of
+    /// further arguments, and comes last for a built-in that sets no most arguments.
+    /// </summary>
+    private static readonly Dictionary<BuiltinKind, (string[] Parameters, string Documentation)> Builtins =
         new()
         {
             [BuiltinKind.Select] = (["condition", "chosen", "otherwise"],
@@ -48,7 +50,7 @@ internal static class CallHelp
             var open = call.Open;
             if (open >= 1 && before[open - 1] is { Kind: SyntaxKind.Directive } directive
                 && SyntaxFacts.BuiltinKindOf(directive.Text) is var kind
-                && builtins.TryGetValue(kind, out var builtin))
+                && Builtins.TryGetValue(kind, out var builtin))
             {
                 var parameters = builtin.Parameters;
                 // A built-in that takes any number of arguments marks the last one it names as
@@ -176,7 +178,7 @@ internal static class CallHelp
     private static Protocol.SignatureHelp Help(
         string opening, IReadOnlyList<string> parameters, string closing, string? documentation, int active)
     {
-        var label = new System.Text.StringBuilder(opening);
+        var label = new StringBuilder(opening);
         var offsets = new List<Protocol.ParameterInformation>();
         foreach (var parameter in parameters)
         {

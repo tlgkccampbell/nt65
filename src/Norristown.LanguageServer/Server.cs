@@ -9,10 +9,10 @@ using StreamJsonRpc;
 
 namespace Norristown.LanguageServer;
 
-// The Protocol folder holds hand-written LSP types for only the messages the server handles.
-// The formatter converts property names to camel case.
-
-/// <summary>Serves the Language Server Protocol to one client over a pair of streams.</summary>
+/// <summary>
+/// Serves the Language Server Protocol to one client over a pair of streams. The types in the
+/// <c>Protocol</c> folder describe only the messages this server handles.
+/// </summary>
 internal sealed class Server : IDisposable
 {
     private readonly ServerLog log;
@@ -393,7 +393,7 @@ internal sealed class Server : IDisposable
         cancellation.ThrowIfCancellationRequested();
         diagnostics.WatchOutput();
         var uri = request.TextDocument.Uri;
-        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
+        var path = PathOf(uri);
 
         // The settings and the version are taken with the files the analysis is of, so that the
         // answer does not mix an analysis with a later edit.
@@ -412,11 +412,8 @@ internal sealed class Server : IDisposable
     [JsonRpcMethod("nt65/expansion")]
     public async Task<ExpansionResult?> ExpansionAsync(ExpansionParams request, CancellationToken cancellation)
     {
-        if (await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation)
-            .ConfigureAwait(false) is not { } asked)
-        {
+        if (await AtAsync(request.TextDocument, request.Position, cancellation).ConfigureAwait(false) is not { } asked)
             return null;
-        }
         var expansion = MacroExpansion.At(
             asked.Analysis, asked.Model, asked.Position, request.Into, request.All);
         return expansion is null
@@ -448,8 +445,7 @@ internal sealed class Server : IDisposable
     /// </summary>
     [JsonRpcMethod("nt65/margin")]
     public async Task<MarginResult?> MarginAsync(MarginParams request, CancellationToken cancellation) =>
-        await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation, settled: true)
-            .ConfigureAwait(false) is { } asked
+        await AtAsync(request.TextDocument, request.Position, cancellation, settled: true).ConfigureAwait(false) is { } asked
             ? Margin.At(asked.Analysis, asked.Model, asked.Position, request.Arrows)
             : null;
 
@@ -460,8 +456,7 @@ internal sealed class Server : IDisposable
     /// </summary>
     [JsonRpcMethod("nt65/widths")]
     public async Task<WidthsResult?> WidthsAsync(WidthsParams request, CancellationToken cancellation) =>
-        await AtAsync(new TextDocumentPositionParams(request.TextDocument, new Position(0, 0)), cancellation)
-            .ConfigureAwait(false) is { } asked
+        await AtAsync(request.TextDocument, new Position(0, 0), cancellation).ConfigureAwait(false) is { } asked
             ? Widths.Of(asked.Analysis, asked.Model)
             : null;
 
@@ -473,8 +468,7 @@ internal sealed class Server : IDisposable
     /// </summary>
     [JsonRpcMethod("nt65/processor")]
     public async Task<ProcessorResult?> ProcessorAsync(ProcessorParams request, CancellationToken cancellation) =>
-        await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation, settled: true)
-            .ConfigureAwait(false) is { } asked
+        await AtAsync(request.TextDocument, request.Position, cancellation, settled: true).ConfigureAwait(false) is { } asked
             ? CaretProcessor.At(
                 asked.Analysis, asked.Model, asked.Position, request.Callers ?? [], file => outgoing.ToClient(Uris.ToUri(file)))
             : null;
@@ -494,8 +488,7 @@ internal sealed class Server : IDisposable
     {
         cancellation.ThrowIfCancellationRequested();
         diagnostics.WatchOutput();
-        var uri = request.TextDocument.Uri;
-        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
+        var path = PathOf(request.TextDocument.Uri);
         var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
         if (analysis.FileFor(path) is null)
             return null;
@@ -506,6 +499,10 @@ internal sealed class Server : IDisposable
         return LanguageServer.DirectPages.Of(analysis, built, file => outgoing.ToClient(Uris.ToUri(file)), cancellation);
     }
 
+    /// <summary>
+    /// Handles the client opening a document, whose text now comes from the client rather than
+    /// from disk. Its diagnostics are published at once.
+    /// </summary>
     [JsonRpcMethod("textDocument/didOpen")]
     public async Task DidOpenAsync(DidOpenTextDocumentParams request, CancellationToken cancellation)
     {
@@ -514,6 +511,7 @@ internal sealed class Server : IDisposable
         await diagnostics.PublishEditedAsync(document.Uri, document.Version, cancellation, open: true).ConfigureAwait(false);
     }
 
+    /// <summary>Handles an edit to an open document by applying it and publishing what changed.</summary>
     [JsonRpcMethod("textDocument/didChange")]
     public async Task DidChangeAsync(DidChangeTextDocumentParams request, CancellationToken cancellation)
     {
@@ -531,6 +529,9 @@ internal sealed class Server : IDisposable
             request.TextDocument.Uri, request.TextDocument.Version, cancellation).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Handles the client closing a document, whose text from now on comes from disk again.
+    /// </summary>
     [JsonRpcMethod("textDocument/didClose")]
     public Task DidCloseAsync(DidCloseTextDocumentParams request, CancellationToken cancellation)
     {
@@ -561,6 +562,10 @@ internal sealed class Server : IDisposable
                 : []);
     }
 
+    /// <summary>
+    /// Returns the ranges the editor may fold, which are the file's blocks. They come from the
+    /// syntax alone, so the request is answered without waiting for an analysis.
+    /// </summary>
     [JsonRpcMethod("textDocument/foldingRange")]
     public IReadOnlyList<FoldingRange> FoldingRanges(FoldingRangeParams request, CancellationToken cancellation)
     {
@@ -568,6 +573,7 @@ internal sealed class Server : IDisposable
         return workspace.Find(request.TextDocument.Uri) is { } document ? Lsp.ToFoldingRanges(document.Tree) : [];
     }
 
+    /// <summary>Returns what the editor shows about the position under the pointer, or null for nothing.</summary>
     [JsonRpcMethod("textDocument/hover")]
     public async Task<Hover?> HoverAsync(TextDocumentPositionParams request, CancellationToken cancellation) =>
         await AtAsync(request, cancellation).ConfigureAwait(false) is { } asked
@@ -615,6 +621,7 @@ internal sealed class Server : IDisposable
             .Distinct()]);
     }
 
+    /// <summary>Returns every occurrence in the file of the name at the caret, for the editor to highlight.</summary>
     [JsonRpcMethod("textDocument/documentHighlight")]
     public async Task<IReadOnlyList<DocumentHighlight>> DocumentHighlightsAsync(
         TextDocumentPositionParams request, CancellationToken cancellation) =>
@@ -669,6 +676,10 @@ internal sealed class Server : IDisposable
             [.. everywhere.Select(asked => asked.Analysis)]);
     }
 
+    /// <summary>
+    /// Returns what could be typed at the caret. Each item's documentation is kept back for
+    /// <see cref="Resolve"/>, which the client calls for the one item it highlights.
+    /// </summary>
     [JsonRpcMethod("textDocument/completion")]
     public async Task<IReadOnlyList<CompletionItem>> CompletionAsync(
         TextDocumentPositionParams request, CancellationToken cancellation)
@@ -695,6 +706,7 @@ internal sealed class Server : IDisposable
             : request;
     }
 
+    /// <summary>Returns the parameters of the call the caret is in, with the active one marked, or null outside a call.</summary>
     [JsonRpcMethod("textDocument/signatureHelp")]
     public async Task<SignatureHelp?> SignatureHelpAsync(
         TextDocumentPositionParams request, CancellationToken cancellation) =>
@@ -702,6 +714,10 @@ internal sealed class Server : IDisposable
             ? CallHelp.At(asked.Program, asked.Model, asked.Position)
             : null;
 
+    /// <summary>
+    /// Returns the lenses shown above the file's declarations, which give what each routine
+    /// costs and which registers it preserves.
+    /// </summary>
     [JsonRpcMethod("textDocument/codeLens")]
     public async Task<IReadOnlyList<CodeLens>> CodeLensesAsync(CodeLensParams request, CancellationToken cancellation)
     {
@@ -713,6 +729,7 @@ internal sealed class Server : IDisposable
         return LanguageServer.CodeLenses.In(document.Tree, analysis.ModelFor(path)?.Families ?? [], analysis.FlowFor(path));
     }
 
+    /// <summary>Returns the paths in the file that the editor may open as links, such as the file an <c>.incbin</c> includes.</summary>
     [JsonRpcMethod("textDocument/documentLink")]
     public async Task<IReadOnlyList<DocumentLink>> DocumentLinksAsync(
         DocumentLinkParams request, CancellationToken cancellation)
@@ -756,8 +773,7 @@ internal sealed class Server : IDisposable
     [JsonRpcMethod("textDocument/prepareCallHierarchy")]
     public async Task<IReadOnlyList<CallHierarchyItem>> PrepareCallHierarchyAsync(
         CallHierarchyPrepareParams request, CancellationToken cancellation) =>
-        await AtAsync(new TextDocumentPositionParams(request.TextDocument, request.Position), cancellation)
-            .ConfigureAwait(false) is { } asked
+        await AtAsync(request.TextDocument, request.Position, cancellation).ConfigureAwait(false) is { } asked
             ? outgoing.ToClient(LanguageServer.CallHierarchy.Prepare(asked.Analysis, asked.Model, asked.Position))
             : [];
 
@@ -775,6 +791,7 @@ internal sealed class Server : IDisposable
         return outgoing.ToClient(LanguageServer.CallHierarchy.Incoming(analysis, request.Item, cancellation));
     }
 
+    /// <summary>Returns the routines that the routine an item names calls, with the ranges of its calls.</summary>
     [JsonRpcMethod("callHierarchy/outgoingCalls")]
     public async Task<IReadOnlyList<CallHierarchyOutgoingCall>> OutgoingCallsAsync(
         CallHierarchyOutgoingCallsParams request, CancellationToken cancellation)
@@ -784,11 +801,15 @@ internal sealed class Server : IDisposable
         return outgoing.ToClient(LanguageServer.CallHierarchy.Outgoing(analysis, request.Item, cancellation));
     }
 
+    /// <summary>
+    /// Returns the quick fixes and refactorings offered over a range. A client that can ask for
+    /// an action's edits later is sent the actions without them, as <see cref="ResolveCodeActionAsync"/>
+    /// explains.
+    /// </summary>
     [JsonRpcMethod("textDocument/codeAction")]
     public async Task<IReadOnlyList<CodeAction>> CodeActionsAsync(CodeActionParams request, CancellationToken cancellation)
     {
-        var start = new TextDocumentPositionParams(request.TextDocument, request.Range.Start);
-        if (await AtAsync(start, cancellation).ConfigureAwait(false) is not { } asked)
+        if (await AtAsync(request.TextDocument, request.Range.Start, cancellation).ConfigureAwait(false) is not { } asked)
             return [];
         var only = request.Context.Only;
         return outgoing.ToClient(
@@ -809,8 +830,7 @@ internal sealed class Server : IDisposable
     {
         if (request.Data is not { } data)
             return request;
-        var at = new TextDocumentPositionParams(new TextDocumentIdentifier(data.Uri), data.Range.Start);
-        if (await AtAsync(at, cancellation).ConfigureAwait(false) is not { } asked
+        if (await AtAsync(new TextDocumentIdentifier(data.Uri), data.Range.Start, cancellation).ConfigureAwait(false) is not { } asked
             || LanguageServer.CodeActions.Resolved(asked.Analysis, asked.Model, request, lineLength) is not { } resolved)
         {
             // The file changed after the action was offered, and the action is no longer offered
@@ -820,6 +840,10 @@ internal sealed class Server : IDisposable
         return outgoing.ToClient(resolved, asked.Analysis);
     }
 
+    /// <summary>
+    /// Returns the semantic tokens of a whole file, which color each name by what it is declared
+    /// as, under a result id the client may quote to ask for a delta later.
+    /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/full")]
     public Task<Protocol.SemanticTokens> SemanticTokensAsync(SemanticTokensParams request, CancellationToken cancellation)
     {
@@ -829,7 +853,7 @@ internal sealed class Server : IDisposable
 
     /// <summary>
     /// Returns the semantic tokens for the lines the editor is showing. For a file of thousands of
-    /// lines, the client requests the visible screenful, which is coloured while the rest of the
+    /// lines, the client requests the visible screenful, which is colored while the rest of the
     /// file is computed.
     /// </summary>
     [JsonRpcMethod("textDocument/semanticTokens/range")]
@@ -852,11 +876,13 @@ internal sealed class Server : IDisposable
     public async Task<object> SemanticTokensDeltaAsync(SemanticTokensDeltaParams request, CancellationToken cancellation)
     {
         cancellation.ThrowIfCancellationRequested();
-        var holding = classified.TryGetValue(request.TextDocument.Uri, out var before)
-            && before.Id == request.PreviousResultId;
-        var held = before.Data;
+
+        // The tokens the client holds are taken before the new ones replace them.
+        var held = classified.TryGetValue(request.TextDocument.Uri, out var before) && before.Id == request.PreviousResultId
+            ? before.Data
+            : null;
         var answer = await ClassifiedAsync(request.TextDocument.Uri, cancellation).ConfigureAwait(false);
-        return holding ? NameHighlighting.Changed(answer.ResultId!, held, answer.Data) : answer;
+        return held is null ? answer : NameHighlighting.Changed(answer.ResultId!, held, answer.Data);
     }
 
     /// <summary>
@@ -879,23 +905,36 @@ internal sealed class Server : IDisposable
         ];
     }
 
+    /// <summary>
+    /// Returns the declarations across every file of the workspace whose names match what the
+    /// programmer typed. The outline of each file answers, so nothing is analyzed.
+    /// </summary>
     [JsonRpcMethod("workspace/symbol")]
     public IReadOnlyList<SymbolInformation> WorkspaceSymbols(
         WorkspaceSymbolParams request, CancellationToken cancellation) =>
         outgoing.ToClient(LanguageServer.WorkspaceSymbols.Matching(workspace.Files(), request.Query, cancellation));
 
+    /// <summary>
+    /// Handles the request to shut down, which the protocol sends before <c>exit</c>. Nothing is
+    /// released until <c>exit</c> arrives, but the framing records that it was sent, which decides
+    /// the exit code.
+    /// </summary>
     [JsonRpcMethod("shutdown")]
     public object? Shutdown() => null;
 
     /// <summary>
     /// Handles the notification that the client is done. The process exits with 0 if the client
     /// sent <c>shutdown</c> first and 1 if it did not, as the protocol requires. The message loop
-    /// is signalled rather than stopped, because a handler cannot end the dispatch it is running
+    /// is signaled rather than stopped, because a handler cannot end the dispatch it is running
     /// in.
     /// </summary>
     [JsonRpcMethod("exit")]
     public void Exit() => Leave(framing.Phase == ServerPhase.ShuttingDown ? 0 : 1, "the client said goodbye");
 
+    /// <summary>
+    /// Creates the formatter that reads and writes the protocol's JSON, which names properties in
+    /// camel case and leaves out the ones that are null, as the protocol expects.
+    /// </summary>
     internal static SystemTextJsonFormatter CreateFormatter()
     {
         var formatter = new SystemTextJsonFormatter();
@@ -954,19 +993,20 @@ internal sealed class Server : IDisposable
     {
         if (processId is not { } id || id <= 0)
             return;
+        var gone = $"the editor that started it (pid {id}) has gone";
         try
         {
             parent = Process.GetProcessById(id);
             parent.EnableRaisingEvents = true;
-            parent.Exited += (_, _) => Leave(1, $"the editor that started it (pid {id}) has gone");
+            parent.Exited += (_, _) => Leave(1, gone);
             if (parent.HasExited)
-                Leave(1, $"the editor that started it (pid {id}) has gone");
+                Leave(1, gone);
         }
         catch (ArgumentException)
         {
             // There is no such process: the editor exited between starting this server and the
             // server looking it up, which is exactly the case the watch exists for.
-            Leave(1, $"the editor that started it (pid {id}) has gone");
+            Leave(1, gone);
         }
         catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
@@ -1076,10 +1116,18 @@ internal sealed class Server : IDisposable
     /// </summary>
     private async Task<(ProgramAnalysis Analysis, SemanticModel? Model)> AnalysisAndModelAsync(string uri, CancellationToken cancellation)
     {
-        var path = workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
+        var path = PathOf(uri);
         var analysis = await workspace.AnalysisForAsync(path, cancellation).ConfigureAwait(false);
         return (analysis, analysis.ModelFor(path));
     }
+
+    /// <summary>
+    /// Returns the logical path of the file a URI names, which is the path of the open document
+    /// the client gave the URI for, or the path the URI itself converts to for a file that is not
+    /// open.
+    /// </summary>
+    private string PathOf(string uri) =>
+        workspace.Find(uri) is { } document ? document.Tree.Path : Uris.ToPath(uri);
 
     /// <summary>
     /// Returns the test of whether a routine of <paramref name="analysis"/>'s program runs under an
@@ -1099,10 +1147,19 @@ internal sealed class Server : IDisposable
     /// about. A request whose answer needs the program-wide answers passes
     /// <paramref name="settled"/>, and waits for them.
     /// </summary>
-    private async Task<Asked?> AtAsync(TextDocumentPositionParams request, CancellationToken cancellation, bool settled = false)
+    private Task<Asked?> AtAsync(TextDocumentPositionParams request, CancellationToken cancellation, bool settled = false) =>
+        AtAsync(request.TextDocument, request.Position, cancellation, settled);
+
+    /// <summary>
+    /// Returns what a request about <paramref name="position"/> in <paramref name="textDocument"/>
+    /// points at, as <see cref="AtAsync(TextDocumentPositionParams, CancellationToken, bool)"/>
+    /// does for a request that carries the two together.
+    /// </summary>
+    private async Task<Asked?> AtAsync(
+        TextDocumentIdentifier textDocument, Position position, CancellationToken cancellation, bool settled = false)
     {
         cancellation.ThrowIfCancellationRequested();
-        if (workspace.Find(request.TextDocument.Uri) is not { } document)
+        if (workspace.Find(textDocument.Uri) is not { } document)
             return null;
         var analysis = await workspace.AnalysisForAsync(document.Tree.Path, cancellation, settled).ConfigureAwait(false);
         cancellation.ThrowIfCancellationRequested();
@@ -1112,12 +1169,12 @@ internal sealed class Server : IDisposable
             analysis,
             analysis.Program,
             model,
-            document.Tree.GetPosition(request.Position.Line, request.Position.Character));
+            document.Tree.GetPosition(position.Line, position.Character));
     }
 
     /// <summary>
     /// Returns what a request points at in each program that holds the file, as
-    /// <see cref="AtAsync"/> does for the one program the editor shows the file as part of. A
+    /// <see cref="AtAsync(TextDocumentIdentifier, Position, CancellationToken, bool)"/> does for the one program the editor shows the file as part of. A
     /// library that several projects share is a file of each of their programs.
     /// </summary>
     private async Task<IReadOnlyList<Asked>> EverywhereAsync(TextDocumentPositionParams request, CancellationToken cancellation)

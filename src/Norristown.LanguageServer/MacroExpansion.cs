@@ -501,7 +501,7 @@ internal sealed class MacroExpansion
         if (parameter.Kind == ParameterKind.Enum
             && model.GivenAt(parameter.Symbol, at) is { } given && model.MemberFor(given.Argument, given.Caller) is { } member)
         {
-            return member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
+            return PathTo(member);
         }
 
         // A braced operand passed on whole to another macro keeps its braces, without which
@@ -528,7 +528,7 @@ internal sealed class MacroExpansion
     {
         var inside = name.Parent is ExpressionSyntax;
         if (iteration.Member is { } member)
-            return member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
+            return PathTo(member);
         if (iteration.Item is { } item)
         {
             if (item.Tree != model.Tree && Under(item).OfType<NameExpressionSyntax>().Any())
@@ -543,6 +543,12 @@ internal sealed class MacroExpansion
         }
         return null;
     }
+
+    /// <summary>
+    /// Returns the name that reaches an enum member from where the call is, which is its
+    /// qualified name in the call's own file and its full path from the root anywhere else.
+    /// </summary>
+    private string PathTo(Symbol member) => member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
 
     /// <summary>Adds one line of the expansion.</summary>
     private void Emit(string text) => lines.Add(text.TrimEnd());

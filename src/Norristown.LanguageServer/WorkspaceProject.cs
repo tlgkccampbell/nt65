@@ -49,6 +49,12 @@ internal sealed class WorkspaceProject
     public ProjectSettings Own { get; }
 
     /// <summary>
+    /// Gets the last analysis of the project that finished, which may be of files that have
+    /// changed since, or null when none has.
+    /// </summary>
+    public ProgramAnalysis? Latest => analysis.Latest;
+
+    /// <summary>
     /// Returns whether a <c>files</c> glob names <paramref name="path"/>, whether or not the file
     /// is on disk.
     /// </summary>
@@ -63,8 +69,7 @@ internal sealed class WorkspaceProject
     /// Returns whether the project, in any of its configurations, links the linker config at
     /// <paramref name="path"/>.
     /// </summary>
-    public bool Links(string path) =>
-        Own.LinkedFiles.Any(linked => string.Equals(Paths.Normalized(linked), Paths.Normalized(path), FilePaths.Comparison));
+    public bool Links(string path) => Own.LinkedFiles.Any(linked => Workspace.SamePath(linked, path));
 
     /// <summary>
     /// Builds the project in the named configuration, or for null in its default configuration,
@@ -98,12 +103,6 @@ internal sealed class WorkspaceProject
         else
             onDisk.Remove(path);
     }
-
-    /// <summary>
-    /// Gets the last analysis of the project that finished, which may be of files that have
-    /// changed since, or null when none has.
-    /// </summary>
-    public ProgramAnalysis? Latest => analysis.Latest;
 
     /// <summary>
     /// Returns whether the last analysis included <paramref name="path"/> through an

@@ -65,7 +65,7 @@ internal sealed class Workspace
     /// analysis back. <see cref="Compiler"/> analyzes when none is given.
     /// </param>
     /// <param name="failed">
-    /// Is told of each analysis that fails for any reason but being cancelled, which is a bug in
+    /// Is told of each analysis that fails for any reason but being canceled, which is a bug in
     /// nt65 that no request would otherwise say anything about.
     /// </param>
     public Workspace(Analyzer? analyzer = null, Action<Exception>? failed = null)
@@ -120,7 +120,7 @@ internal sealed class Workspace
             projects.Clear();
             foreach (var root in roots)
                 projects.AddRange(ProjectFiles(root).Select(file => new WorkspaceProject(file, analyzer)));
-            projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
+            SortProjects();
             ConfigureAll();
         }
     }
@@ -272,17 +272,7 @@ internal sealed class Workspace
             {
                 if (Paths.Normalized(path).Split('/')[^1] == ProjectFile.Name)
                 {
-                    changed |= projects.RemoveAll(project => SamePath(project.File, path)) > 0;
-                    if (File.Exists(path) && roots.Any(root => Within(root, path)))
-                    {
-                        var added = new WorkspaceProject(path, analyzer);
-                        added.Configure(Named(added, configuration, AnyNames()));
-                        projects.Add(added);
-                        projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
-                        changed = true;
-                    }
-                    ConfigureAll();
-                    loose.Invalidate();
+                    changed |= ProjectFileChanged(path);
                     continue;
                 }
 
@@ -572,8 +562,34 @@ internal sealed class Workspace
             }
         }
 
-        // The diagnostics depend on nothing but the analysis and the file, so a program that has
-        // not been analyzed again since the last publish costs nothing to publish again.
+        var diagnostics = Reported(found);
+        return [.. found
+            .OrderBy(file => file.Key, StringComparer.Ordinal)
+            .Select(file => Publish(file.Key, file.Value.Analysis, file.Value.Tree))];
+
+        Published Publish(string path, ProgramAnalysis analysis, SyntaxTree? tree)
+        {
+            var model = tree is null ? null : analysis.ModelFor(path);
+            return new Published(
+                UriOf(path),
+                versions.TryGetValue(path, out var version) ? version : null,
+                tree,
+                diagnostics[path],
+                analysis.Configuration,
+                model,
+                model is null ? null : RunsFrom.Marked(analysis, model));
+        }
+    }
+
+    /// <summary>
+    /// Returns the diagnostics to publish for each file in <paramref name="found"/>, and remembers
+    /// them for the next publish. The diagnostics depend on nothing but the analysis and the file,
+    /// so a file whose program has not been analyzed again since the last publish gets the list it
+    /// got then, and its suggestions are not looked for again.
+    /// </summary>
+    private IReadOnlyDictionary<string, IReadOnlyList<Diagnostic>> Reported(
+        IReadOnlyDictionary<string, (ProgramAnalysis Analysis, SyntaxTree? Tree)> found)
+    {
         IReadOnlyDictionary<string, (ProgramAnalysis Analysis, IReadOnlyList<Diagnostic> Diagnostics)> before;
         lock (gate)
         {
@@ -590,22 +606,7 @@ internal sealed class Workspace
         {
             reported = now;
         }
-        return [.. found
-            .OrderBy(file => file.Key, StringComparer.Ordinal)
-            .Select(file => Publish(file.Key, file.Value.Analysis, file.Value.Tree))];
-
-        Published Publish(string path, ProgramAnalysis analysis, SyntaxTree? tree)
-        {
-            var model = tree is null ? null : analysis.ModelFor(path);
-            return new Published(
-                UriOf(path),
-                versions.TryGetValue(path, out var version) ? version : null,
-                tree,
-                now[path].Diagnostics,
-                analysis.Configuration,
-                model,
-                model is null ? null : RunsFrom.Marked(analysis, model));
-        }
+        return now.ToDictionary(file => file.Key, file => file.Value.Diagnostics, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -625,6 +626,13 @@ internal sealed class Workspace
         }
     }
 
+    /// <summary>
+    /// Returns the configuration <paramref name="project"/> builds in when the editor chooses
+    /// <paramref name="configuration"/>, which is that name where the project has it, or null
+    /// for the project's default. When no project has the name at all,
+    /// <paramref name="anyNames"/> is false and every project is given the name, so that each
+    /// reports it as unknown.
+    /// </summary>
     private static string? Named(WorkspaceProject project, string? configuration, bool anyNames) =>
         configuration is { Length: > 0 } && (!anyNames || project.Own.Configurations.Any(c => c.Name == configuration))
             ? configuration
@@ -692,9 +700,14 @@ internal sealed class Workspace
         }
     }
 
-    private static bool SamePath(string a, string b) =>
+    /// <summary>
+    /// Checks whether two paths name the same file, once both are written as logical paths and
+    /// compared as the file system compares them.
+    /// </summary>
+    internal static bool SamePath(string a, string b) =>
         string.Equals(Paths.Normalized(a), Paths.Normalized(b), FilePaths.Comparison);
 
+    /// <summary>Checks whether <paramref name="path"/> is beneath <paramref name="directory"/>.</summary>
     private static bool Within(string directory, string path) =>
         Paths.Normalized(path).StartsWith(Paths.Normalized(directory) + "/", FilePaths.Comparison);
 
@@ -786,6 +799,35 @@ internal sealed class Workspace
         return files;
     }
 
+    /// <summary>
+    /// Handles a project file that changed on disk. The project it described is dropped, and
+    /// read again where the file still exists in one of the folders the client opened. Every
+    /// project is then configured again, because which projects have the active configuration's
+    /// name may have changed. Returns whether the workspace held or now holds the project. The
+    /// caller holds the lock.
+    /// </summary>
+    private bool ProjectFileChanged(string path)
+    {
+        var changed = projects.RemoveAll(project => SamePath(project.File, path)) > 0;
+        if (File.Exists(path) && roots.Any(root => Within(root, path)))
+        {
+            var added = new WorkspaceProject(path, analyzer);
+            added.Configure(Named(added, configuration, AnyNames()));
+            projects.Add(added);
+            SortProjects();
+            changed = true;
+        }
+        ConfigureAll();
+        loose.Invalidate();
+        return changed;
+    }
+
+    /// <summary>
+    /// Orders the projects by their files, so that every answer that lists them is in the same
+    /// order from one request to the next. The caller holds the lock.
+    /// </summary>
+    private void SortProjects() => projects.Sort((a, b) => string.CompareOrdinal(a.File, b.File));
+
     /// <summary>Marks every program that names a changed file to be analyzed again.</summary>
     private void Invalidate(string path)
     {
@@ -812,6 +854,10 @@ internal sealed class Workspace
         loose.Invalidate();
     }
 
+    /// <summary>
+    /// Checks whether any project has a configuration named as the active one is. The caller
+    /// holds the lock.
+    /// </summary>
     private bool AnyNames() =>
         projects.Any(project => project.Own.Configurations.Any(c => c.Name == configuration));
 }

@@ -3,7 +3,7 @@ namespace Norristown.LanguageServer;
 /// <summary>
 /// Runs work once the typing stops. Each call replaces any work that was waiting, so a run of
 /// keystrokes does the work once, after the last of them. A wait that has been replaced runs out
-/// and then does nothing. Work that had already started when it was replaced is cancelled,
+/// and then does nothing. Work that had already started when it was replaced is canceled,
 /// because its result is now out of date.
 /// </summary>
 /// <param name="quiet">How long there must be no further call before the work runs.</param>

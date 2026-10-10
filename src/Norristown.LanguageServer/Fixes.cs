@@ -15,6 +15,9 @@ namespace Norristown.LanguageServer;
 /// </summary>
 internal static class Fixes
 {
+    /// <summary>The register widths a fix may declare, one fix for each.</summary>
+    private static readonly int[] Widths = [8, 16];
+
     /// <summary>
     /// Returns the fixes for the diagnostics of <paramref name="model"/>'s file on the lines
     /// <paramref name="range"/> covers.
@@ -51,6 +54,11 @@ internal static class Fixes
         }
     }
 
+    /// <summary>
+    /// Returns the changes that apply one fix a diagnostic carries, which are usually one and
+    /// sometimes two readings of the line. A fix whose edit cannot be found in the file as it
+    /// stands yields nothing.
+    /// </summary>
     private static IEnumerable<Change> For(
         ProgramAnalysis analysis, SemanticModel model, Diagnostic diagnostic, DiagnosticFix fix)
     {
@@ -85,7 +93,7 @@ internal static class Fixes
 
             case FixKind.Immediate when fix.Text is { } hex:
                 var number = Edits.SpanOf(tree, diagnostic.Span);
-                var written = tree.Text[number.Start..number.End];
+                var written = Text(tree, number);
                 yield return Fix(diagnostic, $"Make it the number `#{written}`",
                     [new Edit(tree, new TextSpan(number.Start, 0), "#")]);
                 yield return Fix(diagnostic, $"Write the address as `{hex}`", [new Edit(tree, number, hex)],
@@ -110,7 +118,7 @@ internal static class Fixes
 
             case FixKind.Instruction when fix.Text is { } replacement:
                 var replaced = Edits.SpanOf(tree, diagnostic.Span);
-                var shouted = tree.Text[replaced.Start..replaced.End].TakeWhile(char.IsLetter).All(char.IsUpper);
+                var shouted = Text(tree, replaced).TakeWhile(char.IsLetter).All(char.IsUpper);
                 yield return Fix(diagnostic, $"Change it to `{replacement}`",
                     [new Edit(tree, replaced, shouted ? replacement.ToUpperInvariant() : replacement)]);
                 break;
@@ -170,8 +178,8 @@ internal static class Fixes
                 yield return Fix(diagnostic, $"Bring in `{path}` with `.use`", [Used(tree, path)]);
                 break;
 
-            case FixKind.State when fix.At is { } label && analysis.ModelFor(label.File) is { } labelled:
-                foreach (var state in StatesAfter(analysis, labelled, label))
+            case FixKind.State when fix.At is { } label && analysis.ModelFor(label.File) is { } labeled:
+                foreach (var state in StatesAfter(analysis, labeled, label))
                     yield return Fix(diagnostic, state.Title, state.Edits, preferred: false);
                 break;
 
@@ -196,7 +204,7 @@ internal static class Fixes
                 // puts the caret on the name and starts a rename.
                 var named = Edits.SpanOf(tree, diagnostic.Span);
                 yield return new Change(
-                    $"Rename `{tree.Text[named.Start..named.End]}`…",
+                    $"Rename `{Text(tree, named)}`…",
                     CodeActionKinds.QuickFix,
                     [],
                     diagnostic,
@@ -229,7 +237,7 @@ internal static class Fixes
                 break;
 
             case FixKind.Width when fix.Text is { } item:
-                foreach (var width in (int[])[8, 16])
+                foreach (var width in Widths)
                 {
                     yield return Fix(diagnostic, $"Add `.ensure {item}{width}`",
                         [Edits.InsertBefore(tree, line, $".ensure {item}{width}")], preferred: false);
@@ -237,7 +245,7 @@ internal static class Fixes
                 break;
 
             case FixKind.Signature when fix is { Text: { } register, At: { } routine }:
-                foreach (var width in (int[])[8, 16])
+                foreach (var width in Widths)
                 {
                     if (Edits.SignatureItem(tree, routine.LineIndex, $"{register}{width}") is { } item)
                     {
@@ -271,7 +279,7 @@ internal static class Fixes
             case FixKind.Keeps when fix is { Text: { } kept, At: { } callee }
                 && analysis.ModelFor(callee.File) is { } declaring
                 && Edits.AddedRegister(declaring.Tree, callee.LineIndex, "keeps", kept) is { } promise:
-                yield return Fix(diagnostic, $"Add `{kept}` to the `keeps` of `{declaring.Tree.Text[Edits.SpanOf(declaring.Tree, callee).Start..Edits.SpanOf(declaring.Tree, callee).End]}`", [promise]);
+                yield return Fix(diagnostic, $"Add `{kept}` to the `keeps` of `{Text(declaring.Tree, Edits.SpanOf(declaring.Tree, callee))}`", [promise]);
                 break;
 
             case FixKind.Unkeep when fix is { Text: { } unpromised, At: { } jumper }
@@ -331,13 +339,13 @@ internal static class Fixes
                 break;
 
             case FixKind.Exit when fix is { Text: { } leaves, At: { } routine }
-                && model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == routine) is { } returning
+                && DeclaredAt(model, routine) is { } returning
                 && Edits.ExitItem(tree, routine.LineIndex, leaves, (returning.Signature ?? Signature.Default).Entry) is { } exit:
                 yield return Fix(diagnostic, $"Declare that `{returning.Name}` returns with `{leaves}`", [exit]);
                 break;
 
             case FixKind.Inferred when fix is { Text: { } items, At: { } routine }
-                && model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == routine) is { } declaring
+                && DeclaredAt(model, routine) is { } declaring
                 && Edits.DeclaredItems(tree, routine.LineIndex, Items(items, before: true), Items(items, before: false)) is { } declared:
                 yield return Fix(diagnostic, $"Declare `{items}` in the signature of `{declaring.Name}`", [declared]);
                 break;
@@ -544,6 +552,13 @@ internal static class Fixes
     private static string Text(SyntaxTree tree, TextSpan span) => tree.Text[span.Start..span.End];
 
     /// <summary>
+    /// Returns the symbol whose declaration a diagnostic or a fix reports at <paramref name="at"/>,
+    /// or null where nothing in the file is declared there.
+    /// </summary>
+    private static Symbol? DeclaredAt(SemanticModel model, Span at) =>
+        model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == at);
+
+    /// <summary>
     /// Returns the items that a signature written as <paramref name="items"/> gives before its
     /// <c>-&gt;</c>, where <paramref name="before"/> is true, or after it otherwise.
     /// </summary>
@@ -554,10 +569,6 @@ internal static class Fixes
         return [.. half.Split(", ", StringSplitOptions.RemoveEmptyEntries)];
     }
 
-    /// <summary>
-    /// Creates a fix for <paramref name="diagnostic"/>, preferred unless it is one of several
-    /// readings.
-    /// </summary>
     /// <summary>
     /// Returns the span of the <c>.const</c> declaration a diagnostic names, from its keyword to the
     /// end of its value, and the rest of it as data found elsewhere, such as <c>BORDER: .byte = $D020</c>.
@@ -572,10 +583,14 @@ internal static class Fixes
             return null;
         }
         var start = constant.Keyword.Span.Start;
-        var value = tree.Text[constant.Value.Span.Start..constant.Value.Span.End];
+        var value = Text(tree, constant.Value.Span);
         return (new TextSpan(start, constant.Value.Span.End - start), $"{constant.Name.Text}: .byte = {value}");
     }
 
+    /// <summary>
+    /// Creates a quick fix for <paramref name="diagnostic"/>, preferred unless it is one of
+    /// several readings of the same line.
+    /// </summary>
     private static Change Fix(Diagnostic diagnostic, string title, IReadOnlyList<Edit> edits, bool preferred = true) =>
         new(title, CodeActionKinds.QuickFix, edits, diagnostic, preferred);
 
@@ -617,8 +632,8 @@ internal static class Fixes
         var line = jump.LineIndex + 1;
         while (Edits.StatementOn(tree, line) is BlankLineSyntax)
             line++;
-        if (Edits.StatementOn(tree, line) is LabeledLineSyntax { Statement: null } labelled
-            && model.SymbolAt(labelled.Label.Name) is { } skip
+        if (Edits.StatementOn(tree, line) is LabeledLineSyntax { Statement: null } labeled
+            && model.SymbolAt(labeled.Label.Name) is { } skip
             && model.ReferencesTo(skip).Count(reference => !reference.IsDeclaration) == 1)
         {
             edits.Add(Edits.RemoveLines(tree, line, line));
@@ -690,13 +705,7 @@ internal static class Fixes
     /// Returns an edit that adds a <c>.use</c> of <paramref name="path"/> under the last
     /// <c>.use</c>, or under the <c>.module</c> if there is none.
     /// </summary>
-    private static Edit Used(SyntaxTree tree, string path)
-    {
-        var after = Edits.LastLine<UseDirectiveSyntax>(tree) is var use and >= 0
-            ? use
-            : Edits.LastLine<ModuleDirectiveSyntax>(tree);
-        return Edits.InsertAfter(tree, after, $".use {path}");
-    }
+    private static Edit Used(SyntaxTree tree, string path) => Edits.InsertAfter(tree, Edits.UseLine(tree), $".use {path}");
 
     /// <summary>
     /// Returns the fixes that add a <c>.state</c> after a label that is entered from somewhere
@@ -713,7 +722,7 @@ internal static class Fixes
     {
         var tree = model.Tree;
         var line = label.LineIndex;
-        var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == label);
+        var symbol = DeclaredAt(model, label);
         var block = analysis.FlowFor(tree.Path)?.Regions
             .SelectMany(region => region.Blocks)
             .FirstOrDefault(block => block.Label == symbol && block.On is null);
@@ -817,7 +826,7 @@ internal static class Fixes
     private static Edit? Storage(SyntaxTree tree, Span at)
     {
         var span = Edits.SpanOf(tree, at);
-        var text = tree.Text[span.Start..span.End];
+        var text = Text(tree, span);
         if (!text.StartsWith(".res", StringComparison.OrdinalIgnoreCase))
             return null;
         var count = text[".res".Length..].Trim();
@@ -832,7 +841,7 @@ internal static class Fixes
     {
         var tree = model.Tree;
         var span = Edits.SpanOf(tree, diagnostic.Span);
-        var name = tree.Text[span.Start..span.End];
+        var name = Text(tree, span);
         var tokens = LineContext.TokensOf(tree, diagnostic.Span.LineIndex);
         var colon = tokens.FindIndex(token => token.Start == span.Start) + 1;
 
@@ -844,7 +853,7 @@ internal static class Fixes
                 [new Edit(tree, new TextSpan(span.Start, 0), ".data ")], preferred: false);
         }
 
-        var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
+        var symbol = DeclaredAt(model, diagnostic.Span);
         var title = $"Make `{name}` a position, `@{name}`";
         yield return symbol is null
             ? Fix(diagnostic, title, [new Edit(tree, new TextSpan(span.Start, 0), "@")], preferred: false)
@@ -922,7 +931,7 @@ internal static class Fixes
     {
         var tree = model.Tree;
         var line = diagnostic.Span.LineIndex;
-        var symbol = model.Symbols.FirstOrDefault(symbol => symbol.DeclarationSpan == diagnostic.Span);
+        var symbol = DeclaredAt(model, diagnostic.Span);
 
         // Removal deletes whole lines, which is only safe where the line starts with the
         // declaration. A label with an instruction after it shares its line with code.

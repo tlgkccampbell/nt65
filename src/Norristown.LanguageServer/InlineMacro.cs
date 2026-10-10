@@ -76,7 +76,7 @@ internal static class InlineMacro
     }
 
     /// <summary>
-    /// Creates the change as offered when it cannot be applied, with its title and greyed out
+    /// Creates the change as offered when it cannot be applied, with its title and grayed out
     /// with the reason.
     /// </summary>
     private static Change Refused(string title, string why) =>
