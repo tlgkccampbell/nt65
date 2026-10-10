@@ -39,6 +39,7 @@ internal sealed class FlagAnalysis : IKnownFlags
     private readonly IReadOnlyDictionary<StepKey, IReadOnlyList<MnemonicKind>> variants;
     private readonly InferredSignatures signatures;
     private readonly NextTargets targets;
+    private readonly DispatchTables tables;
     private readonly Dictionary<StepKey, FlagState> before = [];
 
     // What is known after each block that leaves the routine by running into another, keyed by
@@ -74,6 +75,7 @@ internal sealed class FlagAnalysis : IKnownFlags
         this.exits = exits;
         this.signatures = signatures;
         targets = new NextTargets(model, layout.Steps);
+        tables = new DispatchTables(model, targets);
     }
 
     /// <summary>
@@ -738,7 +740,7 @@ internal sealed class FlagAnalysis : IKnownFlags
         if (block.IsDeclared || label.Signature is not null || label.IsExported)
             return true;
         return model.ReferencesTo(label).Any(reference =>
-            !reference.IsDeclaration && !edges.Contains(reference.Span) && !Touches(reference.Span)
+            !reference.IsDeclaration && !edges.Contains(reference.Span) && !tables.Touches(reference.Span)
             && !dispatched.Any(item => item.Contains(reference.Span)));
     }
 
@@ -747,68 +749,27 @@ internal sealed class FlagAnalysis : IKnownFlags
     /// spread, where nothing but those annotations hands control to what the items name. A label
     /// named only there is reached only along the edges the flow graph gives the
     /// <c>.next</c>, so the flags the dispatching statement leaves flow into it as a branch's do.
-    /// <para>
-    /// A list or a table counts only where every item names a label or a routine, so the flow
-    /// graph spreads all of it. It must not be exported. Every other name of it in the file must
-    /// be in one of <paramref name="dispatches"/>, in a jump of this routine, or in an instruction
-    /// that only reads its bytes, as <c>lda table,x</c> does. Anything else, such as a call's
-    /// <c>.next</c> or another routine's, may hand control to its labels with other flags.
-    /// </para>
+    /// <see cref="DispatchTables.IsDispatchedOnlyBy"/> decides which tables count, with a name in
+    /// one of <paramref name="edges"/> counted as the routine's own where it is in a jump or in
+    /// one of <paramref name="dispatches"/>.
     /// </summary>
     private List<TextSpan> Dispatched(
         IReadOnlyList<(NextDirectiveSyntax Next, Expansion? On)> dispatches, IReadOnlySet<TextSpan> edges)
     {
+        bool Own(TextSpan span) => edges.Contains(span) && (tables.InJump(span)
+            || dispatches.Any(each => each.Next.Tree == model.Tree && each.Next.Span.Contains(span)));
+
         var spans = new List<TextSpan>();
         foreach (var (next, on) in dispatches)
         {
             foreach (var name in next.Targets)
             {
-                if (Targets.Of(model, name, on) is not { Symbol: var table } || table.IsExported
-                    || model.ReferencesTo(table).Any(reference => !reference.IsDeclaration && !Touches(reference.Span)
-                        && !(edges.Contains(reference.Span) && (InJump(reference.Span)
-                            || dispatches.Any(each => each.Next.Tree == model.Tree && each.Next.Span.Contains(reference.Span))))))
-                {
+                if (Targets.Of(model, name, on) is not { Symbol: var table } || !tables.IsDispatchedOnlyBy(table, on, Own))
                     continue;
-                }
-                var items = targets.ItemsOf(table, on).ToList();
-                if (items.Count == 0 || targets.Spread(table, on).Count() != items.Count)
-                    continue;
-                spans.AddRange(items.Where(each => each.Item.Tree == model.Tree).Select(each => each.Item.Span));
+                spans.AddRange(targets.ItemsOf(table, on).Where(each => each.Item.Tree == model.Tree).Select(each => each.Item.Span));
             }
         }
         return spans;
-    }
-
-    /// <summary>
-    /// Returns a value indicating whether the name at <paramref name="span"/> is in the operand of
-    /// an instruction that transfers control without calling, such as <c>jmp (table,x)</c>.
-    /// </summary>
-    private bool InJump(TextSpan span) =>
-        model.Tree.Root.FindToken(span.Start).Parent?.AncestorsAndSelf().OfType<InstructionStatementSyntax>().FirstOrDefault()
-            is { } instruction
-        && Instructions.IsControlTransfer(instruction.MnemonicKind) && !Instructions.IsCall(instruction.MnemonicKind);
-
-    /// <summary>
-    /// Returns a value indicating whether the name at <paramref name="span"/> names code only to
-    /// touch its bytes, as a <c>.patch</c> target does, and as the address of an instruction that
-    /// reads or writes memory there does. An immediate is a value that may be jumped to later, so
-    /// it does not count.
-    /// </summary>
-    private bool Touches(TextSpan span)
-    {
-        foreach (var node in model.Tree.Root.FindToken(span.Start).Parent?.AncestorsAndSelf() ?? [])
-        {
-            switch (node)
-            {
-                case PatchDirectiveSyntax:
-                    return true;
-                case ImmediateOperandSyntax:
-                    return false;
-                case InstructionStatementSyntax instruction:
-                    return !Instructions.IsControlTransfer(instruction.MnemonicKind);
-            }
-        }
-        return false;
     }
 
     /// <summary>
