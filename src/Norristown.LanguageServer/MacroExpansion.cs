@@ -504,6 +504,11 @@ internal sealed class MacroExpansion
             return member.Tree == model.Tree ? member.QualifiedName : "::" + member.PathName;
         }
 
+        // A braced operand passed on whole to another macro keeps its braces, without which
+        // `{buf,x}` would read as two arguments.
+        var argument = name.Parent is NamedArgumentSyntax named ? named : (SyntaxNode)name;
+        if (value is BracedOperandSyntax && argument.Parent is ArgumentListSyntax { Parent: MacroCallSyntax })
+            return value.GetTextOnOneLine();
         var unbraced = (value as BracedOperandSyntax)?.Operand ?? value;
         var text = unbraced.GetTextOnOneLine();
         return name.Parent is ExpressionSyntax && unbraced is BinaryExpressionSyntax or UnaryExpressionSyntax

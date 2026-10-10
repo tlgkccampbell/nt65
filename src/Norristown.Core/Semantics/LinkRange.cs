@@ -52,10 +52,13 @@ internal static class LinkRange
     /// <paramref name="bytes"/> bytes wide, inside <c>.lobyte()</c> or <c>.loword()</c>. That is
     /// the case when it names an address that ca65 or ld65 may refuse, as
     /// <see cref="NamesWideAddress"/> decides, and its range always fits the slot, signed or
-    /// unsigned, so that keeping the low part loses nothing.
+    /// unsigned, so that keeping the low part loses nothing. The slot holds the expression plus
+    /// <paramref name="offset"/>, as a macro body's <c>source+1</c> holds the byte after the
+    /// operand it was given.
     /// </summary>
-    public static bool Narrows(SemanticModel model, SyntaxNode expression, Expansion? on, int bytes) =>
-        bytes is 1 or 2 && NamesWideAddress(model, expression, on, bytes) && Fits(Of(model, expression, on), bytes);
+    public static bool Narrows(SemanticModel model, SyntaxNode expression, Expansion? on, int bytes, long offset = 0) =>
+        bytes is 1 or 2 && NamesWideAddress(model, expression, on, bytes)
+        && Fits(Of(model, expression, on) is { } range ? Within((Int128)range.Low + offset, (Int128)range.High + offset) : null, bytes);
 
     /// <summary>
     /// Returns whether a range, where there is one, fits a slot of <paramref name="bytes"/>

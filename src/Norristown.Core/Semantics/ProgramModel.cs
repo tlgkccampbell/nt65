@@ -548,6 +548,7 @@ public sealed class ProgramModel
                 ArgumentChecks.CheckHeader(symbol, ValueOf, SetOf, Report);
                 ArgumentChecks.CheckComparisons(symbol, SetOf, (span, message) =>
                     byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(span), message)));
+                ArgumentChecks.CheckOperandUses(symbol, SetOf, Report);
             }
 
             // A routine is imported as far when its signature says so, either directly or
