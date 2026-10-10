@@ -128,7 +128,7 @@ public static class Repetitions
         if (folded)
         {
             return model.SymbolOf(walked) is { Kind: SymbolKind.Enum, Body: { } enumerated }
-                ? [.. enumerated.Symbols.Where(member => member.IsEnumMember).Select(
+                ? [.. enumerated.EnumMembers.Select(
                     (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member))]
                 : [];
         }
@@ -155,7 +155,7 @@ public static class Repetitions
             return [.. items.Select((item, i) => Expansion.Iteration(outer, block, binding, Value.Unknown, item, i, indexBinding: index))];
 
         if (named is { Kind: SymbolKind.Enum, Body: { } members })
-            return [.. members.Symbols.Where(member => member.IsEnumMember).Select(
+            return [.. members.EnumMembers.Select(
                 (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member, index))];
 
         Report(model, diagnostics, walked, outer, Catalogue.EachNotOverAList);

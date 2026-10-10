@@ -276,7 +276,7 @@ internal sealed partial class Evaluator
 
         // An enum counts its members.
         if (kind == BuiltinKind.Countof && measured.Kind == SymbolKind.Enum)
-            return Value.Of(measured.Body?.Symbols.Count(member => member.Kind == SymbolKind.Constant) ?? 0);
+            return Value.Of(measured.Body?.EnumMembers.Count() ?? 0);
 
         // A routine and mixed data are measured in bytes, not elements. How many bytes a
         // routine takes is a matter of layout, which only a caller that has laid out the

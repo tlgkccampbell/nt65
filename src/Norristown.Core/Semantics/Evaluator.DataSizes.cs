@@ -300,7 +300,7 @@ internal sealed partial class Evaluator
         }
         else if (SymbolOf(counted) is { Kind: SymbolKind.Enum, Body: { } walked })
         {
-            iterations.AddRange(walked.Symbols.Where(member => member.IsEnumMember).Select((member, i) => (Action)(() =>
+            iterations.AddRange(walked.EnumMembers.Select((member, i) => (Action)(() =>
             {
                 Count(i);
                 if (binding is null)
