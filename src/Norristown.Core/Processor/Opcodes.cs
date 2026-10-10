@@ -57,6 +57,7 @@ public static class Opcodes
             && FlagEffects.Written(mnemonic, mode, null) == StatusFlags.None;
     }
 
+    /// <summary>Builds the table of each CPU, each from the table of the CPU it extends.</summary>
     private static FrozenDictionary<Cpu, Table> Build()
     {
         var nmos = new Table();
@@ -68,13 +69,11 @@ public static class Opcodes
         var rockwell = cmos.Copy();
         Rockwell(rockwell);
         var wdc = rockwell.Copy();
-        wdc.Add(Wai, Implied, 0xCB);
-        wdc.Add(Stp, Implied, 0xDB);
+        Wdc(wdc);
 
         // The 65816 reuses the bytes of the Rockwell bit instructions for its long modes.
         var native = cmos.Copy();
-        native.Add(Wai, Implied, 0xCB);
-        native.Add(Stp, Implied, 0xDB);
+        Wdc(native);
         Native(native);
         return new Dictionary<Cpu, Table>
         {
@@ -87,6 +86,7 @@ public static class Opcodes
         }.ToFrozenDictionary();
     }
 
+    /// <summary>Adds the documented opcodes of the NMOS 6502, which every CPU has.</summary>
     private static void Nmos(Table table)
     {
         for (var i = 0; i < alu.Length; i++)
@@ -215,6 +215,7 @@ public static class Opcodes
             table.Add(Jam, Implied, opcode);
     }
 
+    /// <summary>Adds the opcodes the CMOS parts add to the NMOS 6502's.</summary>
     private static void Cmos(Table table)
     {
         for (var i = 0; i < alu.Length; i++)
@@ -240,6 +241,7 @@ public static class Opcodes
         table.Add(Trb, Absolute, 0x1C);
     }
 
+    /// <summary>Adds the Rockwell bit instructions, eight forms each.</summary>
     private static void Rockwell(Table table)
     {
         for (var bit = 0; bit < 8; bit++)
@@ -251,6 +253,14 @@ public static class Opcodes
         }
     }
 
+    /// <summary>Adds <c>wai</c> and <c>stp</c>, which WDC's 65C02 and the 65816 have.</summary>
+    private static void Wdc(Table table)
+    {
+        table.Add(Wai, Implied, 0xCB);
+        table.Add(Stp, Implied, 0xDB);
+    }
+
+    /// <summary>Adds the 65816's own opcodes, including the long modes of the eight ALU instructions.</summary>
     private static void Native(Table table)
     {
         for (var i = 0; i < alu.Length; i++)

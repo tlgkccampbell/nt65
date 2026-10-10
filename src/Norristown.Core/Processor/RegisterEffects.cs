@@ -36,8 +36,8 @@ public static class RegisterEffects
         var read = Instructions.Facts(mnemonic).Reads | (Of(FlagEffects.Read(mnemonic)) & ~Registers.C);
 
         // A shift or an increment through memory leaves the accumulator alone.
-        if (mnemonic is MnemonicKind.Asl or MnemonicKind.Lsr or MnemonicKind.Rol or MnemonicKind.Ror
-            or MnemonicKind.Inc or MnemonicKind.Dec && mode != AddressingMode.Accumulator)
+        if (mnemonic is (MnemonicKind.Asl or MnemonicKind.Lsr or MnemonicKind.Rol or MnemonicKind.Ror
+            or MnemonicKind.Inc or MnemonicKind.Dec) && mode != AddressingMode.Accumulator)
         {
             read &= ~Registers.A;
         }

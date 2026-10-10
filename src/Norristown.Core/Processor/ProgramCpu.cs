@@ -50,6 +50,7 @@ public static class ProgramCpu
     private static List<(Cpu Cpu, TextSpan Span)> Statements(SyntaxTree tree) =>
         cpuItems.GetValue(tree, tree => [.. Read(tree)]);
 
+    /// <summary>Reads the <c>.cpu</c> items of a file whose name the lexer accepted, in source order.</summary>
     private static IEnumerable<(Cpu Cpu, TextSpan Span)> Read(SyntaxTree tree)
     {
         foreach (var directive in tree.Root.DescendantNodes().OfType<CpuDirectiveSyntax>())

@@ -281,6 +281,10 @@ public static class Instructions
         return table.ToFrozenDictionary();
     }
 
+    /// <summary>
+    /// Applies <paramref name="with"/> to the facts of each of <paramref name="mnemonics"/>,
+    /// starting a mnemonic the table does not hold yet from <see cref="InstructionFacts.None"/>.
+    /// </summary>
     private static void Fact(
         Dictionary<MnemonicKind, InstructionFacts> table, ReadOnlySpan<MnemonicKind> mnemonics,
         Func<InstructionFacts, InstructionFacts> with)
@@ -289,6 +293,7 @@ public static class Instructions
             table[mnemonic] = with(table.GetValueOrDefault(mnemonic, InstructionFacts.None));
     }
 
+    /// <summary>Builds the table for the MOS 6502, which every other table starts from.</summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build6502()
     {
         var table = new Dictionary<MnemonicKind, HashSet<AddressingMode>>();
@@ -329,10 +334,10 @@ public static class Instructions
     /// <summary>
     /// Builds the table for the 6502X, which adds the NMOS 6502's undocumented opcodes with
     /// ca65's names and forms, because the output has to assemble under ca65. They are not a
-    /// documented instruction set. No datasheet lists them, and which of them a given part runs
-    /// the same way is a fact about its silicon. nt65 takes the names, the modes and the
-    /// encodings from ca65. It takes what each opcode does, and what it costs, from how NMOS
-    /// parts behave, and leaves out anything on which parts disagree.
+    /// documented instruction set, and which of them a given part runs the same way is a fact
+    /// about its silicon. nt65 takes the names, the modes and the encodings from ca65. It takes
+    /// what each opcode does, and what it costs, from how NMOS parts behave, and leaves out
+    /// anything on which parts disagree.
     /// <para>
     /// One documented instruction also gains modes. <c>nop</c> takes the operands its
     /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are valid on this CPU
@@ -372,6 +377,10 @@ public static class Instructions
         return Freeze(table);
     }
 
+    /// <summary>
+    /// Builds the table for the 65SC02, the original CMOS 6502, which adds instructions and modes
+    /// to the 6502's.
+    /// </summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65SC02()
     {
         var table = Copy(mos6502);
@@ -412,6 +421,10 @@ public static class Instructions
         return Freeze(table);
     }
 
+    /// <summary>
+    /// Builds the table for the 65816, which adds the long modes and its own instructions to the
+    /// 65C02's and leaves out the Rockwell bit instructions.
+    /// </summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65816()
     {
         // The Rockwell bit instructions are the one part of the 65C02 the 65816 left out.
@@ -434,10 +447,12 @@ public static class Instructions
         return Freeze(table);
     }
 
+    /// <summary>Returns a table that can be added to, holding every entry of <paramref name="table"/>.</summary>
     private static Dictionary<MnemonicKind, HashSet<AddressingMode>> Copy(
         IEnumerable<KeyValuePair<MnemonicKind, FrozenSet<AddressingMode>>> table) =>
         table.ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value));
 
+    /// <summary>Gives each of <paramref name="mnemonics"/> every one of <paramref name="modes"/>.</summary>
     private static void Add(Dictionary<MnemonicKind, HashSet<AddressingMode>> table, ReadOnlySpan<MnemonicKind> mnemonics,
         params ReadOnlySpan<AddressingMode> modes)
     {
@@ -450,6 +465,7 @@ public static class Instructions
         }
     }
 
+    /// <summary>Returns <paramref name="table"/> as the read-only table the lookups use.</summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Freeze(
         Dictionary<MnemonicKind, HashSet<AddressingMode>> table) =>
         table.ToFrozenDictionary(pair => pair.Key, pair => pair.Value.ToFrozenSet());

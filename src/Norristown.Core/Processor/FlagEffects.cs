@@ -5,8 +5,9 @@ namespace Norristown.Processor;
 
 /// <summary>
 /// Determines which processor flags each instruction writes and which it reads. These are
-/// datasheet facts. <see cref="Mnemonics.Flags"/> shows the flags an instruction writes beside it,
-/// and the walk that finds where an input's value was set follows them.
+/// facts about the processors, not anything nt65 works out. <see cref="Mnemonics.Flags"/> shows
+/// the flags an instruction writes beside it, and the walk that finds where an input's value was
+/// set follows them.
 /// <para>
 /// <see cref="RegisterEffects"/> takes the C, Z, N and V flags it follows as
 /// <see cref="Registers"/> from this table.
