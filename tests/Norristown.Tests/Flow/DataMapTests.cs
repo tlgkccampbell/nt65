@@ -356,6 +356,55 @@ public sealed class DataMapTests
     }
 
     /// <summary>
+    /// The nested relation is a fact the map records on the use, not something read back out of
+    /// the wording of its notes. The routine that relies on the location across the call is
+    /// marked, and a use whose hazards come from an interrupt is not, however many notes it has.
+    /// </summary>
+    [Fact]
+    public void TheNestedRelationIsRecordedOnTheUse()
+    {
+        var nested = Map("""
+            .segment ZEROPAGE
+            .data tmp: .byte
+            .segment CODE
+            .export .proc main {
+                lda #0
+                sta tmp
+                jsr inner
+                lda tmp
+                rts
+            }
+            .proc inner {
+                stx tmp
+                lda tmp
+                rts
+            }
+            """).Pages.Single().Locations.Single();
+        Assert.Equal(DataRelation.Nested, nested.Relation);
+        Assert.True(nested.Uses.Single(use => use.Routine.DisplayName == "main").IsNested);
+        Assert.False(nested.Uses.Single(use => use.Routine.DisplayName == "inner").IsNested);
+
+        var interrupted = Map("""
+            .segment ZEROPAGE
+            .data tmp: .byte
+            .segment CODE
+            .export .proc main {
+                sta tmp
+                lda tmp
+                rts
+            }
+            .export .proc nmi: interrupt {
+                stx tmp
+                lda tmp
+                rti
+            }
+            """).Pages.Single().Locations.Single();
+        Assert.Equal(DataRelation.Interrupt, interrupted.Relation);
+        Assert.Contains(interrupted.Uses, use => use.Hazards.Count > 0);
+        Assert.All(interrupted.Uses, use => Assert.False(use.IsNested));
+    }
+
+    /// <summary>
     /// A helper that both the program and an interrupt handler call can be interrupted part-way
     /// through its use of a location and run again by the handler. A location only that helper
     /// uses is shared with an interrupt, and its use runs both in an interrupt and outside one.
@@ -1561,6 +1610,10 @@ public sealed class DataMapTests
 
     /// <summary>Returns the map of <paramref name="text"/> as lines of text, one for each page, segment, location, use and note.</summary>
     private static List<string> Render(string cpu, string text) => Render(FlowFragment.Analyze(cpu, text));
+
+    /// <summary>Returns the map of a 6502 program's zero page and segments.</summary>
+    private static DataMap Map(string text) =>
+        DataMap.Of(FlowFragment.Analyze("6502", text), null, TestContext.Current.CancellationToken);
 
     /// <summary>
     /// Returns the map of <paramref name="analysis"/>'s program as lines of text, one for each

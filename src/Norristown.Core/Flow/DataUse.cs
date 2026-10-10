@@ -20,6 +20,11 @@ namespace Norristown.Flow;
 /// Whether the routine reaches the location through the direct page while D is not known, so that
 /// it may reach some other address instead.
 /// </param>
+/// <param name="IsNested">
+/// Whether the routine relies on the location across a call to a routine that uses it as a
+/// temporary of its own, which is the relation <see cref="DataRelation.Nested"/> names. The
+/// notes in <see cref="Hazards"/> say which call and which routine.
+/// </param>
 public sealed record DataUse(
     Symbol Routine, DataRole Role, IReadOnlyList<DataAccess> Accesses, IReadOnlyList<DataNote> Hazards, bool IsHandler, bool InInterrupt, bool InMain,
-    bool IsUnknownPage = false);
+    bool IsUnknownPage = false, bool IsNested = false);

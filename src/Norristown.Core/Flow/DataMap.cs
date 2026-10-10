@@ -30,11 +30,6 @@ namespace Norristown.Flow;
 /// </summary>
 public sealed class DataMap
 {
-    // The endings of the note that marks a call between a routine's use of a location and its
-    // read of it again, where the call uses the location as a temporary.
-    private const string NestedAfterWrite = "runs between a write and a read of it";
-    private const string NestedAfterRead = "runs between two reads of it";
-
     private DataMap(IReadOnlyList<DirectPage> pages, IReadOnlyList<DataSegment> segments, IReadOnlyList<DataCall> calls)
     {
         Pages = pages;
@@ -761,14 +756,15 @@ public sealed class DataMap
                 {
                     var list = location.ToList();
                     var role = RoleOf(list, location.Key.Location, location.Key.Unknown, readsFirst[region]);
+                    var nested = location.Key.Unknown ? null : hazards.GetValueOrDefault(location.Key.Location);
                     var notes = location.Key.Unknown
                         ? UnknownNotes(inInterrupt, location.Key.Location, list[0].Line, held)
-                        : hazards.GetValueOrDefault(location.Key.Location) ?? [];
+                        : nested ?? [];
                     notes = [.. notes, .. Strays(list)];
                     var use = new DataUse(
                         routine, role,
                         [.. list.Select(access => new DataAccess(access.Line, access.Reads, access.Writes, access.Times, access.InUncountedLoop))],
-                        notes, handler, inInterrupt, inMain, location.Key.Unknown);
+                        notes, handler, inInterrupt, inMain, location.Key.Unknown, IsNested: nested is { Count: > 0 });
                     uses[(routine, location.Key.Location, location.Key.Unknown)] = use;
                 }
             }
@@ -1064,7 +1060,7 @@ public sealed class DataMap
                 var callText = call.At.GetText().Trim();
                 if (notes.Any(note => note.At == call.At))
                     return;
-                var between = call.Written ? NestedAfterWrite : NestedAfterRead;
+                var between = call.Written ? "runs between a write and a read of it" : "runs between two reads of it";
                 notes.Add(new DataNote("⚠", $"`{callText}` {between}", call.At));
                 notes.Add(new DataNote("⚠", $"`{call.Temp.DisplayName}` uses it as a temporary", WriteIn(call.Temp, location)));
                 notes.Add(new DataNote("◦", "read again here, after the call", read));
@@ -1257,8 +1253,7 @@ public sealed class DataMap
             var uses = location.Uses;
             if (uses.Count == 0)
                 return DataRelation.Unused;
-            if (uses.Any(use => use.Hazards.Any(note => note.Text.EndsWith(NestedAfterWrite, StringComparison.Ordinal)
-                || note.Text.EndsWith(NestedAfterRead, StringComparison.Ordinal))))
+            if (uses.Any(use => use.IsNested))
                 return DataRelation.Nested;
             // One routine reached from both is enough, because the interrupt can stop the
             // routine part-way through its use and run it again.
