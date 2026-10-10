@@ -261,10 +261,11 @@ internal sealed class ExpressionWriter(
     /// <paramref name="width"/> bytes wide, inside <c>.lobyte()</c> or <c>.loword()</c>. That is
     /// the case where <see cref="LinkRange.Narrows"/> says so. It is also the case for a slot that
     /// holds the address within its bank and that ca65 range-checks, as <paramref name="inBank"/>
-    /// marks it, where the value names an address placed past $FFFF.
+    /// marks it, where the value names an address placed past $FFFF. The slot holds the value
+    /// plus <paramref name="offset"/>.
     /// </summary>
-    private bool Narrows(SyntaxNode value, int width, bool inBank) =>
-        LinkRange.Narrows(model, value, Expansion, width)
+    private bool Narrows(SyntaxNode value, int width, bool inBank, long offset = 0) =>
+        LinkRange.Narrows(model, value, Expansion, width, offset)
         || (inBank && LinkRange.NamesWideAddress(model, value, Expansion, width));
 
     /// <summary>
@@ -1003,8 +1004,8 @@ internal sealed class ExpressionWriter(
     /// <summary>
     /// Returns the text of the operand a call passed, in the form the body asked for. That is the
     /// operand as it stands, the byte after it, or one byte of an immediate value. The operand as
-    /// it stands is narrowed for <paramref name="laid"/>, the layout of the instruction it ends
-    /// up in, as <see cref="Whole"/> narrows it.
+    /// it stands, and the byte after it, are narrowed for <paramref name="laid"/>, the layout of
+    /// the instruction they end up in, as <see cref="Whole"/> narrows an operand.
     /// </summary>
     private string? Argument(OperandSubstitution given, LineLayout? laid, List<string> comments)
     {
@@ -1023,7 +1024,8 @@ internal sealed class ExpressionWriter(
         }
 
         // Anything else is the argument's own operand, as it stands when the body named it
-        // whole, and with `+ n` on its expression when the body asked for a later byte.
+        // whole, and with `+ n` on its expression when the body asked for a later byte. The sum
+        // is narrowed for the instruction as the operand itself would be.
         var offset = given.Offset;
         if (offset == 0)
             return Whole(given.Operand, laid, comments);
@@ -1031,7 +1033,10 @@ internal sealed class ExpressionWriter(
             return null;
         var index = given.Index is { } register ? "," + register.Text : "";
         var address = Substituted(addressed, comments);
-        return offset > 0 ? $"{address}+{offset}{index}" : $"{address}{offset}{index}";
+        var sum = offset > 0 ? $"{address}+{offset}" : $"{address}{offset}";
+        if (laid is { Mode: { } mode } && NarrowedWidth(addressed, mode, offset) is { } width)
+            sum = LowPartOf(sum, width);
+        return sum + index;
     }
 
     /// <summary>
@@ -1079,11 +1084,20 @@ internal sealed class ExpressionWriter(
     /// <see cref="RangeChecksInBank"/> says ca65 range-checks.
     /// </summary>
     private bool NarrowAddress(SyntaxNode address, AddressingMode mode, TokenRewriter rewriter) =>
+        NarrowedWidth(address, mode) is { } width && Narrow(address, width, rewriter, inBank: width == 2);
+
+    /// <summary>
+    /// Returns the width of the low part the address of an operand in <paramref name="mode"/> is
+    /// written as, as <see cref="NarrowAddress(SyntaxNode, AddressingMode, TokenRewriter)"/>
+    /// decides, or null where it is written as it stands. The operand addresses
+    /// <paramref name="address"/> plus <paramref name="offset"/>.
+    /// </summary>
+    private int? NarrowedWidth(SyntaxNode address, AddressingMode mode, long offset = 0) =>
         Instructions.Width(mode) switch
         {
-            AddressSize.ZeroPage => Narrow(address, 1, rewriter),
-            AddressSize.Absolute when RangeChecksInBank(mode) => Narrow(address, 2, rewriter, inBank: true),
-            _ => false,
+            AddressSize.ZeroPage when Narrows(address, 1, inBank: false, offset) => 1,
+            AddressSize.Absolute when RangeChecksInBank(mode) && Narrows(address, 2, inBank: true, offset) => 2,
+            _ => null,
         };
 
     /// <summary>

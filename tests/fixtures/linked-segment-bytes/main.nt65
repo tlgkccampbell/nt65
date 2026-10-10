@@ -3,13 +3,22 @@
 ; symbol in a one-byte slot whatever its value, so a value that always fits a byte is written as
 ; its low byte, which loses nothing. ld65 defines every such symbol as absolute, so a run address
 ; in the zero page is written as its low byte wherever it fills a one-byte slot. An operand
-; given whole to a macro is written the same way as one written in place.
+; given whole to a macro is written the same way as one written in place, whether the body
+; offsets it or passes it on to another macro.
 .module main
 
 .export main, pages, given
 
 .macro load(source: operand) {
     lda source
+}
+
+.macro load_from(source: operand) {
+    load!(source)
+}
+
+.macro load_next(source: operand) {
+    lda source+1
 }
 
 .segment TABLES
@@ -52,5 +61,9 @@
     load!(.runof(FAST))                     ; a zero-page operand
     ldy #0
     load!({(.runof(FAST)),y})               ; a zero-page pointer
+    load!({.runof(FAST) + 1,x})             ; a zero-page operand with an index
+    load_from!({.runof(FAST) + 1,x})        ; through a parameter of an enclosing macro
+    load_next!(.runof(FAST))                ; the byte after a zero-page operand
+    load_next!({.runof(FAST),x})
     rts
 }
