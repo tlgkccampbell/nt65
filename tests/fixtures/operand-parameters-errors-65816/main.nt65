@@ -1,0 +1,36 @@
+; The 65816's own operands around an `operand` parameter. The parameter stands as a whole
+; operand, so the body may not put it in brackets, make it stack-relative or give it a far prefix,
+; nor pass it on that way in braces. Each line is reported once, in the body, and no call adds to it.
+.module main
+
+.cpu 65816
+
+.export copy
+
+.macro inner(source: operand) {
+    lda source
+}
+
+.macro wrongly(source: operand) {
+    lda [source]                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda [source],y              ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda source,s                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda (source,s),y            ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda f:source                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+}
+
+.macro passes_wrongly(source: operand) {
+    inner!({[source],y})        ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    inner!({source,s})          ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+}
+
+.segment ZEROPAGE
+.data ptr: .faraddr
+
+.segment CODE
+.proc copy: a8, i8, native {
+    wrongly!(ptr)
+    wrongly!({3,s})
+    passes_wrongly!(ptr)
+    rts
+}

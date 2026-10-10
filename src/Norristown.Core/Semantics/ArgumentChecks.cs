@@ -155,6 +155,25 @@ public static class ArgumentChecks
     }
 
     /// <summary>
+    /// Reports a diagnostic, once names are resolved, for each operand in a macro's body that
+    /// gives one of the macro's <c>operand</c> parameters an index, a prefix, parentheses, an
+    /// immediate or a bit branch's second expression. Such a line is wrong whatever a call
+    /// passes, so it is reported once in the definition rather than at each call. A braced
+    /// argument of a call in the body is an operand too.
+    /// </summary>
+    public static void CheckOperandUses(
+        Symbol macro, Func<NameExpressionSyntax, Symbol?> symbolOf, Action<TextSpan, DiagnosticMessage> report)
+    {
+        if (macro.Definition is not { } definition)
+            return;
+        foreach (var operand in definition.DescendantNodes().OfType<OperandSyntax>())
+        {
+            if (Operands.ParameterNotWhole(operand, symbolOf) is { } parameter && macro.Parameters.Contains(parameter))
+                report(operand.Span, Catalogue.OperandParameterNotWhole.Message(parameter.Name));
+        }
+    }
+
+    /// <summary>
     /// Returns the range a <c>const(low..high)</c> takes, or null when it names no range or the
     /// header is invalid.
     /// </summary>
@@ -188,6 +207,11 @@ public static class ArgumentChecks
             operand = given;
             at = found.Caller;
         }
+
+        // An operand that gives an operand parameter an index, a prefix, parentheses or `#` has
+        // no mode of its own, and it is reported where its macro is declared.
+        if (Operands.ParameterNotWhole(operand, name => model.SymbolOf(name)) is not null)
+            return null;
 
         var mode = Operands.ModeOf(operand);
         if (mode is not ("abs" or "absx" or "absy"))

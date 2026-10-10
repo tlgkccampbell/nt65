@@ -79,6 +79,7 @@ public sealed class CatalogueAreaTests
             "const-argument-out-of-range", "declaration-in-a-macro-body", "enum-argument-not-a-member",
             "expansion-limit", "expression-argument-braced", "ident-argument-not-a-name", "macro-names-unexported",
             "macro-recursive", "operand-argument-mode", "operand-argument-parenthesized", "operand-mode-unknown",
+            "operand-parameter-not-whole",
             "parameter-after-block", "parameter-after-list", "parameter-kind-not-an-enum",
             "parameter-range-invalid", "parameter-unknown", "repeat-too-many", "word-argument-ambiguous",
             "word-argument-not-listed",

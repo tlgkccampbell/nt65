@@ -65,6 +65,39 @@
     }
 }
 
+; An `operand` parameter stands as a whole operand, so the body may not give it an index, a
+; prefix, parentheses or `#`, nor pass it on that way in braces. The line is wrong whatever a call
+; passes, so it is reported once, in the body, and no call adds to it.
+.macro inner(source: operand) {
+    lda source
+}
+
+.macro wrongly(source: operand) {
+    lda source,x                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda source+1,y              ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda .byteof(source, 1),x    ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda (source),y              ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda (source,x)              ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda (source)                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda a:source                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda z:source                ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    lda #source                 ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+}
+
+.macro passes_wrongly(source: operand) {
+    inner!({source,x})          ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    inner!({source+1,x})        ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    inner!({(source),y})        ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    inner!({#source})           ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    inner!({a:source})          ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+}
+
+; A bit branch is the 65C02's, so this macro is not called here; the body is checked all the same.
+.macro branch_on_bit(source: operand) {
+    bbr0 source, copy           ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+    bbr0 copy, source           ;! error[operand-parameter-not-whole]: `source` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses or immediate of its own
+}
+
 .const SPEED = 3
 
 .segment ZEROPAGE
@@ -89,5 +122,9 @@
     direct!({ptr,x})        ;! error[operand-argument-mode]: `at` takes `zp`, and this is `zpx`
     high!({(ptr),y})        ;! error[operand-has-no-next-byte]: `p + 1` in the macro needs a plain address, and this call gives `p` an indirect operand
     high!({#5})             ;! error[operand-has-no-next-byte]: `p + 1` in the macro needs a plain address, and this call gives `p` an immediate operand
+    wrongly!(ptr)
+    wrongly!({buffer,y})
+    passes_wrongly!(ptr)
+    passes_wrongly!({#5})
     rts
 }
