@@ -116,6 +116,26 @@ public sealed class FlagAnalysisTests
             Problems(Macro + ".proc p {\n    skip_if_plus!(1)\n    skip_if_plus!(2)\n    rts\n}\n"));
     }
 
+    /// <summary>
+    /// A call through a pointer enters each label its <c>.next</c> names with the flags at the
+    /// call, so a carry set before the call reaches the label's return. The routine then returns
+    /// with the carry set on every path, and a caller's <c>bcs</c> is always taken.
+    /// </summary>
+    [Fact]
+    public void ALabelACallNamesIsEnteredWithTheFlagsAtTheCall()
+    {
+        var program = Analysis.Program(Analysis.Fragment, ("main.nt65", ".module main\n.cpu 65816\n.segment CODE\n"
+            + ".proc r: a8, i8, native {\n    sec\n    ldx #0\n    jsr (t,x)\n    .next inner\n    sec\n    rts\ninner:\n"
+            + "    .state a8, i8, native\n    rts\n}\n"
+            + ".proc caller: a8, i8, native {\n    jsr r\n    bcs @done\n    nop\n@done:\n    rts\n}\n"
+            + ".segment RODATA\n.data t: .addr r::inner\n"));
+
+        Assert.Equal(
+            ["main.nt65:18: this code is never reached: `bcs @done` above is always taken, because C is 1 here, and nothing "
+                + "branches or jumps here"],
+            program.Problems());
+    }
+
     /// <summary>Returns the problems nt65 finds in <paramref name="text"/>, after a 6502 header.</summary>
     private static IReadOnlyList<string> Problems(string text) =>
         Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();

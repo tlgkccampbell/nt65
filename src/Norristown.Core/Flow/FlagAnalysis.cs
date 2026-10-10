@@ -500,8 +500,10 @@ internal sealed class FlagAnalysis : IKnownFlags
             {
                 switch (edge.Kind)
                 {
-                    // A call does not change the flags on its way in.
+                    // A call does not change the flags on its way in, and that holds for a label
+                    // the `.next` under a call names as for one its operand names.
                     case EdgeKind.Call:
+                    case EdgeKind.Declared when block.EndsInCall:
                         Arrive(edge.To, last);
                         break;
                     case EdgeKind.FallThrough when block.End == BlockEnd.Branch && test is { } branch:
