@@ -108,6 +108,15 @@ internal static class CallerStack
 
             foreach (var step in block.Steps)
             {
+                // The instructions the bytes of a hidden path decode as read the stack as the same
+                // instructions written there would. None of them pulls, because the layout refuses
+                // to decode one that does.
+                if (file.Layout.HiddenPathAt(step) is { } hidden
+                    && hidden.Instructions.Any(decoded => RegisterEffects.ReadsStackPointer(decoded.Mnemonic)
+                        || decoded.Mode is AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY))
+                {
+                    reads = true;
+                }
                 if (step.Statement is not InstructionStatementSyntax statement)
                     continue;
                 var mnemonic = statement.MnemonicKind;
