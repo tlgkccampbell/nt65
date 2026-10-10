@@ -117,10 +117,6 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Determines whether an expression names an address, which makes it an alias rather than a
-    /// constant.
-    /// </summary>
-    /// <summary>
     /// Determines whether the value of <paramref name="node"/> is an address rather than a
     /// number. An address plus or minus a number is an address, and so is what <c>.endof</c>,
     /// <c>.loadof</c> and <c>.runof</c> give. The distance between two addresses is a number,
@@ -146,6 +142,11 @@ internal sealed partial class Evaluator
         return ChoiceArguments(node) is not null && ChosenBy(node) is { } chosen && IsAddressValued(chosen);
     }
 
+    /// <summary>
+    /// Determines whether an expression names an address anywhere in it, which makes the
+    /// constant it defines an alias rather than a number. A <c>.select</c> or <c>.switch</c>
+    /// counts only the value it chooses.
+    /// </summary>
     private bool NamesAnAddress(SyntaxNode node)
     {
         if (node is CurrentAddressExpressionSyntax)
@@ -184,6 +185,7 @@ internal sealed partial class Evaluator
         return null;
     }
 
+    /// <summary>Returns the address size of the segment called <paramref name="segment"/>, or null when it is unknown.</summary>
     private AddressSize? SegmentSize(string? segment) =>
         segment is null ? null : segments.Find(segment)?.Size;
 }

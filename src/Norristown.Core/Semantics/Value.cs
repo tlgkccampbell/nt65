@@ -51,6 +51,13 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
     /// <summary>Returns a bare word value, such as the <c>a</c> of <c>push!(a, x, y)</c>.</summary>
     public static Value Word(string word) => new(ValueKind.Word, 0, word);
 
+    /// <summary>
+    /// Formats a number as messages show it, in at least <paramref name="digits"/> hexadecimal
+    /// digits, such as <c>$7e</c> or <c>$2100</c>.
+    /// </summary>
+    public static string Hex(long number, int digits) =>
+        "$" + number.ToString($"x{digits}", CultureInfo.InvariantCulture);
+
     /// <summary>Returns the number, or null when the value is not a number.</summary>
     public long? AsNumber() => IsNumber ? Number : null;
 
@@ -109,7 +116,4 @@ public readonly record struct Value(ValueKind Kind, long Number, string? Text)
         }
         return quoted.Append('"').ToString();
     }
-
-    private static string Hex(long number, int digits) =>
-        "$" + number.ToString($"x{digits}", CultureInfo.InvariantCulture);
 }

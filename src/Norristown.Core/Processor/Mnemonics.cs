@@ -5,14 +5,15 @@ namespace Norristown.Processor;
 
 /// <summary>
 /// Provides each instruction's name and the processor flags it writes. nt65 does not work out
-/// either of these. They are datasheet facts, in WDC's words, kept here because they are needed
-/// only beside an instruction the editor is showing. Each name drops the tail that says what the
-/// instruction works on, since the line already shows that, so the name is
-/// <c>load accumulator</c> rather than <c>load accumulator with memory</c>.
+/// either of these. They are facts about the processors, with the names the manufacturer gives
+/// the instructions, kept here because they are needed only beside an instruction the editor is
+/// showing. Each name drops the tail that says what the instruction works on, since the line
+/// already shows that, so the name is <c>load accumulator</c> rather than
+/// <c>load accumulator with memory</c>.
 /// <para>
-/// The undocumented opcodes of the NMOS 6502 have no datasheet to take a name from, so each is
-/// named after the two documented instructions it performs at once. The name of an opcode whose
-/// result varies from part to part says so, since that is what a reader most needs to know.
+/// The undocumented opcodes of the NMOS 6502 have no official name, so each is named after the
+/// two documented instructions it performs at once. The name of an opcode whose result varies
+/// from part to part says so, since that is what a reader most needs to know.
 /// </para>
 /// </summary>
 public static class Mnemonics
@@ -168,7 +169,7 @@ public static class Mnemonics
 
         // The NMOS 6502 leaves the decimal flag unchanged when it takes an interrupt, a trap
         // every CMOS part closed by clearing the flag.
-        if (mnemonic is Brk or Cop && cpu == Cpu.Mos6502)
+        if (mnemonic is (Brk or Cop) && cpu == Cpu.Mos6502)
             written &= ~StatusFlags.Decimal;
         return written == StatusFlags.None ? null
             : written == FlagEffects.All ? "all"

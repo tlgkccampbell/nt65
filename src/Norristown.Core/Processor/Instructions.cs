@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using Norristown.Syntax;
+using static Norristown.Processor.AddressingMode;
 using static Norristown.Syntax.MnemonicKind;
 
 namespace Norristown.Processor;
@@ -74,12 +75,12 @@ public static class Instructions
     /// </summary>
     public static int Length(AddressingMode mode) => mode switch
     {
-        AddressingMode.Implied or AddressingMode.Accumulator => 1,
-        AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
-            or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX
-            or AddressingMode.AbsoluteIndirectLong or AddressingMode.DirectRelative
-            or AddressingMode.RelativeLong or AddressingMode.BlockMove => 3,
-        AddressingMode.Long or AddressingMode.LongX => 4,
+        Implied or Accumulator => 1,
+        Absolute or AbsoluteX or AbsoluteY
+            or AbsoluteIndirect or AbsoluteIndirectX
+            or AbsoluteIndirectLong or DirectRelative
+            or RelativeLong or BlockMove => 3,
+        Long or LongX => 4,
         _ => 2,
     };
 
@@ -109,14 +110,14 @@ public static class Instructions
     /// </summary>
     public static AddressSize? Width(AddressingMode mode) => mode switch
     {
-        AddressingMode.Direct or AddressingMode.DirectX or AddressingMode.DirectY
-            or AddressingMode.DirectIndirect or AddressingMode.DirectIndirectX
-            or AddressingMode.DirectIndirectY or AddressingMode.DirectRelative
-            or AddressingMode.DirectIndirectLong or AddressingMode.DirectIndirectLongY => AddressSize.ZeroPage,
-        AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
-            or AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectX
-            or AddressingMode.AbsoluteIndirectLong => AddressSize.Absolute,
-        AddressingMode.Long or AddressingMode.LongX => AddressSize.Far,
+        Direct or DirectX or DirectY
+            or DirectIndirect or DirectIndirectX
+            or DirectIndirectY or DirectRelative
+            or DirectIndirectLong or DirectIndirectLongY => AddressSize.ZeroPage,
+        Absolute or AbsoluteX or AbsoluteY
+            or AbsoluteIndirect or AbsoluteIndirectX
+            or AbsoluteIndirectLong => AddressSize.Absolute,
+        Long or LongX => AddressSize.Far,
         _ => null,
     };
 
@@ -281,6 +282,10 @@ public static class Instructions
         return table.ToFrozenDictionary();
     }
 
+    /// <summary>
+    /// Applies <paramref name="with"/> to the facts of each of <paramref name="mnemonics"/>,
+    /// starting a mnemonic the table does not hold yet from <see cref="InstructionFacts.None"/>.
+    /// </summary>
     private static void Fact(
         Dictionary<MnemonicKind, InstructionFacts> table, ReadOnlySpan<MnemonicKind> mnemonics,
         Func<InstructionFacts, InstructionFacts> with)
@@ -289,50 +294,41 @@ public static class Instructions
             table[mnemonic] = with(table.GetValueOrDefault(mnemonic, InstructionFacts.None));
     }
 
+    /// <summary>Builds the table for the MOS 6502, which every other table starts from.</summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build6502()
     {
         var table = new Dictionary<MnemonicKind, HashSet<AddressingMode>>();
-        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc],
-            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
-            AddressingMode.AbsoluteX, AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX,
-            AddressingMode.DirectIndirectY);
-        Add(table, [Sta],
-            AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX,
-            AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
-        Add(table, [Asl, Lsr, Rol, Ror],
-            AddressingMode.Accumulator, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
-            AddressingMode.AbsoluteX);
-        Add(table, [Inc, Dec],
-            AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX);
-        Add(table, [Ldx],
-            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute,
-            AddressingMode.AbsoluteY);
-        Add(table, [Ldy],
-            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
-            AddressingMode.AbsoluteX);
-        Add(table, [Stx], AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute);
-        Add(table, [Sty], AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute);
-        Add(table, [Cpx, Cpy], AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.Absolute);
-        Add(table, [Bit], AddressingMode.Direct, AddressingMode.Absolute);
-        Add(table, [Jmp], AddressingMode.Absolute, AddressingMode.AbsoluteIndirect);
-        Add(table, [Jsr], AddressingMode.Absolute);
-        Add(table, [Bcc, Bcs, Beq, Bmi, Bne, Bpl, Bvc, Bvs], AddressingMode.Relative);
+        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc], Immediate, Direct, DirectX, Absolute,
+            AbsoluteX, AbsoluteY, DirectIndirectX, DirectIndirectY);
+        Add(table, [Sta], Direct, DirectX, Absolute, AbsoluteX, AbsoluteY, DirectIndirectX,
+            DirectIndirectY);
+        Add(table, [Asl, Lsr, Rol, Ror], Accumulator, Direct, DirectX, Absolute, AbsoluteX);
+        Add(table, [Inc, Dec], Direct, DirectX, Absolute, AbsoluteX);
+        Add(table, [Ldx], Immediate, Direct, DirectY, Absolute, AbsoluteY);
+        Add(table, [Ldy], Immediate, Direct, DirectX, Absolute, AbsoluteX);
+        Add(table, [Stx], Direct, DirectY, Absolute);
+        Add(table, [Sty], Direct, DirectX, Absolute);
+        Add(table, [Cpx, Cpy], Immediate, Direct, Absolute);
+        Add(table, [Bit], Direct, Absolute);
+        Add(table, [Jmp], Absolute, AbsoluteIndirect);
+        Add(table, [Jsr], Absolute);
+        Add(table, [Bcc, Bcs, Beq, Bmi, Bne, Bpl, Bvc, Bvs], Relative);
 
         // `brk` takes a signature byte on every CPU, and is two bytes wide.
-        Add(table, [Brk], AddressingMode.Immediate);
+        Add(table, [Brk], Immediate);
         Add(table,
             [Clc, Cld, Cli, Clv, Dex, Dey, Inx, Iny, Nop, Pha, Php, Pla, Plp, Rti, Rts, Sec, Sed, Sei, Tax, Tay, Tsx, Txa, Txs, Tya],
-            AddressingMode.Implied);
+            Implied);
         return Freeze(table);
     }
 
     /// <summary>
     /// Builds the table for the 6502X, which adds the NMOS 6502's undocumented opcodes with
     /// ca65's names and forms, because the output has to assemble under ca65. They are not a
-    /// documented instruction set. No datasheet lists them, and which of them a given part runs
-    /// the same way is a fact about its silicon. nt65 takes the names, the modes and the
-    /// encodings from ca65. It takes what each opcode does, and what it costs, from how NMOS
-    /// parts behave, and leaves out anything on which parts disagree.
+    /// documented instruction set, and which of them a given part runs the same way is a fact
+    /// about its silicon. nt65 takes the names, the modes and the encodings from ca65. It takes
+    /// what each opcode does, and what it costs, from how NMOS parts behave, and leaves out
+    /// anything on which parts disagree.
     /// <para>
     /// One documented instruction also gains modes. <c>nop</c> takes the operands its
     /// undocumented encodings read, so <c>nop $12</c> and <c>nop abs,x</c> are valid on this CPU
@@ -345,45 +341,43 @@ public static class Instructions
 
         // The read-modify-write pairs, each an official instruction folded into another. They
         // take every mode that the store they are built on takes.
-        Add(table, [Slo, Rla, Sre, Rra, Dcp, Isc],
-            AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX,
-            AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
-        Add(table, [Lax],
-            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute,
-            AddressingMode.AbsoluteY, AddressingMode.DirectIndirectX, AddressingMode.DirectIndirectY);
-        Add(table, [Sax],
-            AddressingMode.Direct, AddressingMode.DirectY, AddressingMode.Absolute, AddressingMode.DirectIndirectX);
+        Add(table, [Slo, Rla, Sre, Rra, Dcp, Isc], Direct, DirectX, Absolute, AbsoluteX, AbsoluteY,
+            DirectIndirectX, DirectIndirectY);
+        Add(table, [Lax], Immediate, Direct, DirectY, Absolute, AbsoluteY, DirectIndirectX,
+            DirectIndirectY);
+        Add(table, [Sax], Direct, DirectY, Absolute, DirectIndirectX);
 
         // The opcodes that take only an immediate, which pass A through an operation and the
         // carry or the flags.
-        Add(table, [Alr, Anc, Ane, Arr, Axs], AddressingMode.Immediate);
+        Add(table, [Alr, Anc, Ane, Arr, Axs], Immediate);
 
         // The unstable stores, which mix the high byte of their own address into what they write.
-        Add(table, [Sha], AddressingMode.AbsoluteY, AddressingMode.DirectIndirectY);
-        Add(table, [Shx, Tas, Las], AddressingMode.AbsoluteY);
-        Add(table, [Shy], AddressingMode.AbsoluteX);
+        Add(table, [Sha], AbsoluteY, DirectIndirectY);
+        Add(table, [Shx, Tas, Las], AbsoluteY);
+        Add(table, [Shy], AbsoluteX);
 
         // The several opcodes that stop the processor share one mnemonic, `jam`, which is ca65's
         // name for them.
-        Add(table, [Jam], AddressingMode.Implied);
-        Add(table, [Nop],
-            AddressingMode.Immediate, AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute,
-            AddressingMode.AbsoluteX);
+        Add(table, [Jam], Implied);
+        Add(table, [Nop], Immediate, Direct, DirectX, Absolute, AbsoluteX);
         return Freeze(table);
     }
 
+    /// <summary>
+    /// Builds the table for the 65SC02, the original CMOS 6502, which adds instructions and modes
+    /// to the 6502's.
+    /// </summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65SC02()
     {
         var table = Copy(mos6502);
-        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc, Sta], AddressingMode.DirectIndirect);
-        Add(table, [Bit], AddressingMode.Immediate, AddressingMode.DirectX, AddressingMode.AbsoluteX);
-        Add(table, [Inc, Dec], AddressingMode.Accumulator);
-        Add(table, [Jmp], AddressingMode.AbsoluteIndirectX);
-        Add(table, [Bra], AddressingMode.Relative);
-        Add(table, [Phx, Phy, Plx, Ply], AddressingMode.Implied);
-        Add(table, [Stz],
-            AddressingMode.Direct, AddressingMode.DirectX, AddressingMode.Absolute, AddressingMode.AbsoluteX);
-        Add(table, [Trb, Tsb], AddressingMode.Direct, AddressingMode.Absolute);
+        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc, Sta], DirectIndirect);
+        Add(table, [Bit], Immediate, DirectX, AbsoluteX);
+        Add(table, [Inc, Dec], Accumulator);
+        Add(table, [Jmp], AbsoluteIndirectX);
+        Add(table, [Bra], Relative);
+        Add(table, [Phx, Phy, Plx, Ply], Implied);
+        Add(table, [Stz], Direct, DirectX, Absolute, AbsoluteX);
+        Add(table, [Trb, Tsb], Direct, Absolute);
         return Freeze(table);
     }
 
@@ -396,8 +390,8 @@ public static class Instructions
         var table = Copy(cmos65SC02);
         for (var bit = 0; bit < 8; bit++)
         {
-            Add(table, [Rmb0 + bit, Smb0 + bit], AddressingMode.Direct);
-            Add(table, [Bbr0 + bit, Bbs0 + bit], AddressingMode.DirectRelative);
+            Add(table, [Rmb0 + bit, Smb0 + bit], Direct);
+            Add(table, [Bbr0 + bit, Bbs0 + bit], DirectRelative);
         }
         return Freeze(table);
     }
@@ -408,36 +402,41 @@ public static class Instructions
         // WDC's own 65C02 also has `jsr (abs,x)` at $fc, but ca65 does not accept it before the
         // 65816, so neither does nt65, because what nt65 writes has to be what ca65 assembles.
         var table = Copy(rockwell65C02);
-        Add(table, [Stp, Wai], AddressingMode.Implied);
+        Add(table, [Stp, Wai], Implied);
         return Freeze(table);
     }
 
+    /// <summary>
+    /// Builds the table for the 65816, which adds the long modes and its own instructions to the
+    /// 65C02's and leaves out the Rockwell bit instructions.
+    /// </summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Build65816()
     {
         // The Rockwell bit instructions are the one part of the 65C02 the 65816 left out.
         var table = Copy(wdc65C02
             .Where(pair => SyntaxFacts.BitOf(pair.Key) is null));
-        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc, Sta],
-            AddressingMode.Long, AddressingMode.LongX, AddressingMode.DirectIndirectLong,
-            AddressingMode.DirectIndirectLongY, AddressingMode.StackRelative, AddressingMode.StackRelativeIndirectY);
-        Add(table, [Jsr], AddressingMode.AbsoluteIndirectX);
-        Add(table, [Jml], AddressingMode.Long, AddressingMode.AbsoluteIndirectLong);
-        Add(table, [Jsl], AddressingMode.Long);
-        Add(table, [Brl, Per], AddressingMode.RelativeLong);
-        Add(table, [Mvn, Mvp], AddressingMode.BlockMove);
-        Add(table, [Pea], AddressingMode.Absolute);
-        Add(table, [Pei], AddressingMode.DirectIndirect);
+        Add(table, [Adc, And, Cmp, Eor, Lda, Ora, Sbc, Sta], Long, LongX, DirectIndirectLong,
+            DirectIndirectLongY, StackRelative, StackRelativeIndirectY);
+        Add(table, [Jsr], AbsoluteIndirectX);
+        Add(table, [Jml], Long, AbsoluteIndirectLong);
+        Add(table, [Jsl], Long);
+        Add(table, [Brl, Per], RelativeLong);
+        Add(table, [Mvn, Mvp], BlockMove);
+        Add(table, [Pea], Absolute);
+        Add(table, [Pei], DirectIndirect);
 
         // `cop` takes a signature byte as `brk` does, and `wdm` takes the byte an emulator hooks on.
-        Add(table, [Rep, Sep, Cop, Wdm], AddressingMode.Immediate);
-        Add(table, [Phb, Phd, Phk, Plb, Pld, Rtl, Tcd, Tcs, Tdc, Tsc, Txy, Tyx, Xba, Xce], AddressingMode.Implied);
+        Add(table, [Rep, Sep, Cop, Wdm], Immediate);
+        Add(table, [Phb, Phd, Phk, Plb, Pld, Rtl, Tcd, Tcs, Tdc, Tsc, Txy, Tyx, Xba, Xce], Implied);
         return Freeze(table);
     }
 
+    /// <summary>Returns a table that can be added to, holding every entry of <paramref name="table"/>.</summary>
     private static Dictionary<MnemonicKind, HashSet<AddressingMode>> Copy(
         IEnumerable<KeyValuePair<MnemonicKind, FrozenSet<AddressingMode>>> table) =>
         table.ToDictionary(pair => pair.Key, pair => new HashSet<AddressingMode>(pair.Value));
 
+    /// <summary>Gives each of <paramref name="mnemonics"/> every one of <paramref name="modes"/>.</summary>
     private static void Add(Dictionary<MnemonicKind, HashSet<AddressingMode>> table, ReadOnlySpan<MnemonicKind> mnemonics,
         params ReadOnlySpan<AddressingMode> modes)
     {
@@ -450,6 +449,7 @@ public static class Instructions
         }
     }
 
+    /// <summary>Returns <paramref name="table"/> as the read-only table the lookups use.</summary>
     private static FrozenDictionary<MnemonicKind, FrozenSet<AddressingMode>> Freeze(
         Dictionary<MnemonicKind, HashSet<AddressingMode>> table) =>
         table.ToFrozenDictionary(pair => pair.Key, pair => pair.Value.ToFrozenSet());

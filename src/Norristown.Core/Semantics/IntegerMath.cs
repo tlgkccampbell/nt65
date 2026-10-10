@@ -30,7 +30,7 @@ public static class IntegerMath
 
     /// <summary>
     /// The number of fraction bits the series is computed to. This precision far exceeds the
-    /// distance between two neighbouring results at any scale the language accepts. The one case
+    /// distance between two neighboring results at any scale the language accepts. The one case
     /// where an exact value could sit halfway between two results is computed exactly instead,
     /// so the nearest whole number never depends on the last bit.
     /// </summary>

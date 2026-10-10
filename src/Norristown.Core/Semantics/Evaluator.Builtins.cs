@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Norristown.Processor;
 using Norristown.Syntax;
 
@@ -28,9 +29,17 @@ internal sealed partial class Evaluator
     /// </summary>
     private static bool HasBytesOfItsOwn(Symbol symbol) => symbol.Kind is SymbolKind.Proc or SymbolKind.Data;
 
+    /// <summary>
+    /// Applies <paramref name="apply"/> to one number argument, or returns the unknown value when
+    /// the argument is not a number.
+    /// </summary>
     private static Value Number1(Value[] arguments, Func<long, long> apply) =>
         arguments is [{ Kind: ValueKind.Number } a] ? Value.Of(apply(a.Number)) : Value.Unknown;
 
+    /// <summary>
+    /// Applies <paramref name="apply"/> to two number arguments, or returns the unknown value
+    /// when either is not a number.
+    /// </summary>
     private static Value Number2(Value[] arguments, Func<long, long, long> apply) =>
         arguments is [{ Kind: ValueKind.Number } a, { Kind: ValueKind.Number } b]
             ? Value.Of(apply(a.Number, b.Number))
@@ -386,7 +395,7 @@ internal sealed partial class Evaluator
             return Value.Of(whole.Substring((int)from.Number, (int)taken.Number));
         }
 
-        var joined = new System.Text.StringBuilder();
+        var joined = new StringBuilder();
         var known = true;
         for (var i = 0; i < values.Length; i++)
         {
@@ -669,63 +678,54 @@ internal sealed partial class Evaluator
             return known;
         var before = problems;
 
-        var bound = names.Values;
-        var shadowed = new List<(Symbol Symbol, Value Value, bool Had)>();
+        // The parameters take back what they had before the call, however the call ends.
+        using var bound = new ParameterBindings(names.Values, symbol.ParameterSymbols, values);
+        if (outermost)
+        {
+            unlinked = [];
+            linkedFrom = call.Tree;
+        }
+        Value result;
         try
         {
-            for (var i = 0; i < values.Length; i++)
+            result = Body(call, symbol, given);
+            if (outermost && result.Kind == ValueKind.Unknown && unlinked is [var (first, elsewhere), ..])
             {
-                var parameter = symbol.ParameterSymbols[i];
-                shadowed.Add((parameter, bound.GetValueOrDefault(parameter), bound.ContainsKey(parameter)));
-                bound[parameter] = values[i];
+                Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere
+                    ? "that address is declared in another file, which this file's output cannot name"
+                    : "ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant"));
             }
-            if (outermost)
-            {
-                unlinked = [];
-                linkedFrom = call.Tree;
-            }
-            Value result;
-            try
-            {
-                calls.Add((call, symbol, given));
-                try
-                {
-                    using (Evaluating(symbol))
-                        result = Evaluate(symbol.Items[0]);
-                }
-                finally
-                {
-                    calls.RemoveAt(calls.Count - 1);
-                }
-                if (outermost && result.Kind == ValueKind.Unknown && unlinked is [var (first, elsewhere), ..])
-                {
-                    Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere
-                        ? "that address is declared in another file, which this file's output cannot name"
-                        : "ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant"));
-                }
-            }
-            finally
-            {
-                if (outermost)
-                {
-                    unlinked = null;
-                    linkedFrom = null;
-                }
-            }
-            if (kept is not null && problems == before)
-                kept.Keep(symbol, values, result);
-            return result;
         }
         finally
         {
-            // The parameters take back what they had before the call, however the call ends.
-            foreach (var (parameter, previous, had) in shadowed)
+            if (outermost)
             {
-                if (had)
-                    bound[parameter] = previous;
-                else
-                    bound.Remove(parameter);
+                unlinked = null;
+                linkedFrom = null;
             }
+        }
+        if (kept is not null && problems == before)
+            kept.Keep(symbol, values, result);
+        return result;
+    }
+
+    /// <summary>
+    /// Evaluates the body of <paramref name="function"/> for <paramref name="call"/>, with the
+    /// call on the stack of calls so that a problem in the body is reported at the outermost call,
+    /// and with the function among the symbols being evaluated so that a path back to it is a
+    /// cycle.
+    /// </summary>
+    private Value Body(CallExpressionSyntax call, Symbol function, IReadOnlyList<ExpressionSyntax> given)
+    {
+        calls.Add((call, function, given));
+        try
+        {
+            using (Evaluating(function))
+                return Evaluate(function.Items[0]);
+        }
+        finally
+        {
+            calls.RemoveAt(calls.Count - 1);
         }
     }
 
@@ -750,5 +750,40 @@ internal sealed partial class Evaluator
             ranges.Add((first.Value, last.Value, to.Value));
         }
         return ranges;
+    }
+
+    /// <summary>
+    /// Binds a function's parameters to the values a call gave them for as long as the body is
+    /// evaluated. Disposing it gives each parameter back what it was bound to before the call, or
+    /// unbinds it, so that a call inside another call of the same function sees its own values
+    /// and leaves the outer call's in place.
+    /// </summary>
+    private sealed class ParameterBindings : IDisposable
+    {
+        private readonly Dictionary<Symbol, Value> bound;
+        private readonly List<(Symbol Parameter, Value Previous, bool Had)> shadowed = [];
+
+        public ParameterBindings(Dictionary<Symbol, Value> bound, IReadOnlyList<Symbol> parameters, Value[] values)
+        {
+            this.bound = bound;
+            for (var i = 0; i < values.Length; i++)
+            {
+                var parameter = parameters[i];
+                shadowed.Add((parameter, bound.GetValueOrDefault(parameter), bound.ContainsKey(parameter)));
+                bound[parameter] = values[i];
+            }
+        }
+
+        /// <summary>Gives each parameter back what it was bound to before the call.</summary>
+        public void Dispose()
+        {
+            foreach (var (parameter, previous, had) in shadowed)
+            {
+                if (had)
+                    bound[parameter] = previous;
+                else
+                    bound.Remove(parameter);
+            }
+        }
     }
 }

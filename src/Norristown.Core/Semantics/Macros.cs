@@ -159,9 +159,10 @@ public static class Macros
             }
         }
 
+        // Whether `other` comes before `than` in the program, by file and then by position.
         static bool First(Symbol other, Symbol than) =>
             string.CompareOrdinal(other.Tree.Path, than.Tree.Path) is var byPath
-            && (byPath < 0 || byPath == 0 && other.NameSpan.Start < than.NameSpan.Start);
+            && (byPath < 0 || (byPath == 0 && other.NameSpan.Start < than.NameSpan.Start));
     }
 
     /// <summary>

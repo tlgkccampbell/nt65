@@ -252,14 +252,8 @@ internal sealed partial class Evaluator
         if (context.Written is null)
             return Evaluated(node);
         var value = CheckedForCa65(node, Evaluated(node));
-        if (unlinked is not null && value.Kind == ValueKind.Unknown)
-        {
-            if (!IsLinkTime(node) && UsesParameter(node))
-                unlinked.Add((node, false));
-            else if (node is NameExpressionSyntax name && node.Tree != linkedFrom
-                && node.FirstAncestorOrSelf<FuncDeclarationSyntax>() is not null && SymbolOf(name) is { IsAddress: true })
-                unlinked.Add((node, true));
-        }
+        if (unlinked is { } collecting && value.Kind == ValueKind.Unknown)
+            NoteUnlinked(node, collecting);
         return value;
     }
 
@@ -278,6 +272,10 @@ internal sealed partial class Evaluator
     private static Evaluator Querying(EvaluationInputs inputs) =>
         new(EvaluationMode.Query, inputs, static (_, _) => { });
 
+    /// <summary>
+    /// Determines whether a call lies between <paramref name="node"/> and <paramref name="top"/>,
+    /// the operand that holds it.
+    /// </summary>
     private static bool InsideCall(SyntaxNode node, SyntaxNode top)
     {
         for (var at = node.Parent; at is not null && at != top.Parent; at = at.Parent)
@@ -287,7 +285,6 @@ internal sealed partial class Evaluator
         }
         return false;
     }
-
 
     /// <summary>
     /// Returns the word that one side of a comparison gives. This is the value when it is
@@ -300,6 +297,7 @@ internal sealed partial class Evaluator
             ? word.Text
             : null;
 
+    /// <summary>Returns <paramref name="value"/> as a value, or the unknown value for null.</summary>
     private static Value Number(long? value) => value is { } number ? Value.Of(number) : Value.Unknown;
 
     /// <summary>Evaluates an operand for its bytes, or for its value when it has no bytes.</summary>
@@ -318,6 +316,24 @@ internal sealed partial class Evaluator
                 Report(name, Catalogue.ScopeHasNoAddress.Message(scope.Name));
         }
         Evaluate(operand);
+    }
+
+    /// <summary>
+    /// Records a part of a <c>.func</c> body, without a value, that the output cannot leave to
+    /// ld65. Such a part applies something other than an operator to a parameter given an
+    /// address, or names an address declared in a file other than the one that made the call.
+    /// </summary>
+    private void NoteUnlinked(SyntaxNode node, List<(SyntaxNode Node, bool Elsewhere)> collecting)
+    {
+        if (!IsLinkTime(node) && UsesParameter(node))
+        {
+            collecting.Add((node, Elsewhere: false));
+        }
+        else if (node is NameExpressionSyntax name && node.Tree != linkedFrom
+            && node.FirstAncestorOrSelf<FuncDeclarationSyntax>() is not null && SymbolOf(name) is { IsAddress: true })
+        {
+            collecting.Add((node, Elsewhere: true));
+        }
     }
 
     /// <summary>
@@ -421,6 +437,10 @@ internal sealed partial class Evaluator
         return false;
     }
 
+    /// <summary>
+    /// Returns the value of an expression by its form, before <see cref="Evaluate"/> checks the
+    /// value against what ca65 can hold.
+    /// </summary>
     private Value Evaluated(SyntaxNode node)
     {
         // A literal the lexer rejected has no value, just as an undeclared name has none. Its
@@ -511,6 +531,10 @@ internal sealed partial class Evaluator
             EvaluateSymbol(symbol);
     }
 
+    /// <summary>
+    /// Evaluates <paramref name="symbol"/> as the owner of the problems found meanwhile, or only
+    /// notes that it was read when it belongs to an unchanged file.
+    /// </summary>
     private void EvaluateSymbol(Symbol symbol)
     {
         if (unchanged(symbol))
@@ -522,6 +546,10 @@ internal sealed partial class Evaluator
             EvaluateOwnSymbol(symbol);
     }
 
+    /// <summary>
+    /// Evaluates a symbol of a file that is being evaluated, unless it has been evaluated already,
+    /// is being evaluated, which is a cycle, or lies deeper than <see cref="MaximumDepth"/>.
+    /// </summary>
     private void EvaluateOwnSymbol(Symbol symbol)
     {
         var index = evaluating.IndexOf(symbol);
@@ -613,6 +641,29 @@ internal sealed partial class Evaluator
                 break;
         }
 
+        Measure(symbol);
+        if (symbol.ValueExpression is not { } expression)
+        {
+            // A label, a routine or a data declaration has its address where it lands, which
+            // only the linker knows. Its address size comes from the segment it is in.
+            symbol.AddressSize = symbol.Kind switch
+            {
+                SymbolKind.Label or SymbolKind.Proc or SymbolKind.Data => SegmentSize(symbol.Segment),
+                _ => symbol.AddressSize,
+            };
+            return;
+        }
+        EvaluateValue(symbol, expression);
+    }
+
+    /// <summary>
+    /// Gives a data declaration, or an import or data found elsewhere that has an element type,
+    /// its size and element count, which are what <c>.sizeof</c> and <c>.countof</c> return for
+    /// it. Data found elsewhere that states no element type first takes the one at its address,
+    /// and data found elsewhere that states its own is checked against the room left there.
+    /// </summary>
+    private void Measure(Symbol symbol)
+    {
         // Data found elsewhere with no element type of its own takes the one at its address, where
         // there is one, before it is sized from it.
         var elsewhere = symbol is { Kind: SymbolKind.AddressAlias, ValueExpression: { Parent: DataDeclarationSyntax } at }
@@ -629,11 +680,10 @@ internal sealed partial class Evaluator
         if (elsewhere?.Parent is DataDeclarationSyntax { Directive: null } && landing is { } target && target.Storage != symbol)
             TakeElement(symbol, target);
 
-        // A data declaration takes its size and element count from what it declares, and these
-        // are what `.sizeof` and `.countof` return for it. Mixed data has bytes and no elements.
-        // An import that declares an element type is sized from it in exactly the same way,
-        // because nt65 works with what the import declares, as it does with a routine import's
-        // signature.
+        // A data declaration takes its size and element count from what it declares. Mixed data
+        // has bytes and no elements. An import that declares an element type is sized from it in
+        // exactly the same way, because nt65 works with what the import declares, as it does with
+        // a routine import's signature.
         if (symbol.Kind == SymbolKind.Data || symbol.IsTypedStorage)
         {
             // How much room a declaration takes is computed with nt65's own arithmetic, even
@@ -659,19 +709,15 @@ internal sealed partial class Evaluator
         // bytes than the data there has left.
         if (elsewhere?.Parent is DataDeclarationSyntax { Directive: not null } && landing is { } under && under.Storage != symbol)
             CheckFits(symbol, under);
+    }
 
-        if (symbol.ValueExpression is not { } expression)
-        {
-            // A label, a routine or a data declaration has its address where it lands, which
-            // only the linker knows. Its address size comes from the segment it is in.
-            symbol.AddressSize = symbol.Kind switch
-            {
-                SymbolKind.Label or SymbolKind.Proc or SymbolKind.Data => SegmentSize(symbol.Segment),
-                _ => symbol.AddressSize,
-            };
-            return;
-        }
-
+    /// <summary>
+    /// Gives <paramref name="symbol"/> the value of <paramref name="expression"/>, which defines
+    /// it, and its address size. A constant whose expression names an address becomes an address
+    /// alias, unless it is an enum member, which must be a number.
+    /// </summary>
+    private void EvaluateValue(Symbol symbol, SyntaxNode expression)
+    {
         // The output contains the symbol's value and every step of the expression that
         // defines it, because ca65 computes those steps again from the text.
         using (Evaluating(symbol, context with { Written = symbol }))
@@ -1096,6 +1142,10 @@ internal sealed partial class Evaluator
         expression.DescendantNodes().Prepend(expression).OfType<CallExpressionSyntax>().Any(call =>
             call.BuiltinKind is BuiltinKind.Spanof or BuiltinKind.Mincycles or BuiltinKind.Maxcycles);
 
+    /// <summary>
+    /// Applies the prefix operator <paramref name="op"/> to <paramref name="operand"/>, reporting
+    /// an operand that is text or a result that does not fit.
+    /// </summary>
     private Value Unary(SyntaxToken op, Value operand)
     {
         if (operand.AsNumber() is not { } value)
@@ -1107,6 +1157,11 @@ internal sealed partial class Evaluator
         return Value.Unknown;
     }
 
+    /// <summary>
+    /// Applies the binary operator <paramref name="op"/> to <paramref name="left"/> and
+    /// <paramref name="right"/>, reporting an operand that is text, a division by zero or a result
+    /// that does not fit.
+    /// </summary>
     private Value Binary(SyntaxToken op, Value left, Value right)
     {
         if (left.AsNumber() is not { } a || right.AsNumber() is not { } b)
@@ -1152,11 +1207,14 @@ internal sealed partial class Evaluator
     /// </summary>
     private Symbol? SymbolOf(SyntaxNode node) => node is NameExpressionSyntax name ? SymbolOf(name) : null;
 
+    /// <summary>Reports a problem at <paramref name="span"/>, with <paramref name="related"/> as its notes.</summary>
     private void Report(Span span, DiagnosticMessage message, IReadOnlyList<RelatedSpan> related) =>
         Add(new Diagnostic(span, Severity.Error, message, related));
 
+    /// <summary>Reports a problem with <paramref name="token"/>.</summary>
     private void Report(SyntaxToken token, DiagnosticMessage message) => Report(token.Parent.Tree, token.Span, message);
 
+    /// <summary>Reports a problem with <paramref name="node"/>.</summary>
     private void Report(SyntaxNode node, DiagnosticMessage message) => Report(node.Tree, node.Span, message);
 
     /// <summary>
@@ -1181,6 +1239,10 @@ internal sealed partial class Evaluator
         Add(new Diagnostic(tree.GetSpan(span), Severity.Error, message, []));
     }
 
+    /// <summary>
+    /// Passes a diagnostic to the caller, owned by the file of the symbol being evaluated, and
+    /// counts it as a problem.
+    /// </summary>
     private void Add(Diagnostic diagnostic)
     {
         problems++;
@@ -1191,12 +1253,7 @@ internal sealed partial class Evaluator
     /// Replaces the walk context with <paramref name="inner"/> until the returned scope is
     /// disposed, which restores the context it replaced.
     /// </summary>
-    private ContextScope Enter(WalkContext inner)
-    {
-        var outer = context;
-        context = inner;
-        return new ContextScope(this, outer, Pushed: false);
-    }
+    private ContextScope Enter(WalkContext inner) => new(this, Replace(inner), pushed: false);
 
     /// <summary>
     /// Adds <paramref name="symbol"/> to the symbols being evaluated until the returned scope is
@@ -1211,9 +1268,15 @@ internal sealed partial class Evaluator
     private ContextScope Evaluating(Symbol symbol, WalkContext inner)
     {
         evaluating.Add(symbol);
+        return new ContextScope(this, Replace(inner), pushed: true);
+    }
+
+    /// <summary>Replaces the walk context with <paramref name="inner"/> and returns the one it replaced.</summary>
+    private WalkContext Replace(WalkContext inner)
+    {
         var outer = context;
         context = inner;
-        return new ContextScope(this, outer, Pushed: true);
+        return outer;
     }
 
     /// <summary>
@@ -1259,12 +1322,13 @@ internal sealed partial class Evaluator
     /// Restores the walk context a scope replaced when it is disposed, and removes the symbol the
     /// scope added to the symbols being evaluated, if it added one.
     /// </summary>
-    private readonly ref struct ContextScope(Evaluator evaluator, WalkContext outer, bool Pushed)
+    private readonly ref struct ContextScope(Evaluator evaluator, WalkContext outer, bool pushed)
     {
+        /// <summary>Restores the walk context, and pops the symbol the scope pushed, if any.</summary>
         public void Dispose()
         {
             evaluator.context = outer;
-            if (Pushed)
+            if (pushed)
                 evaluator.evaluating.RemoveAt(evaluator.evaluating.Count - 1);
         }
     }

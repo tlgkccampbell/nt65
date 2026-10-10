@@ -117,7 +117,6 @@ public readonly record struct StateItem(
         return items.Count > 0 && items.TrueForAll(item => item.IsAboutRegisters || item.Part == StatePart.Flag);
     }
 
-
     /// <summary>
     /// Returns the banks a <c>dbr = [...]</c> item names, each evaluated with
     /// <paramref name="valueOf"/>. When they do not form a set, returns null and sets
@@ -173,8 +172,8 @@ public readonly record struct StateItem(
         // A flag takes a value with `=`, and C, Z, N and V also stand alone after `->`. Several
         // flags take one value together, as in `cz = 0`. `i` is the index width when `*` or `?`
         // follows it, and the interrupt flag when `=` does.
-        if (suffix == SyntaxKind.Equals && FlagValues.Of(name) != Processor.StatusFlags.None
-            || suffix == SyntaxKind.None && name is "c" or "z" or "n" or "v")
+        if ((suffix == SyntaxKind.Equals && FlagValues.Of(name) != Processor.StatusFlags.None)
+            || (suffix == SyntaxKind.None && name is "c" or "z" or "n" or "v"))
         {
             return new StateItem(node, StatePart.Flag, Width.Unknown, ProcessorMode.Unknown, false, false);
         }

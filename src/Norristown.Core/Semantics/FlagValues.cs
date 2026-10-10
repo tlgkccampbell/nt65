@@ -88,10 +88,9 @@ public readonly record struct FlagValues(StatusFlags Known, StatusFlags Set)
     /// </summary>
     public override string ToString()
     {
-        var clear = Known & ~Set;
-        var set = Set;
-        return string.Join(", ", new[] { (clear, false), (set, true) }
-            .Where(group => group.Item1 != StatusFlags.None)
-            .Select(group => Item(group.Item1, group.Item2)));
+        (StatusFlags Flags, bool Value)[] groups = [(Known & ~Set, false), (Set, true)];
+        return string.Join(", ", groups
+            .Where(group => group.Flags != StatusFlags.None)
+            .Select(group => Item(group.Flags, group.Value)));
     }
 }
