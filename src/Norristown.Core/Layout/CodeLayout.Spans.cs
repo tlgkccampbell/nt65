@@ -249,7 +249,9 @@ public sealed partial class CodeLayout
         {
             if (!settled.hidden.TryGetValue(counted[i].Key, out var path))
                 continue;
-            if (!index.TryGetValue(path.Landing, out var landing))
+            // A path that ends in a return lands nowhere, so a pass through it ends there as it
+            // does at a written return.
+            if (path.Landing is not { } key || !index.TryGetValue(key, out var landing))
             {
                 found[i] = (path, null);
                 continue;
