@@ -21,10 +21,16 @@ namespace Norristown.Cli;
 /// </summary>
 public static class InitCommand
 {
+    /// <summary>The output directory the project file names.</summary>
     private const string Out = "build";
 
+    /// <summary>The segment the program's routine goes in when every linked config places it.</summary>
     private const string Code = "CODE";
 
+    /// <summary>
+    /// The source of <c>src/main.nt65</c>, with <c>SEGMENT</c> standing for the segment its
+    /// routine goes in.
+    /// </summary>
     private const string Source = """
         ; The program. `nt65 build` writes its ca65 under the project's `out`, for ca65 to
         ; assemble and ld65 to link.
@@ -54,25 +60,15 @@ public static class InitCommand
             {
                 case "--cpu":
                     var value = i + 1 < arguments.Count ? arguments[++i] : null;
-                    if (value is null || CpuNames.Parse(value) is not { } named)
-                    {
-                        error.WriteLine(value is null
-                            ? $"nt65: `--cpu` needs a processor: {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}"
-                            : $"nt65: `{value}` is not a processor nt65 knows; `--cpu` takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}");
-                        error.WriteLine(CommandLine.SeeHelp);
-                        return ExitCode.UsageError;
-                    }
+                    if (CommandLine.ParseCpu(value, out var problem) is not { } named)
+                        return Commands.Wrong(error, problem!);
                     cpu = named;
                     break;
                 default:
-                    if (arguments[i].StartsWith('-') || where is not null)
-                    {
-                        error.WriteLine(arguments[i].StartsWith('-')
-                            ? $"nt65: `{arguments[i]}` is not an option"
-                            : "nt65: `init` takes at most one directory");
-                        error.WriteLine(CommandLine.SeeHelp);
-                        return ExitCode.UsageError;
-                    }
+                    if (arguments[i].StartsWith('-'))
+                        return Commands.Wrong(error, $"`{arguments[i]}` is not an option");
+                    if (where is not null)
+                        return Commands.Wrong(error, "`init` takes at most one directory");
                     where = arguments[i];
                     break;
             }
@@ -230,6 +226,7 @@ public static class InitCommand
         return Code;
     }
 
+    /// <summary>Returns <paramref name="text"/> as a JSON string, with its quotes and escapes.</summary>
     private static string Quoted(string text) => JsonSerializer.Serialize(text);
 
     /// <summary>Represents an ld65 config that <c>init</c> found, and the name it links it by.</summary>

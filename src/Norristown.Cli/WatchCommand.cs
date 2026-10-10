@@ -37,7 +37,7 @@ internal static class WatchCommand
     /// since no change to a file can fix it.
     /// </summary>
     public static ExitCode Run(
-        CommandLine command, string directory, TextWriter output, TextWriter error, bool colour,
+        CommandLine command, string directory, TextWriter output, TextWriter error, bool color,
         CancellationToken cancellation)
     {
         var root = Path.GetFullPath(ProjectRoot.Chosen(command.Project, directory) is { } file
@@ -47,7 +47,7 @@ internal static class WatchCommand
         // A project named in a folder that does not exist cannot be watched, and the build
         // reports why before returning the usage error.
         if (!Directory.Exists(root))
-            return BuildCommand.Run(command, directory, output, error, colour).Code;
+            return BuildCommand.Run(command, directory, output, error, color).Code;
 
         // The root is watched before the first build, so a file saved while that build is running
         // still triggers a rebuild rather than being missed.
@@ -99,7 +99,7 @@ internal static class WatchCommand
             Dictionary<string, (long Length, DateTime Written)?> stamped;
             lock (watched)
                 stamped = watched.ToDictionary(path => path, Stamp, FilePaths.Comparer);
-            var built = BuildCommand.Run(command, directory, output, error, colour);
+            var built = BuildCommand.Run(command, directory, output, error, color);
             if (built.Code == ExitCode.UsageError)
                 return ExitCode.UsageError;
             lock (watched)

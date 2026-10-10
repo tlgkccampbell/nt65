@@ -35,11 +35,7 @@ public static class FormatCommand
                     break;
                 default:
                     if (argument.StartsWith('-'))
-                    {
-                        error.WriteLine($"nt65: `{argument}` is not an option");
-                        error.WriteLine(CommandLine.SeeHelp);
-                        return ExitCode.UsageError;
-                    }
+                        return Commands.Wrong(error, $"`{argument}` is not an option");
                     named.Add(Path.GetFullPath(argument, directory));
                     break;
             }

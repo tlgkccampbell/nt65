@@ -36,6 +36,8 @@ public static class OutputManifest
         // deleting the file just written would be the worst answer either way.
         var kept = now.ToHashSet(Names);
 
+        // A directory the deletions leave empty goes too, up to the output directory itself.
+        var top = Path.GetFullPath(Path.Combine(root, directory));
         var deleted = new List<string>();
         foreach (var path in before.Where(path => !kept.Contains(path)))
         {
@@ -44,7 +46,6 @@ public static class OutputManifest
                 continue;
             File.Delete(file);
             deleted.Add(path);
-            var top = Path.GetFullPath(Path.Combine(root, directory));
             for (var parent = Path.GetDirectoryName(Path.GetFullPath(file));
                 parent is not null && parent.Length > top.Length && !Directory.EnumerateFileSystemEntries(parent).Any();
                 parent = Path.GetDirectoryName(parent))

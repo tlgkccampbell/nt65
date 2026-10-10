@@ -145,13 +145,8 @@ public sealed record CommandLine(
                     stdout = true;
                     continue;
                 case "--cpu":
-                    if (value is null || CpuNames.Parse(value) is not { } named)
-                    {
-                        problem = value is null
-                            ? $"`--cpu` needs a processor: {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}"
-                            : $"`{value}` is not a processor nt65 knows; `--cpu` takes {CpuNames.Listed.Replace("`", "", StringComparison.Ordinal)}";
+                    if (ParseCpu(value, out problem) is not { } named)
                         return null;
-                    }
                     cpu = named;
                     break;
                 default:
@@ -167,5 +162,22 @@ public sealed record CommandLine(
         }
         return new CommandLine(project, configuration, cpu, settings, output, dependencies, header, files,
             check, watch, json, stdout);
+    }
+
+    /// <summary>
+    /// Parses the processor named after <c>--cpu</c>, or returns null with <paramref name="problem"/>
+    /// describing what is wrong with it. <paramref name="value"/> is the word after the option, or
+    /// null when the option was the last argument.
+    /// </summary>
+    internal static Cpu? ParseCpu(string? value, out string? problem)
+    {
+        problem = null;
+        if (value is not null && CpuNames.Parse(value) is { } cpu)
+            return cpu;
+        var listed = CpuNames.Listed.Replace("`", "", StringComparison.Ordinal);
+        problem = value is null
+            ? $"`--cpu` needs a processor: {listed}"
+            : $"`{value}` is not a processor nt65 knows; `--cpu` takes {listed}";
+        return null;
     }
 }

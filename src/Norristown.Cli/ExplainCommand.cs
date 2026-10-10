@@ -24,11 +24,7 @@ internal static class ExplainCommand
             return ExitCode.Success;
         }
         if (arguments is not [var name] || name.StartsWith('-'))
-        {
-            error.WriteLine("nt65: explain takes one diagnostic's name");
-            error.WriteLine(CommandLine.SeeHelp);
-            return ExitCode.UsageError;
-        }
+            return Commands.Wrong(error, "explain takes one diagnostic's name");
         if (Catalogue.Find(name) is not { } descriptor)
         {
             var nearest = Spelling.Nearest(name, Catalogue.All.Select(entry => entry.Id));
@@ -68,9 +64,12 @@ internal static class ExplainCommand
     /// Returns a severity with its article, as this command prints it, which is "an error",
     /// "a warning" or "a note".
     /// </summary>
-    private static string Reported(Severity severity) =>
-        severity.ToString().ToLowerInvariant() is "info" ? "a note" : $"a{(severity == Severity.Error ? "n" : "")} "
-            + severity.ToString().ToLowerInvariant();
+    private static string Reported(Severity severity) => severity switch
+    {
+        Severity.Error => "an error",
+        Severity.Warning => "a warning",
+        _ => "a note",
+    };
 
     /// <summary>
     /// Returns the message format with each numbered placeholder (<c>{0}</c>, <c>{1}</c>, ...)

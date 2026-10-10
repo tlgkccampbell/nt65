@@ -13,10 +13,10 @@ catch (IOException)
 {
 }
 
-// Colour highlights a diagnostic's severity, and is used only when a person is likely reading
+// Color highlights a diagnostic's severity, and is used only when a person is likely reading
 // standard error: a redirected stream is another program's input, and a non-empty NO_COLOR
-// means the user has asked for no colour.
-var colour = !Console.IsErrorRedirected
+// means the user has asked for no color.
+var color = !Console.IsErrorRedirected
     && Environment.GetEnvironmentVariable("NO_COLOR") is null or "";
 
 // Ctrl+C cancels the token rather than killing the process, so that `--watch` stops cleanly
@@ -34,7 +34,7 @@ Console.CancelKeyPress += (_, stopping) =>
 // report.
 try
 {
-    return (int)Commands.Run(args, Environment.CurrentDirectory, Console.Out, Console.Error, colour, interrupted.Token);
+    return (int)Commands.Run(args, Environment.CurrentDirectory, Console.Out, Console.Error, color, interrupted.Token);
 }
 catch (Exception e)
 {
