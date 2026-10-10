@@ -35,6 +35,10 @@ public static class FunctionArguments
         var next = 0;
         var byName = false;
         var misplaced = false;
+        // Every argument of a call is an expression: only a macro call parses a braced operand,
+        // and a call that tries to give one is reported as missing an expression while it is
+        // parsed. The casts below therefore change nothing for parsed source and only keep a
+        // tree built by hand from being mistaken for a match.
         foreach (var argument in call.Arguments.Arguments)
         {
             if (argument is NamedArgumentSyntax namedArgument)
