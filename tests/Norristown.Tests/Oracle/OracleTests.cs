@@ -99,8 +99,7 @@ public sealed partial class OracleTests
         {
             var (config, handWritten) = LinkFiles(fixture)!.Value;
             var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
-            var result = Ca65Oracle.Pinned.Link(config,
-                [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text)), .. handWritten]);
+            var result = Ca65Oracle.Pinned.Link(config, [.. Ca65Oracle.ByFileName(compilation.Ca65), .. handWritten]);
             if (!result.Succeeded)
                 yield return $"[{fixture.Name}] ld65 reported:\n{result.Messages}";
             else if (result.Binary.Length == 0)
@@ -124,10 +123,8 @@ public sealed partial class OracleTests
             .ToList();
         Assert.Contains(wrong, file => file.Source.Contains("$0103"));
 
-        var result = Ca65Oracle.Pinned.Link(config,
-            [.. Compiler.Compile(fixture.Sources, fixture.Project).Ca65
-                .Select(o => (Path.GetFileName(o.Path), o.Text)),
-             .. wrong]);
+        var result = Ca65Oracle.Pinned.Link(
+            config, [.. Ca65Oracle.ByFileName(Compiler.Compile(fixture.Sources, fixture.Project).Ca65), .. wrong]);
 
         Assert.False(result.Succeeded);
         Assert.Contains("HOST_VERSION is not $0102", result.Messages);
@@ -284,7 +281,6 @@ public sealed partial class OracleTests
             }
             """;
 
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
         var generated = Compiler.Compile(
             [new SourceFile("main.nt65", Main), new SourceFile("lib.nt65", Library)],
             ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
@@ -292,8 +288,7 @@ public sealed partial class OracleTests
         var output = generated.Ca65.Single(o => o.Path.EndsWith("main.s", StringComparison.Ordinal));
         Assert.DoesNotContain(".strat", output.Text, StringComparison.Ordinal);
 
-        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
-        Assert.True(linked.Succeeded, linked.Messages);
+        var linked = LinkedAgainstModules(generated);
         byte[] expected = [.. "NEXT WITHOUT FO"u8, (byte)('R' | 0x80), .. "FO"u8, (byte)('R' | 0x80)];
         Assert.Equal(expected, linked.Binary);
     }
@@ -419,9 +414,7 @@ public sealed partial class OracleTests
         var generated = Compiler.Compile(
             [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
         Assert.Empty(generated.Diagnostics);
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
-        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
-        Assert.True(linked.Succeeded, linked.Messages);
+        var linked = LinkedAgainstModules(generated);
 
         // CODE starts at $0200, and the six bytes of `basic` put `main` at $0206, which is 518.
         byte[] expected = [.. "0518"u8, 0x07, 0x02, 0xa9, (byte)'9', 0x60];
@@ -452,9 +445,7 @@ public sealed partial class OracleTests
         var generated = Compiler.Compile(
             [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Mos6502 });
         Assert.Empty(generated.Diagnostics);
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
-        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
-        Assert.True(linked.Succeeded, linked.Messages);
+        var linked = LinkedAgainstModules(generated);
 
         // CODE starts at $0200, and the three bytes of `parts` put `main` at $0203, which is 515.
         byte[] expected = [0x02, 0x05, 0x02, 0xa9, 0x02, 0xa2, 0x05, 0x60];
@@ -483,9 +474,7 @@ public sealed partial class OracleTests
         var generated = Compiler.Compile(
             [new SourceFile("main.nt65", Nt65)], ProjectSettings.None with { Cpu = Processor.Cpu.Wdc65816 });
         Assert.Empty(generated.Diagnostics);
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
-        var linked = Ca65Oracle.Pinned.Link(config, [.. generated.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))]);
-        Assert.True(linked.Succeeded, linked.Messages);
+        var linked = LinkedAgainstModules(generated);
 
         // CODE starts at $0200, so `main` is $0200.
         byte[] expected = [0xa9, 0x02, 0xa9, 0x02, 0xa2, 0x00, 0x01, 0x60];
@@ -495,9 +484,8 @@ public sealed partial class OracleTests
     [Fact]
     public void RefusesABuildThatIsNotThePinnedCommit()
     {
-        var ca65 = Repo.Path(".cache", "cc65", "bin", OperatingSystem.IsWindows() ? "ca65.exe" : "ca65");
         var e = Assert.Throws<InvalidOperationException>(
-            () => new Ca65Oracle(ca65, "547d9230000000000000000000000000000000", cacheDirectory: null));
+            () => new Ca65Oracle(Ca65Oracle.PinnedPath, "547d9230000000000000000000000000000000", cacheDirectory: null));
         Assert.Contains("refusing to use ca65", e.Message);
     }
 
@@ -554,6 +542,23 @@ public sealed partial class OracleTests
     }
 
     /// <summary>
+    /// Returns the linker configuration of the <c>modules</c> fixture, which puts CODE at $0200
+    /// and serves the tests that link a small program of their own.
+    /// </summary>
+    private static string ModulesLinkConfig() => Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+
+    /// <summary>
+    /// Links the ca65 output of <paramref name="generated"/> against the linker configuration of
+    /// the <c>modules</c> fixture, checks that the link is clean, and returns it.
+    /// </summary>
+    private static LinkResult LinkedAgainstModules(Compilation generated)
+    {
+        var linked = Ca65Oracle.Pinned.Link(ModulesLinkConfig(), Ca65Oracle.ByFileName(generated.Ca65));
+        Assert.True(linked.Succeeded, linked.Messages);
+        return linked;
+    }
+
+    /// <summary>
     /// Links nt65's <paramref name="output"/> and the same program written by hand,
     /// <paramref name="byHand"/>, against the linker configuration of the <c>modules</c> fixture.
     /// Checks that both link and produce the same bytes, and returns those bytes for the caller to
@@ -561,7 +566,7 @@ public sealed partial class OracleTests
     /// </summary>
     private static byte[] LinksLikeByHand(string output, string byHand)
     {
-        var config = Repo.ReadText(Repo.Path("tests", "fixtures", "modules", "link", "link.cfg"));
+        var config = ModulesLinkConfig();
         var fromNt65 = Ca65Oracle.Pinned.Link(config, [("main.s", output)]);
         var fromHand = Ca65Oracle.Pinned.Link(config, [("hand.s", byHand)]);
 

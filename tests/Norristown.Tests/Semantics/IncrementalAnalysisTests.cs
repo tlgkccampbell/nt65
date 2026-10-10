@@ -85,8 +85,9 @@ public sealed class IncrementalAnalysisTests
     }
 
     /// <summary>
-    /// A change to something decided for the program as a whole — the files in it, the project,
-    /// the CPU — makes the whole program be analyzed again, and the analysis reports which it was.
+    /// A change to something decided for the program as a whole, such as the files in it, the
+    /// project or the CPU, makes the whole program be analyzed again, and the analysis reports
+    /// which it was.
     /// </summary>
     [Fact]
     public void WhatIsDecidedForTheWholeProgramIsAnalyzedAgainWithAReason()
@@ -170,8 +171,8 @@ public sealed class IncrementalAnalysisTests
     /// <summary>
     /// An analysis that leaves the program-wide answers for later carries the program-wide
     /// diagnostics from before the edit, so a warning that a change to the routine called removes
-    /// stays at the call until the analysis is settled. Settling then finds what an analysis from scratch finds, and leaves the
-    /// unsettled analysis as it was.
+    /// stays at the call until the analysis is settled. Settling then finds what an analysis from
+    /// scratch finds, and leaves the unsettled analysis as it was.
     /// </summary>
     [Fact]
     public void AnUnsettledAnalysisSettlesToWhatAWholeAnalysisFinds()

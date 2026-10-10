@@ -28,22 +28,14 @@ public sealed class DebugFileTests
 
         static IEnumerable<string> Check(FixtureCase fixture)
         {
-            var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
-            var maps = compilation.Outputs
-                .Where(output => output.Kind == OutputKind.LineMap)
-                .ToDictionary(output => Path.GetFileName(output.Path), output => output.Text, StringComparer.Ordinal);
-            var result = Ca65Oracle.Pinned.Link(
-                LinkConfig(fixture),
-                [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text)), .. HandWritten(fixture)],
-                debugFile: true);
+            var (maps, result) = Linked(fixture, withHandWritten: true);
             if (!result.Succeeded)
             {
                 yield return $"[{fixture.Name}] ld65 reported:\n{result.Messages}";
                 yield break;
             }
 
-            if (!DebugFile.TryRemap(
-                result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var remapped, out var problem))
+            if (!DebugFile.TryRemap(result.DebugFile, MapOf(maps), out var remapped, out var problem))
             {
                 yield return $"[{fixture.Name}] the debug file could not be remapped: {problem}";
                 yield break;
@@ -86,19 +78,10 @@ public sealed class DebugFileTests
     {
         Repo.SkipUnlessSelected("modules");
         var fixture = Linkable().Single(f => f.Name == "modules");
-        var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
-        var maps = compilation.Outputs
-            .Where(output => output.Kind == OutputKind.LineMap)
-            .ToDictionary(output => Path.GetFileName(output.Path), output => output.Text, StringComparer.Ordinal);
-        var result = Ca65Oracle.Pinned.Link(
-            LinkConfig(fixture),
-            [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text)), .. HandWritten(fixture)],
-            debugFile: true);
+        var (maps, result) = Linked(fixture, withHandWritten: true);
         Assert.True(result.Succeeded, result.Messages);
 
-        string? Remap(string text) =>
-            DebugFile.TryRemap(text, name => maps.GetValueOrDefault(name + LineMap.Extension), out var remapped, out _)
-                ? remapped : null;
+        string? Remap(string text) => DebugFile.TryRemap(text, MapOf(maps), out var remapped, out _) ? remapped : null;
 
         var once = Remap(result.DebugFile);
         Assert.NotNull(once);
@@ -116,17 +99,9 @@ public sealed class DebugFileTests
     {
         Repo.SkipUnlessSelected("placement");
         var fixture = Linkable().Single(f => f.Name == "placement");
-        var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
-        var maps = compilation.Outputs
-            .Where(output => output.Kind == OutputKind.LineMap)
-            .ToDictionary(output => Path.GetFileName(output.Path), output => output.Text, StringComparer.Ordinal);
-        var result = Ca65Oracle.Pinned.Link(
-            LinkConfig(fixture), [.. compilation.Ca65.Select(o => (Path.GetFileName(o.Path), o.Text))], debugFile: true);
+        var (maps, result) = Linked(fixture, withHandWritten: false);
         Assert.True(result.Succeeded, result.Messages);
-        Assert.True(
-            DebugFile.TryRemap(
-                result.DebugFile, name => maps.GetValueOrDefault(name + LineMap.Extension), out var remapped, out var problem),
-            problem);
+        Assert.True(DebugFile.TryRemap(result.DebugFile, MapOf(maps), out var remapped, out var problem), problem);
 
         // The object assembled from main.s is attributed to main's source, and every source in
         // its translation unit has line records of its own.
@@ -140,6 +115,31 @@ public sealed class DebugFileTests
     /// <summary>Returns the fixtures that hold a linker configuration, which are the ones that can link.</summary>
     private static IReadOnlyList<FixtureCase> Linkable() =>
         [.. FixtureCase.All().Where(fixture => File.Exists(LinkConfigPath(fixture)))];
+
+    /// <summary>
+    /// Compiles <paramref name="fixture"/> and links its output with <c>ld65 --dbgfile</c>, with
+    /// the fixture's hand-written modules beside it when <paramref name="withHandWritten"/> is
+    /// set. Returns the line maps the compilation wrote, keyed by file name, and the link.
+    /// </summary>
+    private static (Dictionary<string, string> Maps, LinkResult Result) Linked(FixtureCase fixture, bool withHandWritten)
+    {
+        var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
+        var maps = compilation.Outputs
+            .Where(output => output.Kind == OutputKind.LineMap)
+            .ToDictionary(output => Path.GetFileName(output.Path), output => output.Text, StringComparer.Ordinal);
+        var result = Ca65Oracle.Pinned.Link(
+            LinkConfig(fixture),
+            [.. Ca65Oracle.ByFileName(compilation.Ca65), .. withHandWritten ? HandWritten(fixture) : []],
+            debugFile: true);
+        return (maps, result);
+    }
+
+    /// <summary>
+    /// Returns the function that gives the remapper the line map beside a <c>.s</c> file, looked
+    /// up in <paramref name="maps"/> by the file's name.
+    /// </summary>
+    private static Func<string, string?> MapOf(Dictionary<string, string> maps) =>
+        name => maps.GetValueOrDefault(name + LineMap.Extension);
 
     private static string LinkConfig(FixtureCase fixture) => Repo.ReadText(LinkConfigPath(fixture));
 

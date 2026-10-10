@@ -49,10 +49,9 @@ internal sealed partial record FixtureCase(
             return [];
 
         // NT65_FIXTURE selects fixtures whose name contains the given text (scripts/test.ps1 -Fixture).
-        var filter = Repo.Selection;
         return [.. System.IO.Directory.GetDirectories(root)
             .Select(dir => System.IO.Path.GetFileName(dir))
-            .Where(name => string.IsNullOrEmpty(filter) || name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            .Where(Repo.Selects)
             .Order(StringComparer.Ordinal)
             .SelectMany(name => Load(System.IO.Path.Combine(root, name)))];
     }
@@ -141,11 +140,7 @@ internal sealed partial record FixtureCase(
     /// Returns the length of a file an <c>.incbin</c> names, found in the fixture's directory. A
     /// fixture's binaries sit beside its sources, no matter where the tests are run from.
     /// </summary>
-    public long? BinaryLength(string path)
-    {
-        var file = System.IO.Path.Combine(Directory, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
-        return File.Exists(file) ? new FileInfo(file).Length : null;
-    }
+    public long? BinaryLength(string path) => Repo.FileLength(Directory, path);
 
     /// <summary>
     /// Returns every <c>.bin</c> file in the fixture, at its path relative to the fixture. The

@@ -47,6 +47,10 @@ internal static class FixtureRunner
         return failures;
     }
 
+    /// <summary>
+    /// Runs one fixture through <paramref name="compile"/> and returns its failures, empty when
+    /// it passes. The harness tests give a fake compiler here.
+    /// </summary>
     public static IEnumerable<string> Run(
         FixtureCase fixture, Func<IReadOnlyCollection<SourceFile>, Compilation> compile, bool update = false,
         bool thorough = false)
@@ -89,38 +93,10 @@ internal static class FixtureRunner
 
         var expected = fixture.ExpectedOutputs();
         var actual = compilation.Outputs.ToDictionary(o => o.Path, o => o.Text, StringComparer.Ordinal);
-        var expectedDir = Path.Combine(fixture.Directory, fixture.ExpectedDirectory);
-
         if (update)
-        {
-            foreach (var path in expected.Keys.Except(actual.Keys))
-            {
-                File.Delete(Path.Combine(expectedDir, path));
-                for (var directory = Path.GetDirectoryName(Path.Combine(expectedDir, path));
-                    directory is not null && directory.Length > expectedDir.Length
-                        && !System.IO.Directory.EnumerateFileSystemEntries(directory).Any();
-                    directory = Path.GetDirectoryName(directory))
-                {
-                    System.IO.Directory.Delete(directory);
-                }
-            }
-            foreach (var (path, text) in actual)
-            {
-                if (!expected.TryGetValue(path, out var old) || old != text)
-                    Repo.WriteText(Path.Combine(expectedDir, path), text);
-            }
-            return failures;
-        }
-
-        foreach (var path in expected.Keys.Except(actual.Keys))
-            Fail($"expected output not produced: {path}");
-        foreach (var path in actual.Keys.Except(expected.Keys))
-            Fail($"unexpected output (NT65_UPDATE=1 to accept): {path}");
-        foreach (var (path, text) in actual)
-        {
-            if (expected.TryGetValue(path, out var want) && want != text)
-                Fail($"output differs (NT65_UPDATE=1 to accept): {path}\n{FirstDifference(want, text)}");
-        }
+            UpdateSnapshot(Path.Combine(fixture.Directory, fixture.ExpectedDirectory), expected, actual);
+        else
+            CompareOutputs(expected, actual, Fail);
         return failures;
     }
 
@@ -262,6 +238,50 @@ internal static class FixtureRunner
                 yield return $"[{fixture.Name}] nothing is shown beside {output.Source}";
             else if (preview.Text != output.Text || !preview.SourceLines.SequenceEqual(output.LineSources))
                 yield return $"[{fixture.Name}] what is shown beside {output.Source} is not what was written";
+        }
+    }
+
+    /// <summary>
+    /// Rewrites the snapshot under <paramref name="directory"/> to hold <paramref name="actual"/>.
+    /// A file whose text changed is written, a file the compilation no longer produces is
+    /// deleted, and so is each folder that deletion leaves empty.
+    /// </summary>
+    private static void UpdateSnapshot(
+        string directory, IReadOnlyDictionary<string, string> expected, IReadOnlyDictionary<string, string> actual)
+    {
+        foreach (var path in expected.Keys.Except(actual.Keys))
+        {
+            File.Delete(Path.Combine(directory, path));
+            for (var folder = Path.GetDirectoryName(Path.Combine(directory, path));
+                folder is not null && folder.Length > directory.Length
+                    && !System.IO.Directory.EnumerateFileSystemEntries(folder).Any();
+                folder = Path.GetDirectoryName(folder))
+            {
+                System.IO.Directory.Delete(folder);
+            }
+        }
+        foreach (var (path, text) in actual)
+        {
+            if (!expected.TryGetValue(path, out var old) || old != text)
+                Repo.WriteText(Path.Combine(directory, path), text);
+        }
+    }
+
+    /// <summary>
+    /// Reports each output the snapshot expects and the compilation did not produce, each output
+    /// it produced that the snapshot lacks, and each output whose text differs.
+    /// </summary>
+    private static void CompareOutputs(
+        IReadOnlyDictionary<string, string> expected, IReadOnlyDictionary<string, string> actual, Action<string> fail)
+    {
+        foreach (var path in expected.Keys.Except(actual.Keys))
+            fail($"expected output not produced: {path}");
+        foreach (var path in actual.Keys.Except(expected.Keys))
+            fail($"unexpected output (NT65_UPDATE=1 to accept): {path}");
+        foreach (var (path, text) in actual)
+        {
+            if (expected.TryGetValue(path, out var want) && want != text)
+                fail($"output differs (NT65_UPDATE=1 to accept): {path}\n{FirstDifference(want, text)}");
         }
     }
 

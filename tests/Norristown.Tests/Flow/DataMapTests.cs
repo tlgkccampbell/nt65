@@ -31,7 +31,7 @@ public sealed class DataMapTests
         }
         """;
 
-    /// <summary>The sample program of the design, on the 65816, with three direct pages and the PPU's registers.</summary>
+    /// <summary>A SNES program, on the 65816, with three direct pages and the PPU's registers.</summary>
     private const string Snes = """
         .mmio INIDISP: .byte = $2100
         .mmio OAMDATA: .byte = $2104
@@ -149,7 +149,7 @@ public sealed class DataMapTests
         """;
 
     /// <summary>
-    /// The design's sample has a page for each value of D it sets, and the hardware registers it
+    /// The SNES program has a page for each value of D it sets, and the hardware registers it
     /// reaches with D at $2100. That page also names each register declared in its range that no
     /// instruction reaches, such as <c>OAMDATA</c>, but not <c>NMITIMEN</c> at $4200, which lies
     /// outside it. The sample shows each kind of sharing: a pointer passed between routines,
@@ -1313,11 +1313,7 @@ public sealed class DataMapTests
         var root = Repo.ReadProject(directory);
         var configuration = root.Configurations.Single(item => item.Name == "cbmbasic2");
         var project = root.Configured(configuration.Name, configuration.Declaration);
-        var sources = project.Files.SelectMany(glob => SourceGlobs.Matching(directory, glob))
-            .Distinct(StringComparer.Ordinal)
-            .Order(StringComparer.Ordinal)
-            .Select(path => new SourceFile(path, Repo.ReadText(Path.GetFullPath(path, directory))))
-            .ToList();
+        var sources = Repo.Sources(directory, project);
         var map = DataMap.Of(Compiler.Analyze(sources, project, _ => null), null, TestContext.Current.CancellationToken);
         var zero = Assert.Single(map.Pages, page => page.Base == 0);
         var laid = zero.Locations.Where(location => location.Layout != DataLayout.Fixed).ToDictionary(location => location.Name);

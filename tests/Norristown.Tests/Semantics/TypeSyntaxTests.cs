@@ -115,7 +115,7 @@ public sealed class TypeSyntaxTests
         Assert.DoesNotContain(".func", output);
     }
 
-    /// <summary>The source above, the design's own example of each construct, parses without errors.</summary>
+    /// <summary>The source above, which holds an example of each construct, parses without errors.</summary>
     [Fact]
     public void TheDesignsExamplesParse()
     {

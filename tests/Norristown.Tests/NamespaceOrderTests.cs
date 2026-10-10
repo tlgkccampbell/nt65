@@ -6,9 +6,9 @@ namespace Norristown.Tests;
 
 /// <summary>
 /// Tests the order of the namespace layers in <c>Norristown.Core</c>, and checks that no layer
-/// depends on one above it. Two such upward dependencies were found and removed. The semantic
-/// layer relied on layout for the instruction tables and the register vocabulary, and layout
-/// contained the flow analysis. Nothing but this test stops them from coming back.
+/// depends on one above it. The semantic layer must not rely on layout for the instruction
+/// tables or the register vocabulary, and layout must not contain the flow analysis. Nothing
+/// but this test stops such a dependency from being written.
 /// </summary>
 public sealed class NamespaceOrderTests
 {
@@ -26,11 +26,6 @@ public sealed class NamespaceOrderTests
         "Norristown.Layout", "Norristown.Flow", "Norristown.Emit",
     ];
 
-    /// <summary>Gets the binding flags that select every member a type declares, at every accessibility.</summary>
-    private static BindingFlags Everything =>
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
-        | BindingFlags.DeclaredOnly;
-
     /// <summary>
     /// No type's fields, parameters, return types, base type or interfaces come from a layer above
     /// its own.
@@ -43,8 +38,8 @@ public sealed class NamespaceOrderTests
         {
             if (Layer(type.Namespace) is not { } layer)
                 continue;
-            var names = Mentioned(type).Concat(type.GetMembers(Everything).SelectMany(Mentioned));
-            foreach (var named in names.SelectMany(Unwrapped).Distinct())
+            var names = Mentioned(type).Concat(type.GetMembers(TypeSignatures.Everything).SelectMany(Mentioned));
+            foreach (var named in names.SelectMany(TypeSignatures.Unwrapped).Distinct())
             {
                 if (Layer(named.Namespace) is { } above && above > layer)
                     problems.Add($"{type.FullName} names {named.FullName}");
@@ -105,25 +100,4 @@ public sealed class NamespaceOrderTests
         Type nested => [nested.BaseType ?? typeof(object), .. nested.GetInterfaces()],
         _ => [],
     };
-
-    /// <summary>
-    /// Returns <paramref name="type"/>, or its generic definition when it is a constructed generic
-    /// type, followed by the types its generic arguments are built from. For an array or a
-    /// by-reference, it returns the types its element is built from instead. A generic parameter
-    /// yields nothing.
-    /// </summary>
-    private static IEnumerable<Type> Unwrapped(Type type)
-    {
-        if (type.IsGenericParameter)
-            yield break;
-        if (type.HasElementType)
-        {
-            foreach (var inner in Unwrapped(type.GetElementType()!))
-                yield return inner;
-            yield break;
-        }
-        yield return type.IsConstructedGenericType ? type.GetGenericTypeDefinition() : type;
-        foreach (var argument in type.GenericTypeArguments.SelectMany(Unwrapped))
-            yield return argument;
-    }
 }
