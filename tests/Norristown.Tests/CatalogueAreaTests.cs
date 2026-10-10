@@ -139,7 +139,7 @@ public sealed class CatalogueAreaTests
             "frame-past-the-stack", "frame-stack-unknown", "immediate-in-emulation", "jump-across-banks", "jump-distance-mismatch",
             "jump-leaves-bank", "mirror-bank-mismatch", "range-bank-mismatch", "relative-call-extra-phk",
             "relative-call-needs-phk", "return-distance-mismatch", "return-state-mismatch",
-            "state-item-not-a-point", "state-mode-mismatch", "state-outside-a-routine", "state-value-mismatch",
+            "signature-required", "state-item-not-a-point", "state-mode-mismatch", "state-outside-a-routine", "state-value-mismatch",
             "state-value-not-constant", "state-value-out-of-range", "state-width-mismatch", "width-in-emulation",
             "width-unknown",
         ]),

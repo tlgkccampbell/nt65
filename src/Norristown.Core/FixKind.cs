@@ -158,6 +158,13 @@ public enum FixKind
     Keeps,
 
     /// <summary>
+    /// The register the fix's <see cref="DiagnosticFix.Text"/> names, removed from the <c>keeps</c>
+    /// item of the signature of the routine declared at the fix's <see cref="DiagnosticFix.At"/>.
+    /// The item goes whole where it names nothing else.
+    /// </summary>
+    Unkeep,
+
+    /// <summary>
     /// The register reported, saved on the stack before the call with the push the fix's
     /// <see cref="DiagnosticFix.Text"/> names, and restored after it with the matching pull.
     /// </summary>

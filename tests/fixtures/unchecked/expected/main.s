@@ -21,6 +21,8 @@
 .export main__patching
 .export main__enter
 .export main__jumper
+.export main__caller
+.export main__stop_here
 
 .import print: abs
 .import beep: abs
@@ -196,3 +198,22 @@ enter__into:
 main__jumper:
     jmp enter__into
 ; end of jumper
+
+; .proc caller: a8, i8, native  main.nt65:201
+main__caller:
+    jsr enter__into
+    lda #$34
+    rts
+; end of caller
+
+; .proc halt: a8, i8, native, noreturn  main.nt65:209
+halt:
+    lda #0
+halt__spin:
+    jmp halt__spin
+; end of halt
+
+; .proc stop_here: a8, i8, native  main.nt65:216
+main__stop_here:
+    jsr halt__spin
+; end of stop_here

@@ -432,6 +432,8 @@ public sealed class ProgramModel
         foreach (var result in bound)
         {
             CheckAliases(result.Symbols, resolved, byFile);
+            if (cpu == Cpu.Wdc65816)
+                CheckBodilessSignatures(result.Symbols, resolved, byFile);
             CheckExportSizes(result.Symbols, byFile);
         }
 
@@ -588,6 +590,31 @@ public sealed class ProgramModel
                     : (DiagnosticMessage?)null;
             if (mismatch is { } problem)
                 byFile[alias.Tree.Path].Add(new Diagnostic(alias.Tree.GetSpan(value.Span), problem));
+        }
+    }
+
+    /// <summary>
+    /// Reports each routine with no body in the program, an extern proc at an address or a
+    /// <c>proc(...)</c> import, whose signature declares no state. On the 65816 nothing else
+    /// says what a caller holds after calling it, so it must declare its state, if only as
+    /// <c>?</c>. An extern proc that names another routine takes that routine's signature, and
+    /// is not reported.
+    /// </summary>
+    private static void CheckBodilessSignatures(
+        IEnumerable<Symbol> symbols, SymbolMap resolved, Dictionary<string, List<Diagnostic>> byFile)
+    {
+        var names = new BoundNames(resolved);
+        foreach (var routine in symbols)
+        {
+            if (routine is not { Kind: SymbolKind.ExternProc or SymbolKind.ImportedAddress, Signature: { } signature }
+                || signature.DeclaresState || signature.IsInterrupt
+                || routine.Kind == SymbolKind.ExternProc && routine.ValueExpression is { } value
+                    && names.SymbolOf(value) is { Signature: not null } named && named != routine)
+            {
+                continue;
+            }
+            byFile[routine.Tree.Path].Add(new Diagnostic(
+                routine.DeclarationSpan, Catalogue.SignatureRequired.Message(routine.DisplayName)));
         }
     }
 

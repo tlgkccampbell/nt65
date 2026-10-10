@@ -567,7 +567,9 @@ in one area they are the same. ld65 works it out, so it is a link-time value lik
 an `.if` cannot test it. The output writes it as `.lobyte(.bank(x))`: ca65 gives `.bank(x)` the
 address size of `x`, which no byte holds, so the low byte is taken, as ca65's documentation does,
 and every mapper's bank numbers fit it. A constant, a declaration at a constant address, a scope,
-an element or an expression is in no segment, and naming one is `bank-has-no-segment`. Code that
+an element or an expression is in no segment, and naming one is `bank-has-no-segment`. Where it
+is a constant, the message offers its bank byte, `^$7E1234`, which is what such a call usually
+meant. Code that
 maps a switchable bank by writing its number to a register, such as the Commander X16's RAM bank
 at `$00` or an NES mapper's bank register, names what it is about to reach rather than a number
 kept in step with the config by hand:
@@ -817,10 +819,16 @@ stack, and each applies to the next statement that is not itself an `.allow`. Th
 quotes, as in the project file, because a diagnostic's name is not an nt65 name: `-` is an
 operator, and `signature-item-needs-65816` ends in a number. A name nt65 has no entry for is an
 error, with the name it is nearly. `.allow` hides only what is reported as a warning, before
-the project's severities apply, so it still hides one a configuration raises to an error. It
-cannot name an error, and it cannot name a diagnostic whose fix is an annotation that tells nt65
-what really happens, such as `runs-into-data`: hiding it would leave the analysis following
-paths that are not there. An `.allow` that hides nothing is the warning `allow-unused`, as
+the project's severities apply, so it still hides one a configuration raises to an error, and
+an editor offers it there too. It cannot name an error, and it cannot name a diagnostic whose
+fix is an annotation that tells nt65 what really happens: hiding it would leave the analysis
+following paths that are not there, or leave a path it cannot see unanalyzed. Most such
+diagnostics are errors, such as `runs-into-data`, and naming one says which annotation answers
+it rather than only that it is an error. The one warning among them is `label-unreachable`,
+whose answer is a `.state` after the label where something nt65 cannot see jumps there, and
+otherwise removing the code. Code with no label that nothing reaches, `code-unreachable`, may
+still be allowed, since there is no label to declare an entry point at. An `.allow` that hides
+nothing is the warning `allow-unused`, as
 Rust's `#[expect]` is, so a suppression does not outlive the code it was written for. One in a branch the build configuration leaves out, or in a macro body,
 which another call may need, is not reported. A warning in another file's macro body is
 reported at the call, so an `.allow` before the call covers it, and so does one in the body.
@@ -1077,8 +1085,9 @@ record macros are written for in ca65, and `.type T[] { ... }` an array of them:
 Each value names its member, so the struct decides the layout and reordering its members
 cannot misplace a value. A member is named at most once, and a member not named is
 zero. A value must fit its member as it would fit the matching data directive, and a
-member of one element takes one value, so text longer than a byte is not one; a `.res n`
-member takes a string of at most n bytes, padded with its pad; a record member takes a
+member of one element takes one value, so text longer than a byte is not one, and each element
+of an array member is one value in the same way; a `.res n` member, which is how a member that
+holds text is declared, takes a string of at most n bytes, padded with its pad; a record member takes a
 nested one-line initializer, `pos = { x = 1, y = 2 }`; an array member always takes a
 braced list of exactly its count, `colors = { $7fff, $001f, 0, 0 }`, in both forms; and a
 union takes at most one member. The one-line form balances its braces on its line, and the
@@ -1252,7 +1261,8 @@ inferred from the program, across files:
   disagree on is unknown after a call, an error only where a caller then needs it. A tail call
   returns with what the routine it calls leaves.
 - The entry comes from the routine's callers in the program, in any module: every call, tail
-  call, `.fallthrough` and `.next` that hands control to its start. Where they agree on a part,
+  call, `.fallthrough` and `.next` that hands control to its start, the routine's own calls to
+  itself included once the other callers have given its entry. Where they agree on a part,
   the routine is entered with it. Code outside nt65 that calls an exported routine is not
   checked, as nothing outside nt65 is; a routine such code calls declares the entry it expects,
   which is the contract between the two. Where an exported routine's bytes depend on an inferred
@@ -1280,8 +1290,10 @@ The parts fall into two classes, treated differently where callers disagree:
   on a width the body depends on, through an immediate before anything sets it, are an error
   at the routine, `callers-disagree`, listing the callers, with fixes that declare either
   width. Where the body does not depend on it, the part stays `*`: the routine runs with
-  either and hands it back. Where callers disagree on the mode, it stays `native`, the default,
-  which the callers in emulation mode are then reported against.
+  either and hands it back. The mode is treated the same way: where callers disagree on it, it
+  is `e*`, so a routine that does not depend on the mode serves callers in both. Where the body does depend on it, through an `.ensure` of a
+  16-bit width or a call that needs one mode, the error there says the mode is not known and
+  names the callers that disagree.
 - **`dp` and `dbr` decide only which memory an operand reaches**, and a routine may be meant
   to run with several. Callers that disagree combine as two paths do where they meet: `dbr`
   becomes one of the callers' banks, and `dp` becomes unknown, an error only where an operand
@@ -1372,11 +1384,15 @@ Three kinds of routine carry a signature: a proc with a body, an extern proc
 these.
 
 **A routine with no body has nothing to infer from.** An extern proc at a constant address
-or an imported routine that writes nothing about its state is called in any state and returns
-with every part unknown, since no body says what it does. The code after a call to it then sets
-what it needs. A routine with no body that writes some items takes the defaults for the rest,
-as before, and is trusted. An extern proc that names another routine and writes nothing takes
-that routine's signature.
+or an imported routine therefore declares its state wherever the processor has state to
+declare. On the 65816 one that writes nothing about its state, with no signature or with only
+`keeps` or `reads`, is the error `signature-required`, reported at the declaration rather than
+at some caller's return far from it. `?` is the declaration for a routine nothing is known
+about: it is called in any state and returns with every part unknown, and the code after a call
+to it then sets what it needs. On the 6502 and its CMOS variants there is no such state, so an
+empty signature is complete and means the same. A routine with no body that writes some items
+takes the defaults for the rest, as before, and is trusted. An extern proc that names another
+routine and writes nothing takes that routine's signature.
 
 **Transfer functions.** Every instruction has a fixed effect on the state:
 
@@ -1388,7 +1404,7 @@ that routine's signature.
 | `rep #const` with E unknown | the named widths become unknown |
 | `rep`, `sep` with a non-constant operand, or one a store under a `.patch` may write (§7.4) | both widths unknown |
 | `.ensure a16, i8` | the named widths become known (below) |
-| `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown: native, both widths unknown |
+| `clc` immediately before `xce`, in the same basic block | from emulation: native, both widths 8; from native: no change; with E unknown or `*`: native, an 8-bit width stays 8, which it is after either mode, and any other width becomes unknown |
 | `sec` immediately before `xce`, in the same basic block | emulation mode, both widths 8 |
 | any other `xce` | E unknown, both widths unknown |
 | `php`, and every other push or pull | moves the analysis stack (below) |
@@ -1398,9 +1414,10 @@ that routine's signature.
 | a store into the bytes on the stack: relative to S, indexed by a register `tsx` or `tsc` filled, or to a fixed address from $0100 to $01FF | the analysis stack becomes unknown, so a `plp`, `pld` or `plb` after it restores nothing known; the register walk forgets what a pull or `rti` restores the same way (§16) |
 | any other `plp` | both widths unknown; E unchanged |
 | `jsr f`, `jsl f` | state must match f's entry; becomes f's exit, except that items f declares `*` keep their value. A call to a routine that says `noreturn` ends the path |
+| `jsr L`, `jsl L`, where L is a label inside a routine g, g's own or another's | state must match what L's `.state` declares, and the call must be `jsr` or `jsl` as g is `near` or `far`; becomes g's exit, with its `*` items taken from the state here, since the path from L leaves by g's returns. Where g declares `noreturn`, the call ends the path, as a call to g does; an inferred never-returns is worked out from g's own entry and says nothing about the path from L, so it does not count |
 | `per L-1` directly followed by `brl f` or `bra f` to a routine, where `L` labels the statement after the branch | a relative call, as `jsr f`; with `phk` directly before the `per`, as `jsl f` |
 | `jmp f`, `jml f`, a branch or `.next` edge to f, or a `.fallthrough f`, where f is a routine (a tail call) | state must match f's entry; f's exit, with its `*` items taken from the state here, must match this proc's exit; f must be `near` or `far` as this proc is. Where this proc never returns or is an interrupt handler, or f never returns, only f's entry is checked. An unconditional transfer ends the path |
-| `jsr (t,x)` with `.next` naming routines | state must match every entry; becomes the merge of their exits |
+| `jsr (t,x)` with `.next` naming routines, or labels inside routines | each is checked as a direct call to it is, so a label needs a `.state` and the state must match it; becomes the merge of what each returns with, which for a label is the exit of the routine it is in |
 | `rts`, `rtl` | state must match the proc's exit; path ends. An error in a proc that says `noreturn` or `interrupt` |
 | `rti`, `stp` | path ends, nothing checked |
 | `brk #s`, `cop #s`, `wdm #n`, `wai` | no change |
@@ -1439,8 +1456,9 @@ known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`
 `dp?`) deliberately forgets. `emu` also makes both widths 8, which is what emulation mode
 pins them at. Placed directly after a label, a `.state` is that label's declaration.
 
-Where such a label can also be entered from outside its routine — it is exported, or a path
-from another routine names it — the declaration is everything the label assumes: a part it does
+Where such a label can also be entered from outside its routine — it is exported, a path
+from another routine names it, or a call from anywhere names it — the declaration is everything
+the label assumes: a part it does
 not give is unknown there, whatever the routine's own paths leave, except a part the routine's
 signature says `*`, which stays unchanged there as it does at a label nothing reaches. The two
 sides meet in the middle, then: a jump in is checked for the parts the declaration gives, and
@@ -1548,15 +1566,17 @@ analysis stack, so a frame reaches them:
   returns: this proc never does or is an interrupt handler, or the target never returns;
 - on every CPU, every call to a routine that takes `args n` has n bytes pushed, where what the
   caller pushed since it was entered is known;
-- no interrupt handler is called, and no routine that says `noreturn` or `interrupt` returns
-  with `rts` or `rtl`, on every CPU;
+- no interrupt handler, and no label inside one, is called, and no routine that says `noreturn`
+  or `interrupt` returns with `rts` or `rtl`, on every CPU;
 - every call targets a routine with a signature (proc, extern proc or `proc(...)`
-  import). A local subroutine is a separate proc, grouped with its callers in a
-  `.scope` when a shared namespace helps; procs do not nest (§6.1). A routine with
-  several entry points is written as adjacent procs, each ending in a `.fallthrough` into the
-  one written after it (§7.4). On the
-  6502 and its CMOS variants, where there is no state to contract, a call may target any address
-  expression.
+  import) or a label inside a routine, which declares its state with a `.state` (§7.4). Anything
+  else is `call-target-not-a-routine`, whose message names the declaration that makes the target a
+  routine: `proc(...)` on an import, or an extern proc at any other address. A local subroutine is
+  a separate proc, grouped with its callers in a `.scope` when a shared namespace helps; procs do
+  not nest (§6.1). A routine with several entry points is written as adjacent procs, each ending
+  in a `.fallthrough` into the one written after it (§7.4), or as one proc whose second entry is a
+  declared label. On the 6502 and its CMOS variants, where there is no state to contract, a call
+  may target any address expression.
 
 Outside any `.proc` there is no processor state: on the 65816 `rep`, `sep`, `xce`,
 `plp`, `.state`, `.ensure`, `.frame` and any width-dependent immediate are errors, since code that touches processor
@@ -1663,9 +1683,10 @@ tells the analysis what it cannot see. The annotations are claims: nt65 checks t
 claims and the code are consistent with each other, which is the same contract as the
 proc's own entry declaration. The annotations are required on every CPU, because what each
 routine reads and keeps (§7.5) depends on its paths on every CPU, and falling off the end of a
-proc is an error everywhere. The one exception is a jump into another proc's interior and an
-exported inner label. Only the 65816 has processor state that the code after the label depends
-on and that no jump can supply, so only there does the label need a declaration. On the other
+proc is an error everywhere. The one exception is a jump into another proc's interior, a call
+to a label inside a proc and an exported inner label. Only the 65816 has processor state that
+the code after the label depends on and that no jump or call can supply, so only there does the
+label need a declaration. On the other
 CPUs the label is an entry where nothing about the registers is known.
 
 Two annotations carry most of it. Each applies to the statement immediately above it (for
@@ -1818,17 +1839,17 @@ The third directive is about the end of a routine rather than a statement:
 | quirk | how it is recognized | what is required |
 |---|---|---|
 | indirect jump: `jmp (t,x)`, `jml [t]` | addressing mode | `.next` listing the targets, `.next .return` where it goes back to the caller through a return address the routine pulled, or `.next ?` |
-| indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines; the call returns with the merge of their exits |
+| indirect call: `jsr (t,x)` | addressing mode | `.next` listing the routines, or labels inside routines, that it may call; the call returns with the merge of their exits, a label's being that of its routine |
 | `rts` used as a jump | a block pushes a code label and then returns | `.next` on the `rts` |
 | a routine that returns past inline data: `jsr print` then `.strz "hi"` | the routine's signature declares `inline` (§7.3) | the data after each call matches the declaration: one `.strz`, or a run of data directives directly after the call that comes to exactly n bytes; the analysis skips it with no `.next`, on every CPU |
-| jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range |
+| jump to a computed address: `jmp lbl+3` | direct branch or jump operand is not a bare label or routine name, and is not a constant address | `.next` listing the real targets, or `.next ?` when the target is not an instruction boundary; for a branch, `bne NULL-1`, the label at that address written as the operand, since a branch reaches only code within its range. A jump to a constant address, one whose value is a number and that names no label, routine or data, as `jmp $FFD2` or `jmp KERNAL + 3` does, is not computed: it is a tail call to the code there, as `jsr $FFD2` is a call to it, so the path ends there and nothing is kept across it. On the 6502 and its CMOS variants it needs nothing. On the 65816 that code has to be a routine with a signature, as the target of a call has to be, since what it hands back is what the jumping routine returns with: an extern proc, `.proc CHROUT = $FFD2: ...`, says what it expects and returns with, and a bare address is `call-target-unknown` and a constant that is no routine `call-target-not-a-routine`, as for a call |
 | label used as data: `.addr @h`, `lda #<@h` | a code label used anywhere except as a direct branch, jump or call operand, the memory operand of an instruction that reads it, the argument of `.sizeof`, `.countof`, `.endof`, `.spanof`, `.addrsize`, `.mincycles`, `.maxcycles` or `.bankof`, or the `per L-1` of a relative call | a declaration (a `.state` after the label), unless a `.next` in the same proc names the label |
 | label nothing names | no fall-through, branch, or address-taken use; a label on data and a data declaration are exempt | reported as unreachable; a declaration acknowledges it |
 | code nothing reaches: an instruction with no label after an `rts`, a `jmp`, a call that never returns, or a branch the flags show is always taken | no fall-through and no label, so nothing can name it; in a macro body, no call of the macro reaches it | a warning at its first instruction, faded as unneeded; `.allow "code-unreachable"` where it is reached in a way nt65 cannot see |
-| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it. A `.res` or `.align` takes the `.next` only when its fill runs on, which is when the fill byte is a one-byte instruction that does nothing on the program's CPU, such as `$ea` (`nop`). The fill is the padding's own constant fill byte, else what ld65 fills the segment's padding with: the segment's `fillval` in a linked config, else that of the memory area it loads into, else zero. A segment no linked config places, as in a project without `links`, has a fill nt65 cannot work out. Zero (`brk`), `$ff`, an unknown fill or any other byte makes the edge false, and the message names the fill and where it comes from and asks for a fill byte that runs on or a `jmp` over the padding. Padding whose fill runs on still needs the `.next`, since nt65 does not run flow through data |
+| data reached by fall-through: the `.byte $2c` skip, opcodes ca65 lacks | data directive inside a proc with a fall-through predecessor | `.next` on the data. A routine it names is a jump to that routine's start, checked like a tail call, whether or not it is the one written next. A routine that ends in such data is reported once, as running into it. A `.res` or `.align` takes the `.next` only when its fill runs on, which is when the fill byte is a one-byte instruction that does nothing on the program's CPU, such as `$ea` (`nop`). The fill is the padding's own constant fill byte, else what ld65 fills the segment's padding with: the segment's `fillval` in a linked config, else that of the memory area it loads into, else zero. A segment no linked config places, as in a project without `links`, has a fill nt65 cannot work out. Zero (`brk`), `$ff`, an unknown fill or any other byte makes the edge false, and the message names the fill and where it comes from and asks for a fill byte that runs on or a `jmp` over the padding. Padding whose fill runs on still needs the `.next`, since nt65 does not run flow through data. Data in a macro body is reported at the call that runs into it, with the body line as a note (§11.6): where the data is the last thing the call expands to, the `.next` goes after the call (§11.3), and anywhere else it goes in the body |
 | a conditional branch that is always taken: `bcs` over inline text after a routine that returns with carry set | the flags are known where the branch stands from something the flag analysis does not follow, such as what a routine returns with where its signature does not say; a flag the routine's own instructions set, or a signature gives, is followed, and needs nothing | `.next` naming the branch's own target, which removes the edge past the branch; the fix of the data it would otherwise run into writes it |
 | jump to a label on a data directive | target's statement is data | `.next` on the data, plus a declaration on the label |
-| jump into another proc's interior, exported inner label | scoped path to an inner label used as a target, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. Such a label may be a jump target, never a call target. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what it hands back (§7.7). On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
+| jump into another proc's interior, call to an inner label, exported inner label | scoped path to an inner label used as a target, a call to a label inside a proc, `.export` of an inner label | on the 65816, a declaration on the label, which a jump from any module is checked against for the parts it gives, and which is all the code after the label assumes (§7.3). The stack there is the one entering the routine leaves, so nothing the path above the label pushed is known after it. The jump is a way out of the routine making it, checked like a tail call: control never comes back, so that routine returns the way the routine the label is in returns and hands back what the path from the label hands back (§7.7). Such a label may be a call target too, on every CPU, from any routine including its own: on the 65816 the call is checked against the declaration, made with `jsr` or `jsl` as the label's routine is near or far, and comes back with what that routine returns with. On every CPU, a call to a label inside a routine declared `noreturn` ends the path, as a call to the routine does; an inferred never-returns is worked out from the routine's own entry and says nothing about the path from the label, so it does not count. A label its own routine calls is an entry point like any other, so on the 65816 it needs the declaration as well. On the other CPUs no declaration is needed: the label is an entry where nothing about the registers is known |
 | falling off the end of a proc | last block does not end in a transfer of control | `.fallthrough next_proc` as the last line of the body as the configuration resolves it, which may be the last line of a branch of an `.if` chain that ends the body, checked like a tail call and checked to be the routine written directly after, in the same segment, or `.next ?`; the fix writes the `.fallthrough` where the routine written next is known. Where the last statement is a conditional branch, the message offers first the `.next` naming the branch's own target, for a branch that is always taken, and no `.next ?`, which cannot follow a branch. The next proc may be another module's where placement puts the two in one translation unit (§12): across a `.place` it is read in the segment the placing file is in at that line, and a routine in another segment is an error naming both |
 | falling off the end of a segment block nested in a proc | its last block does not end in a transfer of control | `.next` saying where flow goes, or `.next ?`. A segment block is not a routine, so this is a claim about where flow goes and nothing about what is written next, and `.fallthrough` does not stand there; a jump into and out of the block is followed like any other in the proc |
 | a `plp` that pulls no saved P, non-constant `rep`/`sep`, `xce` not immediately after `clc`/`sec` | opcode | a `.state` before the next dependent use |
@@ -2299,7 +2320,8 @@ taken at that word, since control does not come back from it. A jump into anothe
 interior (§7.4) is taken at what the path from that label hands back, worked out from the label
 with the registers a call would bring, alongside the routines. A `keeps` on the routine the label
 is in does not cover that path, because it is checked only from the routine's entry. The same
-holds for a call to such a label. Entered there, a routine may pull what its path from the top
+holds for a call to such a label, from any routine on every CPU, its own included: the call
+hands back what the path from the label hands back. Entered there, a routine may pull what its path from the top
 pushed, which is then what its caller pushed, so a label is also asked whether it reaches below
 its entry on the stack. A branch says the same on the path where it is taken, whether it names the
 routine or a label inside it, a `.next` says it for the statement it stands under, which is how
@@ -2308,7 +2330,7 @@ routine that runs on into the next one. So a routine whose only way out hands co
 promises no more than the routine it hands off to: where that one promises nothing, this one can
 promise nothing, and what is reported names where control went, the routine it went to and the
 `keeps` that belongs there. A `noreturn` routine is the exception, because it hands nothing back
-to anyone: it keeps everything, so a path that calls it or hands control to it ends there with
+to anyone: it keeps everything, so a path that calls it, or a label inside it, or hands control to it ends there with
 nothing to check, which is what lets a routine that promises `keeps y` jump to an error handler
 that never comes back.
 
@@ -2397,14 +2419,17 @@ editor can be told not to show.
 - **On hover over the line that declares a routine or opens a block**, the same lists, because
   the lenses above it may not be there.
 - **On hover over an instruction**, beside what the line costs, what each register holds there,
-  one to a line and always all four, and under them what the routine has pushed, top of the
-  stack first:
+  one to a line and always all seven, which are A, X and Y and then the carry, zero, negative
+  and overflow flags, and under them what the routine has pushed, top of the stack first:
 
   ```text
   A       X as entered
   X       as entered
   Y       new
   C       as entered, or new
+  Z       new
+  N       new
+  V       as entered
 
   stack   X as entered
           status a8, i8
@@ -2871,8 +2896,9 @@ and anywhere else it is an error.
   `.assert main .in [$8000..$ffff]`, the output writes ca65's comparisons, one for each item.
 - **`.switch(v, set, result, ..., otherwise)`** is the result after the first set that holds
   `v`, and `otherwise` when none does. `otherwise` may be left out, and then a value that no set
-  holds is an error, which is how a `.switch` over an enum says it covers every member. `v` must
-  be a constant. Like `.select`, it reads only the result it chooses, and no set after the one
+  holds is an error, which is how a `.switch` over an enum says it covers every member. In a
+  `.func` body that error is reported at the call, naming the argument as the caller wrote it,
+  with the `.switch` as a note, as a macro body's is (§11.6). `v` must be a constant. Like `.select`, it reads only the result it chooses, and no set after the one
   that holds `v`, so those may name what this build does not declare.
 
 ```nt65
@@ -3244,7 +3270,8 @@ The rules:
 - `.export` before a binding-named declaration, or before `.multiproc`, exports every instance;
   the list form, `.export play::pulse1`, exports one. It is the one `.export` a repetition body
   may hold, since the names it exports are the enum's. `.export .scope play { }` around a
-  family exports its instances by the ordinary rule.
+  family exports its instances by the ordinary rule. `.export .each` is an error that points at
+  these forms: the `.each` itself declares nothing, only the declarations in its body do.
 - A condition in the body may name the enum's members, `.if ch == Channel::noise`: the
   binding's own value is one of them, so they are known where a turn's conditions are answered.
 - What the body declares is the turn's, as a repetition's always is, and is named after the
@@ -3497,7 +3524,8 @@ annotates a macro that leaves data in the instruction stream:
 
 **Local declarations.** A body may declare labels, constants, scopes, enums, structs,
 unions, charmaps and lists. Each is local to its expansion and can be named only in the
-body. A macro's header resolves names where the macro is declared and a body cannot
+body. A name used outside it is not declared there, and where the body of a macro the file
+calls declares it, the message says so and asks for the declaration in the caller instead. A macro's header resolves names where the macro is declared and a body cannot
 export, so no local type or list can reach the caller, and a type declared in a body
 never gives the caller a shape.
 
@@ -3600,13 +3628,15 @@ With a signature, the analysis treats a call the way it treats `jsr`: the state 
 match the entry and becomes the exit. Each expansion is checked against the signature,
 with errors reported at the body line and naming the call, so a caller in the wrong
 state gets "`add16!` needs `a8`" at the call rather than an unknown width inside the
-body. A block spliced into a macro with a signature must leave the state as it found it.
-In the body, and in a block spliced into it, a `*` item means the state at the call, not at
-the routine's entry. What a `php`, `phd` or `phb` there saves is kept in the routine's terms,
-the state at the call standing in for each `*`, so a pull after the body reads back the
-width or value that was pushed. A pull in the body gets back a `*` item only where what it
-pulls is what that item means; anything else known comes back as it is, and the rest is
-unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
+body. In the body a `*` item means the state at the call, not at the routine's entry. A block
+spliced into the body is the caller's code, so it sees the caller's state: where the body
+reaches the block, each `*` item is the state at the call, which the caller knows as well as
+it did before the call, and a part the body set is what the body set it to. The block must
+leave the state as it found it. What a `php`, `phd` or `phb` in either saves is kept in the
+routine's terms, the state at the call standing in for each `*`, so a pull after the body
+reads back the width or value that was pushed. A pull in the body gets back a `*` item only
+where what it pulls is what that item means; anything else known comes back as it is, and the
+rest is unknown. Without a signature, an expansion is analyzed inline as the code it contains. On the
 6502 and its CMOS variants, signatures on macros are accepted and have no effect.
 
 This is the checked replacement for macros that test ca65's `.asize` and `.isize`. A macro
@@ -3620,7 +3650,10 @@ what holds under any arguments: parsing, names, the forbidden items above, and h
 parameters are used. A call is checked for each argument against its parameter's kind: a
 `const` that is not constant, a word not in its `one` list, an unbraced `(ptr)` for an
 `operand`. What depends on a particular binding, such as `stx dest` with `dest` bound to
-`buf,x`, is reported at the call with a note naming the line in the body.
+`buf,x`, is reported at the call with a note naming the line in the body. So is what the flow
+and state analyses find in an expansion, since they analyze each call's code where it is called:
+data the code runs into, a construct without the annotation §7.4 requires, a return the routine
+may not make, or the wrong state. A fix is offered only where it edits the caller's own lines.
 
 A word a condition compares with what a parameter stands for is never looked up, so a
 misspelt one would quietly never match. A comparison of `.mode(p)` with a word that is not a
@@ -3907,7 +3940,9 @@ is then checked as a name declared there: against the segment's bank, its direct
 address space (§5.2, §7.5).
 
 On the 6502 and its CMOS variants the signature of a `proc(...)` import or an extern proc may be
-empty, because there is no state for it to declare. On the 65816 it may not (§7.3).
+empty, because there is no state for it to declare. On the 65816 it may not: an empty one is
+`signature-required` at the declaration, and `proc(?)` declares a routine nothing is known
+about (§7.3).
 
 **A typed import** says what the bytes another object defines are, in the element types a
 `.data` declaration is written with (§8): `.import c_sp: .byte[2]`, `.import actors: .type Actor[8]`.
@@ -4416,7 +4451,8 @@ alone and without an assembler:
   declared name a misspelling is within a letter or two of, ca65's assertion level dropped, a
   `.res` as the `.byte[n]` that reserves the same room, an export widened to the address size it
   exports, the width item a routine assumes written into its signature, and the declaration or
-  `.use` item nothing names, taken out or exported. Where the fix is a name nobody but the
+  `.use` item nothing names, taken out or exported, where a path reaches it (a cheap local, or a
+  declaration in a repetition's body, is only taken out). Where the fix is a name nobody but the
   programmer can give — a name ca65 would read as an instruction (§4) — nothing is written: the
   caret goes on the name and a rename starts. Where a line has two readings — an expression that
   needs parentheses, a width the analysis cannot work out — each is offered and none is
@@ -4568,7 +4604,8 @@ process does.
 
 **Unused symbols** are warnings: a label, constant, macro, struct, union, enum, routine or data
 declaration that nothing names and the file does not export, since an export is what another
-file uses. A member of a named enum is one of a set and is not reported on its own, a label a
+file uses. A declaration no path reaches, such as a cheap local or one in a `.repeat` or `.each`
+body, cannot be exported, so its warning says only that it is never used. A member of a named enum is one of a set and is not reported on its own, a label a
 `.state` declares an entry point is reached from outside, and a label flow analysis reports as
 never reached is not reported twice. A routine nothing calls, jumps to or names — in data, in a
 `.next` or a `.fallthrough`, anywhere — and that the file does not export is a routine nothing
@@ -4798,15 +4835,18 @@ Recorded so the reasoning survives. None is open.
   second entry point, which is right: the two ways in genuinely arrive on different stacks, and
   a routine whose second entry point reads what its caller pushed has `args n` to say so. The
   message on whatever then fails names the label and says both.
-- **A jump into another routine's interior is an exit, taken at that routine's word.** It looks
-  like a jump within a body and behaves like a tail call: control lands in another routine, and
-  that routine returns to this one's caller. So the jumping routine is held to what the routine
-  the label is in declares and hands back — its exit state and its `keeps` — and not to what the
-  code after the label happens to do, which is a body's business and no part of an interface.
-  Reading the label's own `.state` for this instead was weighed and refused: a declaration says
-  what the state at a point is, and there is nothing in it, nor anywhere for it, to say which
-  registers survive from there to the return. Taking the routine's word keeps one rule for both
-  spellings of a tail call and puts the promise where a caller can already read it.
+- **A jump into another routine's interior is an exit, taken at what the path from the label
+  hands back.** It looks like a jump within a body and behaves like a tail call: control lands
+  in another routine, and that routine returns to this one's caller, the way that routine
+  returns. What registers survive is worked out from the label, as §7.7 says, and the jumping
+  routine's `keeps` is checked against that. The `keeps` of the routine the label is in was
+  weighed for this and refused, because it is checked only on the paths from that routine's
+  entry and so says nothing true about the path from the label. Reading the label's own
+  `.state` was refused too: a declaration says what the state at a point is, and there is
+  nothing in it, nor anywhere for it, to say which registers survive from there to the return.
+  Where the jumping routine's promise fails, the message offers first to drop the register from
+  that promise, since nothing can be restored after a `jmp` and the path from the label may be
+  shared with the routine's own callers, and only then to keep it on that path.
 - **What a routine keeps is worked out; what it promises is declared.** The set is a fact
   about a body, as what a pass costs is, so it is computed and shown rather than written;
   `keeps` is a promise a caller may lean on, so it is declared and checked. That is the same
@@ -5048,7 +5088,8 @@ Recorded so the reasoning survives. None is open.
   and would bring back a kind of name that is neither a number nor what is at the address.
 - **Defines are gone.** A build sets the settings modules declare, not names of its own that
   every file sees. Such a name had no default, no module and no place to document it, and
-  `.defined` existed only to ask whether a build had given one.
+  `.defined` existed only to ask whether a build had given one. It is not a function in nt65,
+  and its message points at the setting, `.const NAME ?= default`, whose value a condition tests.
 - **The CMOS variants are CPUs of their own.** The 65SC02, the R65C02 and the WDC 65C02
   differ in whole instructions, and a program for one is wrong on another in exactly those,
   so each checks its own set and sets ca65's matching CPU. `.has` asks about an instruction,

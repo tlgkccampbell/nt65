@@ -11,8 +11,13 @@
 .const NOT_A_SET = 3 .in 4                             ;! error[set-expected]: `.in` takes a set in brackets, such as `[a, b, c..d]`, or the name of a `.list`
 .const ALONE     = [1, 2]                              ;! error[set-out-of-place]: a bracketed set can appear only after `.in` or as a `.switch` arm
 .const TEXT      = 3 .in ["three"]                     ;! error[set-item-is-text]: a set holds numbers and names, not text
-.const NO_ARM    = .switch(Mode::zpx, [Mode::imp], 1)  ;! error[switch-no-arm]: no arm of this `.switch` holds 1, and it has no default result
+.const NO_ARM    = .switch(Mode::zpx, [Mode::imp], 1)  ;! error[switch-no-arm]: no arm of this `.switch` holds `Mode::zpx`, which is 1, and it has no default result
 .const SHORT     = .switch(1, [1])                     ;! error[switch-arguments]: `.switch` takes a value, a set and a result for each arm, and an optional default: `.switch(v, [a, b], x, [c], y, otherwise)`
+
+; In a function body the value comes from the call, so the call is reported, with the argument as
+; the caller wrote it.
+.func width(m) = .switch(m, [Mode::imp], 0)
+.const WIDE = width(Mode::zpx)      ;! error[switch-no-arm]: no arm of the `.switch` in `width` holds `Mode::zpx`, which is 1, and it has no default result
 
 .segment BSS
 .data where: .byte

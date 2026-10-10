@@ -204,7 +204,8 @@ public sealed class FlowTests
         var problems = Problems(".proc p {\n    rts\n@gone:\n    nop\n    rts\n}\n");
 
         Assert.Equal(
-            ["main.nt65:5: `@gone` is never reached: no code falls into it and nothing refers to it"],
+            ["main.nt65:5: `@gone` is never reached: no code falls into it and nothing refers to it; "
+                + "if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it"],
             problems);
     }
 

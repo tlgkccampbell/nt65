@@ -37,11 +37,11 @@
 .export .proc main: a8, i8, native {
     jsr work
     lda #Mode::busy
-@unnamed:                       ;! warning[unused-symbol]: `@unnamed` is never used or exported
+@unnamed:                       ;! warning[unused-symbol]: `@unnamed` is never used
     ldx #0
     rts
     ; An unreachable label is reported once, as unreachable, which says more than unused.
-@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: no code falls into it and nothing refers to it
+@dead:                          ;! warning[label-unreachable]: `@dead` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
     rts
     ; An entry point nt65 cannot see the callers of declares its state, and is not reported.
 @hook:
@@ -51,6 +51,12 @@
 
 .segment RODATA
 .data table: .byte[3]               ;! warning[unused-symbol]: `table` is never used or exported
+
+; A declaration in a repetition's body is a different one on each iteration, and no path reaches
+; any of them, so it cannot be exported and is only ever unused.
+.repeat 2 {
+    .data spare: .byte[2]           ;! warning[unused-symbol]: `spare` is never used
+}
 
 ; A routine is reported like anything else: nothing calls it, jumps to it or names it, and it
 ; is not exported, so nothing can reach it.

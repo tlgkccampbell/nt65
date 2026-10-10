@@ -9,3 +9,11 @@
     lda:                                ;! error[mnemonic-name]: `lda` is legal as a name but reads as the 6502 instruction
     rts
 }
+
+; An `.allow` hides a warning before the project's severities apply, so it still hides one the
+; project raises to an error where the code knowingly relies on it.
+.proc allowed {
+    .allow "mnemonic-name", "kept for a ca65 caller"
+    ldx:
+    rts
+}

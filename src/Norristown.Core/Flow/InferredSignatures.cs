@@ -237,12 +237,16 @@ public sealed class InferredSignatures
 
     /// <summary>
     /// Returns <paramref name="entry"/> with <paramref name="part"/> set from what the callers
-    /// agree on. Where they do not, a width or the mode keeps its default, and the direct page
-    /// becomes unknown, as it does where two paths meet. Where the callers agree on emulation
-    /// mode, the widths the routine does not declare are 8 bits, which is all they can be.
+    /// agree on. Where they disagree, a width keeps its default, the mode becomes <c>*</c> as a
+    /// width's default is, and the direct page becomes unknown, as it does where two paths meet.
+    /// Where a caller gives nothing that can be known, the part keeps its default.
+    /// Where the callers agree on emulation mode, the widths the routine does not declare are 8
+    /// bits, which is all they can be.
     /// </summary>
     private static ProcessorState With(ProcessorState entry, StateParts part, Seen answer, ProcessorState defaults)
     {
+        if (part == StateParts.Mode && answer.Kind == SeenKind.Disagree)
+            return entry with { E = ProcessorMode.Unchanged };
         if (answer.Kind == SeenKind.Unknown || (answer.Kind == SeenKind.Disagree && part != StateParts.DirectPage))
             return Defaulted(entry, part, defaults);
         return part switch
@@ -269,6 +273,7 @@ public sealed class InferredSignatures
     {
         StateParts.A => ProcessorState.Format(StateRegister.A, seen.Value == 0 ? Width.Eight : Width.Sixteen),
         StateParts.Index => ProcessorState.Format(StateRegister.Index, seen.Value == 0 ? Width.Eight : Width.Sixteen),
+        StateParts.Mode => ProcessorState.Format(seen.Value == 0 ? ProcessorMode.Native : ProcessorMode.Emulation),
         _ => StateValue.Of(seen.Value).Format(StateRegister.DirectPage),
     };
 
@@ -384,6 +389,8 @@ public sealed class InferredSignatures
         /// Learns from the calls and returns that <paramref name="states"/> recorded, each of
         /// which was analyzed with the signatures as they stand. What a routine whose entry is
         /// still pending does is not learned from, since its body was analyzed with a placeholder.
+        /// A routine's call to itself counts once its entry is settled, so a recursive call made in
+        /// another state disagrees with the outside callers, as any other caller would.
         /// </summary>
         public void Learn(IEnumerable<StateAnalysis> states)
         {
@@ -394,7 +401,7 @@ public sealed class InferredSignatures
                 {
                     var caller = RoutineKey.Of(call.Caller);
                     var target = RoutineKey.Of(call.Target);
-                    if (caller == target || pending.GetValueOrDefault(caller) != StateParts.None || !pending.ContainsKey(target))
+                    if (pending.GetValueOrDefault(caller) != StateParts.None || !pending.ContainsKey(target))
                         continue;
                     if (!calls.TryGetValue(target, out var list))
                         calls[target] = list = [];
@@ -432,7 +439,7 @@ public sealed class InferredSignatures
                         banks[key] = answer.Kind == SeenKind.Known ? StateValue.Of(answer.Value) : StateValue.Unknown;
                     else
                         entries[key] = With(entries[key], part, answer, declared.Entry);
-                    if (answer.Kind == SeenKind.Disagree && part is StateParts.A or StateParts.Index or StateParts.DirectPage)
+                    if (answer.Kind == SeenKind.Disagree && part is StateParts.A or StateParts.Index or StateParts.Mode or StateParts.DirectPage)
                     {
                         disagreements[(key, part)] = [.. seen
                             .Where(each => each.Seen.Kind == SeenKind.Known)

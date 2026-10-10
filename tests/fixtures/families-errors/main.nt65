@@ -104,3 +104,12 @@
 .multiproc Channel {            ;! error[expected-comma]: expected `,` and the name to bind: `.multiproc Channel, ch {`
     rts
 }
+
+; An `.each` declares nothing itself, so `.export` goes on the family declaration in its body.
+.scope voices {
+    .export .each Channel, ch {     ;! error[export-declares-nothing]: `.each` itself declares nothing, so there is nothing to export: put `.export` on the declaration in its body that is named after the binding, as `.export .proc ch`, or write `.export .multiproc`
+        .proc ch {
+            rts
+        }
+    }
+}

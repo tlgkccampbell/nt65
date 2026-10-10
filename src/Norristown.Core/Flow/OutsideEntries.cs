@@ -1,14 +1,16 @@
 using Norristown.Layout;
+using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.Flow;
 
 /// <summary>
-/// Finds which of a file's labels control may reach from outside the routine they are in.
-/// Another module may jump to an exported label, and this file may name a label from another
+/// Finds which of a file's labels control may reach from outside the routine's own paths.
+/// Another module may jump to an exported label, this file may name a label from another
+/// routine, and a call to a label enters it from wherever the call is made, even inside the same
 /// routine. The analysis treats an instance of the same <see cref="Family"/> as part of the same
-/// routine, so a path from one is not from outside.
+/// routine, so a jump from one is not from outside.
 /// <para>
 /// The labels this file names from other routines are worked out the first time any label is
 /// asked about, and kept, because the set is the same for every routine in the file.
@@ -46,9 +48,9 @@ public sealed class OutsideEntries
             + $"on `{routine.DisplayName}` declares what the caller of a second entry point pushed");
 
     /// <summary>
-    /// Returns whether control may reach <paramref name="block"/>'s label from outside its routine.
-    /// Only a label inside a routine counts, because the routine's own name is where its callers
-    /// are meant to enter it.
+    /// Returns whether control may reach <paramref name="block"/>'s label other than along its
+    /// routine's own paths. Only a label inside a routine counts, because the routine's own name is
+    /// where its callers are meant to enter it.
     /// </summary>
     public bool Reaches(BasicBlock block)
     {
@@ -62,7 +64,9 @@ public sealed class OutsideEntries
 
     /// <summary>
     /// Returns every label this file names from a routine other than the one the label is in,
-    /// whether as the target of a jump into that routine or anywhere else in an operand.
+    /// whether as the target of a jump into that routine or anywhere else in an operand, and every
+    /// label this file calls. A call enters the label with whatever state the caller has, so the
+    /// label is an entry point even when its own routine makes the call.
     /// </summary>
     private HashSet<Symbol> Named()
     {
@@ -71,10 +75,12 @@ public sealed class OutsideEntries
         {
             if (step.Routine is not { } routine)
                 continue;
+            var calls = step.Statement is InstructionStatementSyntax instruction
+                && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
             foreach (var name in step.Statement.DescendantNodes().OfType<NameExpressionSyntax>())
             {
                 if (Targets.Of(model, name, step.On)?.Symbol is { Kind: SymbolKind.Label, Routine: { } owner } label
-                    && owner != routine && !owner.IsSiblingOf(routine))
+                    && (calls || (owner != routine && !owner.IsSiblingOf(routine))))
                 {
                     found.Add(label);
                 }

@@ -1,0 +1,28 @@
+; What `.allow` refuses to hide. A warning whose fix is an annotation cannot be allowed, because
+; hiding it would leave a path nt65 cannot see running without being analyzed.
+.module main
+
+.cpu 6502
+
+.segment CODE
+.export .proc main {
+    rts
+    .allow "label-unreachable"  ;! error[allow-answered]: `.allow` cannot hide `label-unreachable`: add the annotation its message names, which tells nt65 what really happens
+@hook:                          ;! warning[label-unreachable]: `@hook` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
+    rts
+}
+
+; The `.state` the message names is the answer: it declares the label an entry point.
+.export .proc handler {
+    rts
+@hook:
+    .state ?
+    rts
+}
+
+; Dead code with no label has no entry point to declare, and `.allow` may still hide it.
+.export .proc after_return {
+    rts
+    .allow "code-unreachable", "kept to show the operand form"
+    lda #1
+}

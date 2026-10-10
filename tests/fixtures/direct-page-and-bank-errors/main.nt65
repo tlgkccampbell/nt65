@@ -25,6 +25,9 @@
 .segment BSS
 .data frames: .byte
 
+.segment SHADOW
+.data shadow: .byte
+
 ; A segment's `dp` and `bank` are constants in range, given once, and `dp` is for `zp`.
 .segment SLOW: abs, dp = $2100        ;! error[segment-dp-not-zp]: segment `SLOW` is not `zp`, and only a `zp` segment takes a `dp`
 .segment WIDE: abs, bank = $100       ;! error[segment-attribute-out-of-range]: `bank` must be $00 to $ff: a bank is one byte
@@ -48,6 +51,13 @@
 ; The design's motivating case: a register mirrored only in some banks, reached from bank $7e.
 .proc mirrored: a8, i8, dbr = $7e {
     sta $2100               ;! error[range-bank-mismatch]: $2100 is reachable only from banks $00-$3f, $80-$bf, but B is $7e here
+    rts
+}
+
+; A single bank is named as one bank, whether it is a mirror or all a range permits.
+.proc single_banks: a8, i8, dbr = $7e {
+    lda shadow              ;! error[bank-mismatch]: `shadow` is in segment `SHADOW`, which is in bank $00 and mirrored in bank $80, but B is $7e here
+    sta $4300               ;! error[range-bank-mismatch]: $4300 is reachable only from bank $00, but B is $7e here
     rts
 }
 

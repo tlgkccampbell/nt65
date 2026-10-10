@@ -300,7 +300,10 @@ internal sealed class FlowChecks
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
             diagnostics.Add(new Diagnostic(label.DeclarationSpan,
-                Catalogue.LabelUnreachable.Message(label.DisplayName)));
+                Catalogue.LabelUnreachable.Message(label.DisplayName))
+            {
+                Fix = new DiagnosticFix(FixKind.State, At: label.DeclarationSpan),
+            });
         }
     }
 
@@ -308,15 +311,18 @@ internal sealed class FlowChecks
     /// Reports data that the instruction above falls through into, as happens with the
     /// <c>.byte $2c</c> skip trick and with opcodes ca65 lacks that are given as bytes. A
     /// <c>.next</c> on the data says where flow goes instead of through it. The analysis cannot
-    /// follow flow into data on any CPU, so the annotation is required on every CPU.
+    /// follow flow into data on any CPU, so the annotation is required on every CPU. Data in a
+    /// macro body is reported at the call, with the body line as a note. Where it is the last
+    /// thing the call expands to, the <c>.next</c> goes after the call, and otherwise in the body.
     /// </summary>
     private void CheckDataReachedByFallingThrough(IReadOnlyList<ControlFlow.Unit> units, HashSet<ControlFlow.Unit> inline)
     {
         var fromCode = false;
         int? stream = null;
         ControlFlow.Unit? before = null;
-        foreach (var unit in units)
+        for (var index = 0; index < units.Count; index++)
         {
+            var unit = units[index];
             if (unit.Step.Stream != stream)
             {
                 fromCode = false;
@@ -333,28 +339,54 @@ internal sealed class FlowChecks
                 continue;
             }
             if (data && fromCode && unit.Next is null)
-            {
-                // Padding whose fill does not run on cannot take a `.next`, so the message asks for
-                // a fill that does, or a jump over it.
-                var message = PaddingFill.Of(unit.Step, model) switch
-                {
-                    { } fill when fill.RunsOn(layout.Cpu) =>
-                        Catalogue.RunsIntoData.Message("padding", "add a `.next` after it saying where flow goes"),
-                    { } fill => Catalogue.RunsIntoData.Message("padding",
-                        fill.WhyNot() + "; give it a fill byte that runs on, such as `$ea` (`nop`), and add a `.next` "
-                            + "after it, or `jmp` over it"),
-                    null => Catalogue.RunsIntoData.Message("data", "add a `.next` after the data saying where flow goes"),
-                };
-                diagnostics.Add(new Diagnostic(unit.Step.Statement.Tree.GetSpan(unit.Step.Statement.Span), message)
-                {
-                    Fix = AlwaysTaken(before),
-                });
-            }
+                ReportRunIntoData(units, index, AlwaysTaken(before));
 
             // Consecutive data lines are reported once: only the first, which code runs into.
             fromCode = !data && flow.RunsOn(unit);
             before = unit;
         }
+    }
+
+    /// <summary>
+    /// Reports the data at <paramref name="index"/> in <paramref name="units"/>, which the
+    /// statement above falls into, with <paramref name="fix"/> where one applies.
+    /// </summary>
+    private void ReportRunIntoData(IReadOnlyList<ControlFlow.Unit> units, int index, DiagnosticFix? fix)
+    {
+        var unit = units[index];
+        var statement = unit.Step.Statement;
+        var what = PaddingFill.Of(unit.Step, model) is null ? "data" : "padding";
+        var call = Expansion.BodyLine(statement, unit.Step.On, model.Tree);
+
+        // Where the data is the last thing a call expands to, a `.next` after the call applies to
+        // it. Anywhere else in a body, the `.next` has to go in the body, after the data.
+        var after = what == "data" ? "after the data" : "after it";
+        string who = "the instruction above", where = $"this {what}";
+        if (call is var (at, holder, level))
+        {
+            var last = !units.Skip(index + 1).Any(next => next.Step.Stream == unit.Step.Stream
+                && next.Step.On?.IsWithin(level) == true);
+            who = "execution";
+            where = last
+                ? $"the {what} that the call to `{at.Name.Text}!` ends in"
+                : $"{what} in the body of `{holder.Name.Text}!`";
+            after = last ? "after the call" : $"after that {what} in the macro body";
+        }
+
+        // Padding whose fill does not run on cannot take a `.next`, so the message asks for a fill
+        // that does, or a jump over it.
+        var message = PaddingFill.Of(unit.Step, model) switch
+        {
+            { } fill when !fill.RunsOn(layout.Cpu) => Catalogue.RunsIntoData.Message(who, where,
+                fill.WhyNot() + $"; give it a fill byte that runs on, such as `$ea` (`nop`), and add a `.next` {after}, "
+                    + "or `jmp` over it"),
+            _ => Catalogue.RunsIntoData.Message(who, where, $"add a `.next` {after} saying where flow goes"),
+        };
+        var found = call is var (reported, _, _)
+            ? new Diagnostic(reported.Tree.GetSpan(reported.Span), message,
+                [new RelatedSpan(statement.Tree.GetSpan(statement.Span), "in the macro body")])
+            : new Diagnostic(statement.Tree.GetSpan(statement.Span), message);
+        diagnostics.Add(found with { Fix = fix });
     }
 
     /// <summary>
@@ -377,9 +409,9 @@ internal sealed class FlowChecks
 
     /// <summary>
     /// Reports each <c>rts</c> or <c>rtl</c> in a routine that never returns or in an interrupt
-    /// handler, and each call to an interrupt handler. Neither kind of routine returns with
-    /// <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by <c>rti</c>, is never
-    /// called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which
+    /// handler, and each call to an interrupt handler or to a label inside one. Neither kind of
+    /// routine returns with <c>rts</c> or <c>rtl</c>, and an interrupt handler, which leaves by
+    /// <c>rti</c>, is never called. It also reports each <c>rti</c> in a routine not marked <c>interrupt</c>, which
     /// the processor may enter in any state. These rules hold on every CPU.
     /// </summary>
     private void CheckReturnsAndCalls(Symbol routine, IReadOnlyList<ControlFlow.Unit> units)
@@ -396,7 +428,7 @@ internal sealed class FlowChecks
             };
             if (returned is not null && routine.Signature is { HasNoCaller: true } own)
             {
-                Report(statement, own.IsInterrupt
+                Report(statement, unit.Step.On, own.IsInterrupt
                     ? Catalogue.HandlerReturnsNotRti.Message(routine.DisplayName, returned)
                     : Catalogue.NoreturnReturns.Message(routine.DisplayName, returned),
 
@@ -406,9 +438,19 @@ internal sealed class FlowChecks
                     // no instruction to replace.
                     own.IsInterrupt && unit.Next is null ? new DiagnosticFix(FixKind.Return, "rti") : null);
             }
-            if (flow.CalledAt(unit.Step) is { Signature.IsInterrupt: true } handler)
+            switch (flow.CalledAt(unit.Step))
             {
-                Report(statement, Catalogue.HandlerCalled.Message(handler.DisplayName));
+                case { Signature.IsInterrupt: true } handler:
+                    Report(statement, unit.Step.On,
+                        Catalogue.HandlerCalled.Message($"`{handler.DisplayName}` is an interrupt handler", "it returns"));
+                    break;
+
+                // The path from a label inside a handler leaves by the handler's `rti`, so a call
+                // to the label is as wrong as a call to the handler.
+                case { Kind: SymbolKind.Label, Signature: null, Routine: { Signature.IsInterrupt: true } owner } label:
+                    Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(
+                        $"`{label.DisplayName}` is inside interrupt handler `{owner.DisplayName}`", "the path from it returns"));
+                    break;
             }
 
             // An `rti` with a `.next` is a computed jump that says where it goes, and is not a
@@ -416,13 +458,18 @@ internal sealed class FlowChecks
             if (statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rti } && unit.Next is null
                 && routine.Signature is { IsInterrupt: false })
             {
-                Report(statement, Catalogue.RtiOutsideHandler.Message(routine.DisplayName),
+                Report(statement, unit.Step.On, Catalogue.RtiOutsideHandler.Message(routine.DisplayName),
                     routine.Tree == model.Tree ? new DiagnosticFix(FixKind.Interrupt, At: routine.DeclarationSpan) : null);
             }
         }
 
-        void Report(SyntaxNode node, DiagnosticMessage message, DiagnosticFix? fix = null) =>
-            diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), message.Descriptor.Severity, message) { Fix = fix });
+        // A line of a macro body is reported at the call that expanded it, with the line as a
+        // note, and without a fix, which would change a line every call expands.
+        void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+            diagnostics.Add(Expansion.BodyLine(node, on, model.Tree) is var (call, _, _)
+                ? new Diagnostic(call.Tree.GetSpan(call.Span), message,
+                    [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")])
+                : new Diagnostic(node.Tree.GetSpan(node.Span), message) with { Fix = fix });
     }
 
     /// <summary>

@@ -506,6 +506,7 @@
         "shift-count-out-of-range",
         "signature-item-needs-65816",
         "signature-item-twice",
+        "signature-required",
         "signature-set-name-is-an-item",
         "signature-set-not-a-set",
         "signature-set-not-first",

@@ -1494,7 +1494,7 @@ immediate in such a routine needs a width the signature writes, and a `rep` in i
 until the signature writes `native` or the code enters native mode with `clc` and `xce`:
 
 ```text
-main.nt65:4:5: error: `lda #` needs the width of A, and `f` declares `a*`, which assumes nothing about it [width-unknown]
+main.nt65:4:5: error: `lda #` needs the width of A, and `f` takes the default `a*`, which assumes nothing about it [width-unknown]
 ```
 
 **Callers that disagree.** The widths and the mode decide how the routine's bytes are read.
@@ -1502,7 +1502,10 @@ Callers that enter a routine with two widths, where its body has an immediate th
 the width, are an error at the routine, `callers-disagree`. It lists each caller, and its fixes
 declare either width. Callers then get the usual error where they call in the other state.
 Where the body does not depend on the width, the callers may disagree, and the routine hands
-the width back as it found it.
+the width back as it found it. The mode works the same way: a routine called in both modes
+that does not depend on the mode is `e*`, and one that does, through an `.ensure a16` or a call
+that needs native mode, is told the mode is not known there, with the callers named. A
+routine's call to itself is one of its callers.
 
 The direct page and the data bank decide only which memory an operand reaches, and a routine
 may be meant to run with several. Callers that disagree combine as two paths do where they
@@ -1898,6 +1901,10 @@ symbol, which is why they mix in one build without either knowing about the othe
 .import VIC_BORDER = $D020          ; a value nt65 needs, checked by ld65 at link time
 ```
 
+On the 65816 a routine's signature cannot be empty, because nt65 has no body to work out its
+state from: write the widths and mode it expects, as in `proc(a8, i16)`, or `proc(?)` if
+nothing is known about it.
+
 A typed import can be measured and indexed like local data: `.sizeof(actors)`,
 `actors[2]::hp`. A checked import, `NAME = value`, gives nt65 a value to use now, and the
 output asserts it with `lderror` so that ld65 fails the link if the ca65 side disagrees.
@@ -1938,7 +1945,8 @@ line is wrong.
 
 The warnings you will meet most are these. A declaration nothing uses and nothing exports is
 `unused-symbol`, and the editor fades it. A `.use` item nothing uses is `unused-use-item`. A
-label nothing reaches is `label-unreachable`. A name that is also an instruction, such as a
+label nothing reaches is `label-unreachable`; if something nt65 cannot see jumps there, a
+`.state` after the label declares it an entry point. A name that is also an instruction, such as a
 constant called `lda`, is legal but is `mnemonic-name`, because the next reader will take it
 for an instruction.
 
@@ -1954,11 +1962,13 @@ hover over the name:
 ```
 
 `.allow` applies to the statement below it. Before a line that opens a block, such as a
-`.proc`, it covers the whole block. It hides only a warning: an error cannot be allowed, and
-neither can a diagnostic whose fix is an annotation such as `.next` or `.patch`, because the
-analysis would go on following paths that are not there. An `.allow` that hides nothing is a
-warning of its own, `allow-unused`, so it goes when the code it was written for changes. The
-editor offers `.allow` as a fix on any warning it may hide.
+`.proc`, it covers the whole block. It hides only a warning, including one your project raises
+to an error. An error cannot be allowed, and neither can a diagnostic whose fix is an
+annotation such as `.next`, `.patch` or `.state`, because the analysis would go on following
+paths that are not there or leave one it cannot see unanalyzed. `label-unreachable` is such a
+warning. An `.allow` that hides nothing is a warning of its own, `allow-unused`, so it goes
+when the code it was written for changes. The editor offers `.allow` as a fix on any warning
+it may hide.
 
 ## In the editor
 
@@ -2278,7 +2288,7 @@ form.
 | `.struct` … `.endstruct`, `.enum`, `.union` | the same words, with braces |
 | `.asciiz "text"` | `.strz "text"` |
 | `.dbyt` | `.beword` |
-| `.charmap $41, $01` | `.charmap screen { 'A'..'Z' = $01 }`, applied as `screen("TEXT")` |
+| `.charmap $41, $01` | a `.charmap screen { … }` block holding the line `'A'..'Z' = $01`, applied as `screen("TEXT")` |
 | `.include "hw.inc"` | a module that exports what the file declared, and `.use`; `nt65 import-inc` converts a file of constants |
 | `.include "part.s"` of code that must land where the line is | a module declared `placed`, and `.place` |
 | `.export` and `.import` between files | `.export` in one module, a path or `.use` in the other |

@@ -92,6 +92,61 @@
     jmp declared::entry     ;! error[return-state-mismatch]: `jmp entry` leaves `leaves_wrongly`: `leaves_wrongly` declares it returns with `a16`, but A is 8-bit when `declared` returns
 }
 
+; A call to a label inside another routine is checked as a jump into it is: the label declares
+; what it takes, and the call returns with what that routine returns with.
+.proc calls_inner: a8, i8 {
+    jsr owner::inner        ;! error[entry-not-declared]: `inner` is inside routine `owner`: mark it an entry point with a `.state` after the label
+    rts
+}
+
+.proc calls_wrongly: a8, i8, native {
+    jsr declared::entry     ;! error[call-state-mismatch]: `jsr entry` needs `a16`, but A is 8-bit here
+    lda #$12
+    rts
+}
+
+.proc far_owner: far, a8, i8, native {
+    rtl
+    inside:
+    .state a8, i8, native
+    rtl
+}
+
+.proc calls_far_label: a8, i8, native {
+    jsr far_owner::inside   ;! error[call-distance-mismatch]: `inside` is far, so call it with `jsl`
+    rts
+}
+
+; A label an indirect call's `.next` names is checked as a direct call to it is, and the call
+; returns with what the label's routine returns with, merged over every place named.
+.segment BSS
+.data vectors: .addr
+
+.segment CODE
+.proc calls_through: a8, i8, native {
+    ldx #0
+    jsr (vectors,x)         ;! error[entry-not-declared]: `inner` is inside routine `owner`: mark it an entry point with a `.state` after the label;! error[call-state-mismatch]: `jsr entry` needs `a16`, but A is 8-bit here
+    .next owner::inner, declared::entry
+    rts
+}
+
+.proc widens: a8, i8, native -> a16 {
+    rep #$20
+    rts
+    inside:
+    .state a8, i8, native
+    rep #$20
+    rts
+}
+
+.proc calls_wide: a8, i8, native -> a16 {
+    ldx #0
+    jsr (vectors,x)
+    .next widens::inside
+    lda #$1234
+    rts
+}
+
 ; A declared label is checked against for the parts its `.state` gives, so those are the only
 ; parts it may assume: what the routine's own path leaves is no promise to whoever jumps in.
 .proc partly: a8, i8 {
@@ -207,10 +262,64 @@
     rts
 }
 
+; A jump to a constant address is a tail call to the code there. On the 6502 it needs nothing,
+; and on the 65816 that code has to be a routine with a signature, as the target of a call has
+; to be, so that what it hands back is known. An extern proc at the address says what it is.
+.const ROM = $E000
+.proc CHROUT = $FFD2: ?
+.proc to_a_number: a8, i8 {
+    jmp $FFD2               ;! error[call-target-unknown]: `jmp` must target a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import
+}
+
+.proc to_a_sum: a8, i8 {
+    jmp ROM + 4             ;! error[call-target-unknown]: `jmp` must target a routine on the 65816: a `.proc`, an extern proc or a `proc(...)` import
+}
+
+.proc to_a_constant: a8, i8 {
+    jmp ROM                 ;! error[call-target-not-a-routine]: `ROM` is not a routine: on the 65816, a call or a jump to an address must target a routine or a label inside one, so declare an extern proc at its address, `.proc name = ROM: ...`, which says what state it takes
+}
+
+.proc to_an_extern: a8, i8 -> ? {
+    jmp CHROUT
+}
+
 ; An exported label inside a routine is another way in.
 .proc exported_inner: a8, i8 {
     rts
     .export inside              ;! error[exported-entry-not-declared]: `inside` is exported from inside routine `exported_inner`: mark it an entry point with a `.state` after the label
     inside:
     rts
+}
+
+; Data a macro body leaves in the instruction stream is wrong for the call that runs into it, so
+; it is reported at that call. Where the data ends what the call expands to, the `.next` goes
+; after the call; anywhere else in the body, it goes in the body.
+.macro skip2() {
+    .byte $2c
+}
+
+.macro skip_inside() {
+    lda #1
+    .byte $2c
+    lda #2
+}
+
+.proc skips_at_the_end: a8, i8 {
+    lda #1
+    skip2!()                ;! error[runs-into-data]: execution falls into the data that the call to `skip2!` ends in: add a `.next` after the call saying where flow goes
+}
+
+.proc skips_inside: a8, i8 {
+    skip_inside!()          ;! error[runs-into-data]: execution falls into data in the body of `skip_inside!`: add a `.next` after that data in the macro body saying where flow goes
+    rts
+}
+
+; Any construct a macro body leaves unannotated is reported at the call that expanded it, with
+; the body line as a note.
+.macro dispatch_on_x() {
+    jmp ($1234,x)
+}
+
+.proc dispatches: a8, i8 {
+    dispatch_on_x!()        ;! error[indirect-jump-unchecked]: `jmp ($1234,x)` is an indirect jump, which nt65 cannot follow: add a `.next` naming the labels it may reach, or `.next ?` where they cannot be named
 }

@@ -28,7 +28,7 @@
     lda #1
     bne @done
     .next @done
-@never:                 ;! warning[label-unreachable]: `@never` is never reached: no code falls into it and nothing refers to it
+@never:                 ;! warning[label-unreachable]: `@never` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
     rts
 @done:
     rts

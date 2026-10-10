@@ -5,14 +5,17 @@
 .cpu 65816
 
 .export late, wrong, stop, crowded, late_never, doubly, handler, closed, calls, tail, takes, short, pointed
-.export near_std, far_jump, wrong_mirror, far_near, reads
+.export near_std, far_jump, wrong_mirror, far_near, reads, resumable, calls_inside
 
 .const LIMIT = 3
 
-; A routine with no body need not declare its state. One that declares nothing returns with
-; every part of the state unknown, since nothing says what it does.
-.proc TOOLBOX = $E10000
-.import blind: proc()
+; A routine with no body has nothing to infer its state from, so on the 65816 it declares it,
+; at the declaration rather than at some caller's return. `?` says that nothing is known.
+.proc TOOLBOX = $E10000         ;! error[signature-required]: `TOOLBOX` has no body, so on the 65816 its signature must declare the state it is called and returns in: write `?` if nothing is known
+.import blind: proc()           ;! error[signature-required]: `blind` has no body, so on the 65816 its signature must declare the state it is called and returns in: write `?` if nothing is known
+.import kept: proc(keeps x)     ;! error[signature-required]: `kept` has no body, so on the 65816 its signature must declare the state it is called and returns in: write `?` if nothing is known
+.proc ROM_ENTRY = $E10004: ?
+.import unknown: proc(?)
 
 ; One that names another routine and writes nothing takes that routine's, which is a declaration.
 .proc also_stop = stop
@@ -63,6 +66,20 @@
 .proc calls: std {
     jsr handler                 ;! error[handler-called]: `handler` is an interrupt handler and cannot be called: it returns with `rti`, which would not return to the caller
     .state std                  ;! error[state-item-not-a-point]: `std` describes a whole routine, not one point in it: put it in the routine's signature, not in `.state`
+    rts
+}
+
+; The path from a label inside a handler leaves by the handler's `rti` as well, so the label
+; cannot be called either.
+.proc resumable: interrupt, native {
+    rep #$30
+    resume:
+    .state a16, i16, native
+    rti
+}
+
+.proc calls_inside: a16, i16, native {
+    jsr resumable::resume       ;! error[handler-called]: `resume` is inside interrupt handler `resumable` and cannot be called: the path from it returns with `rti`, which would not return to the caller
     rts
 }
 

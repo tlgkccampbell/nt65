@@ -11,6 +11,12 @@
 .export main__dispatch
 .export main__set
 .export main__patching
+.export main__clear_screen
+.export main__clear_twice
+.export main__stop_here
+.export main__to_rom
+.export main__to_reset
+.export main__to_kernal
 
 .segment "CODE": absolute
 ; .proc dispatch  main.nt65:16
@@ -50,6 +56,58 @@ patching__op:
     sta a:patching__op+1
     rts
 ; end of patching
+
+; .proc clear_screen  main.nt65:61
+main__clear_screen:
+    lda #0
+    ldx #0
+clear_screen__again:
+    sta a:$0400,x
+    inx
+    bne clear_screen__again
+    rts
+; end of clear_screen
+
+; .proc clear_twice  main.nt65:71
+main__clear_twice:
+    jsr clear_screen__again
+    jsr clear_twice__tail
+    rts
+clear_twice__tail:
+    ldx #0
+    jmp clear_screen__again
+; end of clear_twice
+
+; .proc halt: noreturn  main.nt65:83
+halt:
+    lda #0
+halt__spin:
+    jmp halt__spin
+; end of halt
+
+; .proc stop_here  main.nt65:89
+main__stop_here:
+    ldx #1
+    jsr halt__spin
+; end of stop_here
+
+KERNAL = $ff00
+; .proc to_rom  main.nt65:98
+main__to_rom:
+    jsr $ffd2
+    jsr KERNAL + $e4
+    jmp KERNAL + $d2
+; end of to_rom
+
+; .proc to_reset  main.nt65:104
+main__to_reset:
+    jmp $fffc
+; end of to_reset
+
+; .proc to_kernal  main.nt65:108
+main__to_kernal:
+    jmp KERNAL
+; end of to_kernal
 
 .segment "BSS": absolute
 cmd:   .res 1

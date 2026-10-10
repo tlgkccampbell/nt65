@@ -58,10 +58,24 @@
 .proc calls: a8, i8 {
     jsr far_away            ;! error[call-distance-mismatch]: `far_away` is far, so call it with `jsl`
     jsl calls               ;! error[call-distance-mismatch]: `calls` is near, so call it with `jsr`
-    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816, a call must target a `.proc`, an extern proc or a `proc(...)` import
-    jsr @inside             ;! error[call-target-not-a-routine]: `@inside` is not a routine: on the 65816, a call must target a `.proc`, an extern proc or a `proc(...)` import
+    jsr plain               ;! error[call-target-not-a-routine]: `plain` is not a routine: on the 65816, a call or a jump to an address must target a routine or a label inside one, so import `plain` with `proc(...)`, which says what state it takes
+    jsr value               ;! error[call-target-not-a-routine]: `value` is not a routine: on the 65816, a call or a jump to an address must target a routine or a label inside one, so declare an extern proc at its address, `.proc name = value: ...`, which says what state it takes
+    jsr @inside             ;! error[entry-not-declared]: `@inside` is inside routine `calls`: mark it an entry point with a `.state` after the label
     rts
 @inside:
+    rts
+}
+
+; A call to a label in its own routine enters it as a call from anywhere would, so the label
+; declares what it takes and the call returns with what the routine returns with.
+.proc calls_itself: a8, i8, native -> a8, i8 {
+    rep #$20
+    jsr @half               ;! error[call-state-mismatch]: `jsr @half` needs `a8`, but A is 16-bit here
+    lda #$12
+    rts
+@half:
+    .state a8, i8, native
+    lda #$34
     rts
 }
 
@@ -80,7 +94,7 @@
 ; A label nothing reaches has no state to size an immediate with.
 .proc orphan: a8, i8 {
     rts
-@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: no code falls into it and nothing refers to it
+@lost:                      ;! warning[label-unreachable]: `@lost` is never reached: no code falls into it and nothing refers to it; if it is an entry point nt65 cannot see, add a `.state` after it, and otherwise remove it
     lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and no path from `orphan`'s entry reaches it. A `.state` after its label declares what the state is there
     rts
 }
@@ -131,4 +145,79 @@
     xce
     ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` follows neither `clc` nor `sec`: a `.state` after it declares what it is
     .next ?
+}
+
+; A `clc` before `xce` enters native mode from either mode. Where the mode before it is not
+; known, an 8-bit width stays 8, which it is in either, and only a 16-bit width is lost.
+.proc either_mode: a8, i16, native {
+    .state e?
+    clc
+    xce
+    lda #1
+    ldx #1                  ;! error[width-unknown]: `ldx #` needs the width of X and Y, and it is not known here, because `xce` enters native mode from a mode that is not known, and a 16-bit width is 8 bits if that was emulation mode: a `.state` before it declares which mode it is
+    rep #$10
+    rts
+}
+
+; A `*` a routine writes is what it declares, and one it leaves out is a default it takes.
+.proc by_default {
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and `by_default` takes the default `a*`, which assumes nothing about it
+    lda d:$10               ;! error[direct-page-unknown]: `d:$0010` is reached through the direct page, and `by_default` takes the default `dp*`, which assumes nothing about D
+    rts
+}
+
+.proc declared_star: dp* {
+    lda d:$10               ;! error[direct-page-unknown]: `d:$0010` is reached through the direct page, and `declared_star` declares `dp*`, which assumes nothing about D
+    rts
+}
+
+.segment RODATA
+.data defaults: .addr by_default, declared_star
+
+; A routine that declares nothing about the mode is entered in native mode by default where
+; a caller's mode is not known, and the message says it is a default.
+.segment CODE
+.proc native_by_default {
+    rts
+}
+
+.export .proc unknown_mode: a8, i8, e? {
+    jsr native_by_default   ;! error[call-state-mismatch]: `jsr native_by_default` needs `native`, which `native_by_default` takes by default, but the mode is not known here
+    .next ?
+}
+
+; A recursive call is one of a routine's callers, so a call to itself in another width
+; disagrees with the others where the body depends on the width.
+.proc recurse {             ;! error[callers-disagree]: `recurse` is called with `a16` by some callers and `a8` by others, and `lda #` depends on the width of A
+    lda #1
+    cmp value
+    bcs @done
+    rep #$20
+    jsr recurse
+@done:
+    sep #$20
+    rts
+}
+
+.export .proc recurse_caller: a8, native {
+    jsr recurse
+    sep #$20
+    rts
+}
+
+; Callers that disagree on the mode leave it `*`, which a body that needs native mode says.
+.proc needs_native {
+    .ensure a16             ;! error[ensure-needs-native]: `.ensure a16` needs native mode, and the mode is not known here, because `needs_native` is called with `emu` and `native`
+    sep #$20
+    rts
+}
+
+.export .proc from_native: a8, i8, native {
+    jsr needs_native
+    rts
+}
+
+.export .proc from_emulation: emu {
+    jsr needs_native
+    rts
 }

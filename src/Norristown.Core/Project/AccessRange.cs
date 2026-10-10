@@ -21,10 +21,8 @@ public sealed record AccessRange(long First, long Last, IReadOnlyList<(long Firs
     public bool Permits(long bank) => Banks.Any(banks => bank >= banks.First && bank <= banks.Last);
 
     /// <summary>
-    /// Formats the banks for a message in the project file's notation, such as
-    /// <c>$00-$3f, $80-$bf</c>.
+    /// Formats the banks for a message in the project file's notation, such as <c>bank $80</c> or
+    /// <c>banks $00-$3f, $80-$bf</c>.
     /// </summary>
-    public string FormatBanks() => string.Join(", ", Banks.Select(banks => banks.First == banks.Last
-        ? Semantics.StateValue.Hex(banks.First, 2)
-        : $"{Semantics.StateValue.Hex(banks.First, 2)}-{Semantics.StateValue.Hex(banks.Last, 2)}"));
+    public string FormatBanks() => Semantics.StateValue.FormatBanks(Banks);
 }

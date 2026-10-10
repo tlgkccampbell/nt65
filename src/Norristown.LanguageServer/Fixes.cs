@@ -39,9 +39,10 @@ internal static class Fixes
                 }
             }
 
-            // Any warning that `.allow` may hide can be allowed where it is reported. That
-            // records a decision rather than fixing anything, so it is never preferred.
-            if (diagnostic.Severity == Severity.Warning && Catalogue.IsAllowable(diagnostic.Id))
+            // Any warning that `.allow` may hide can be allowed where it is reported, including one
+            // the project raises to an error. That records a decision rather than fixing anything,
+            // so it is never preferred.
+            if (Catalogue.IsAllowable(diagnostic.Id))
             {
                 yield return Fix(diagnostic, $"Allow `{diagnostic.Id}` here with `.allow`",
                     [Edits.InsertBefore(model.Tree, diagnostic.Span.LineIndex, $".allow \"{diagnostic.Id}\"")],
@@ -266,6 +267,12 @@ internal static class Fixes
                 yield return Fix(diagnostic, $"Add `{kept}` to the `keeps` of `{declaring.Tree.Text[Edits.SpanOf(declaring.Tree, callee).Start..Edits.SpanOf(declaring.Tree, callee).End]}`", [promise]);
                 break;
 
+            case FixKind.Unkeep when fix is { Text: { } unpromised, At: { } jumper }
+                && analysis.ModelFor(jumper.File) is { } owning
+                && WithoutKept(owning.Tree, jumper.LineIndex, unpromised) is { } unkept:
+                yield return Fix(diagnostic, $"Remove `{unpromised}` from the `keeps` of `{Text(owning.Tree, Edits.SpanOf(owning.Tree, jumper))}`", [unkept]);
+                break;
+
             case FixKind.Unused when fix.Text is { } unused:
                 foreach (var change in Unused(model, diagnostic, unused))
                     yield return change;
@@ -364,6 +371,37 @@ internal static class Fixes
         return list.Parent is StateListDirectiveSyntax directive
             ? (title, Removed(tree, tree.GetSpan(directive.Span)))
             : null;
+    }
+
+    /// <summary>
+    /// Returns an edit that removes <paramref name="register"/> from the <c>keeps</c> item in the
+    /// signature of the routine <paramref name="line"/> opens. The item goes whole where it names
+    /// nothing else, and the signature goes whole where the item was all it held. Returns null
+    /// where the signature has no such item, or where removing it would leave an empty entry
+    /// before a <c>-&gt;</c>.
+    /// </summary>
+    private static Edit? WithoutKept(SyntaxTree tree, int line, string register)
+    {
+        if (Edits.RoutineHead(tree, line) is not ({ } signature, _)
+            || signature.Entry.Items.OfType<StateRegistersItemSyntax>()
+                .FirstOrDefault(each => each.Name.Text.Equals("keeps", StringComparison.OrdinalIgnoreCase)) is not { } keeps)
+        {
+            return null;
+        }
+        var index = IndexOf(keeps.Registers, node => node.Name.Text.Equals(register, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+            return null;
+        if (keeps.Registers.Count > 1)
+            return new Edit(tree, ElementSpan(keeps.Registers, index), "");
+        var items = signature.Entry.Items;
+        if (items.Count > 1)
+            return new Edit(tree, ElementSpan(items, IndexOf(items, node => node.Span == keeps.Span)), "");
+        if (signature.Exit is not null)
+            return null;
+
+        // The signature held nothing else, so it goes from the end of the name it follows.
+        var start = signature.ColonToken.GetPreviousToken()?.Span.End ?? signature.Span.Start;
+        return new Edit(tree, new TextSpan(start, signature.Span.End - start), "");
     }
 
     /// <summary>
