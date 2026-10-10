@@ -103,7 +103,7 @@ public sealed class TypeSyntaxTests
     [Fact]
     public void ATypeWritesNothingAndAnEnumWritesItsMembers()
     {
-        var output = Compiled(Source + "\n.export Color, Point, Value\n.segment CODE\n.export .proc main {\n    rts\n}\n");
+        var output = Analysis.Compiled(Source + "\n.export Color, Point, Value\n.segment CODE\n.export .proc main {\n    rts\n}\n");
 
         Assert.Contains("Color__red = $00", output);
         Assert.Contains("Color__green = $05", output);
@@ -115,20 +115,12 @@ public sealed class TypeSyntaxTests
         Assert.DoesNotContain(".func", output);
     }
 
-    /// <summary>The source above, the design's own example of each construct, parses without errors.</summary>
+    /// <summary>The source above, which holds an example of each construct, parses without errors.</summary>
     [Fact]
     public void TheDesignsExamplesParse()
     {
         var tree = SyntaxTree.Parse("main.nt65", Source);
 
         Assert.Empty(tree.Diagnostics);
-    }
-
-    /// <summary>Returns the ca65 a program becomes, which must be a program that compiles.</summary>
-    private static string Compiled(string source)
-    {
-        var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);
-        Assert.Empty(compilation.Diagnostics);
-        return Assert.Single(compilation.Ca65).Text;
     }
 }

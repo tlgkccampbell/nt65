@@ -14,7 +14,7 @@ public sealed class FunctionResultTests
     [Fact]
     public void EachCallWritesItsOwnValue()
     {
-        var output = Compiled("""
+        var output = Analysis.Compiled("""
             .module main
             .cpu 6502
             .func twice(x) = x * 2
@@ -46,7 +46,7 @@ public sealed class FunctionResultTests
     [Fact]
     public void ACallIsSizedByWhetherItGivesText()
     {
-        var output = Compiled("""
+        var output = Analysis.Compiled("""
             .module main
             .cpu 6502
             .func letters(i) = .strcat("a", i + 'b')
@@ -85,14 +85,6 @@ public sealed class FunctionResultTests
             """)]);
 
         Assert.Contains(compilation.Diagnostics, diagnostic => diagnostic.Message == "division by zero");
-    }
-
-    /// <summary>Returns the ca65 a program becomes, which must be a program that compiles.</summary>
-    private static string Compiled(string source)
-    {
-        var compilation = Compiler.Compile([new SourceFile("main.nt65", source)]);
-        Assert.Empty(compilation.Diagnostics);
-        return Assert.Single(compilation.Ca65).Text;
     }
 
     /// <summary>Returns the output's data lines joined into one <c>.byte</c> line.</summary>

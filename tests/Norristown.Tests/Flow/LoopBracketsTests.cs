@@ -1,3 +1,4 @@
+using System.Globalization;
 using Norristown.Flow;
 using Norristown.Syntax;
 using Norristown.Tests.Semantics;
@@ -121,16 +122,9 @@ public sealed class LoopBracketsTests
         var model = analysis.File(Analysis.Path);
         var tree = model.Tree;
         return [.. LoopBrackets.In(analysis, model).SelectMany(routine => routine.Loops).Select(loop =>
-            $"{LineText(tree, loop.Top)} .. {LineText(tree, loop.Bottom)} header {LineText(tree, loop.Header)} "
-            + $"latches [{string.Join(", ", loop.Latches.Select(latch => LineText(tree, latch)))}] x{loop.Trips?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "?"}")];
-    }
+            $"{Line(loop.Top)} .. {Line(loop.Bottom)} header {Line(loop.Header)} "
+            + $"latches [{string.Join(", ", loop.Latches.Select(Line))}] x{loop.Trips?.ToString(CultureInfo.InvariantCulture) ?? "?"}")];
 
-    /// <summary>Returns the text of the line holding <paramref name="span"/>, without its indentation.</summary>
-    private static string LineText(SyntaxTree tree, TextSpan span)
-    {
-        var line = tree.GetLineIndex(span.Start);
-        var start = tree.LineStarts[line];
-        var end = line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
-        return tree.Text[start..end].Trim();
+        string Line(TextSpan span) => FlowFragment.LineText(tree, span);
     }
 }

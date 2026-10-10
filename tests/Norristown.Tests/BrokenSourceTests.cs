@@ -11,7 +11,7 @@ namespace Norristown.Tests;
 
 /// <summary>
 /// Puts every source in the repository, whole and with each line cut short, through everything
-/// above the parser. Its names are bound, its code is laid out, its control flow is analysed,
+/// above the parser. Its names are bound, its code is laid out, its control flow is analyzed,
 /// and every editor request is answered at a caret on every line. Nothing about the answers is
 /// asserted, because a half-written file has no right answer. The test checks only that
 /// answering does not throw.

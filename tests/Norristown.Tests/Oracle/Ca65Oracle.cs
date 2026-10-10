@@ -13,8 +13,11 @@ namespace Norristown.Tests.Oracle;
 /// </summary>
 internal sealed partial class Ca65Oracle
 {
+    /// <summary>The path of the pinned ca65, where <c>scripts/build-cc65.ps1</c> puts it.</summary>
+    public static readonly string PinnedPath = Repo.Path(".cache", "cc65", "bin", Tool("ca65"));
+
     private static readonly Lazy<Ca65Oracle> pinned = new(() => new Ca65Oracle(
-        Repo.Path(".cache", "cc65", "bin", OperatingSystem.IsWindows() ? "ca65.exe" : "ca65"),
+        PinnedPath,
         File.ReadAllText(Repo.Path("scripts", "cc65.commit")).Trim(),
         Repo.Path(".cache", "oracle")));
 
@@ -34,19 +37,25 @@ internal sealed partial class Ca65Oracle
     private readonly string linker;
     private readonly string? cacheDirectory;
 
+    /// <summary>
+    /// Wraps the ca65 at <paramref name="ca65Path"/>, which must report
+    /// <paramref name="pinnedCommit"/>, and caches clean results under
+    /// <paramref name="cacheDirectory"/>, or nowhere when that is null.
+    /// </summary>
     public Ca65Oracle(string ca65Path, string pinnedCommit, string? cacheDirectory)
     {
         if (!File.Exists(ca65Path))
             throw new InvalidOperationException($"ca65 not found at {ca65Path}; run scripts/build-cc65.ps1");
         var (_, output) = Execute(ca65Path, ["--version"], workingDirectory: null);
         CheckVersion(output, pinnedCommit);
+        var bin = Path.GetDirectoryName(ca65Path) ?? "";
         ca65 = ca65Path;
-        ld65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "ld65.exe" : "ld65");
-        cc65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "cc65.exe" : "cc65");
-        sim65 = Path.Combine(Path.GetDirectoryName(ca65Path) ?? "", OperatingSystem.IsWindows() ? "sim65.exe" : "sim65");
+        ld65 = Path.Combine(bin, Tool("ld65"));
+        cc65 = Path.Combine(bin, Tool("cc65"));
+        sim65 = Path.Combine(bin, Tool("sim65"));
         commit = pinnedCommit;
-        binary = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ca65Path)));
-        linker = File.Exists(ld65) ? Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(ld65))) : "";
+        binary = Hash(File.ReadAllBytes(ca65Path));
+        linker = File.Exists(ld65) ? Hash(File.ReadAllBytes(ld65)) : "";
         this.cacheDirectory = cacheDirectory;
     }
 
@@ -94,6 +103,20 @@ internal sealed partial class Ca65Oracle
     }
 
     /// <summary>
+    /// Returns the files to link for <paramref name="outputs"/>, each at the path nt65 gave it,
+    /// so that a program's own linker configuration and hand-written modules find them there.
+    /// </summary>
+    public static IReadOnlyList<(string Name, string Source)> AtTheirPaths(IEnumerable<OutputFile> outputs) =>
+        [.. outputs.Select(output => (output.Path, output.Text))];
+
+    /// <summary>
+    /// Returns the files to link for <paramref name="outputs"/>, each named by its file name
+    /// alone, so that they land in one directory with the hand-written modules of a fixture.
+    /// </summary>
+    public static IReadOnlyList<(string Name, string Source)> ByFileName(IEnumerable<OutputFile> outputs) =>
+        [.. outputs.Select(output => (Path.GetFileName(output.Path), output.Text))];
+
+    /// <summary>
     /// Assembles <paramref name="source"/> with <c>ca65 -g -l</c>. Clean results are cached
     /// by content. <paramref name="alongside"/> are files the source needs, such as the binary
     /// an <c>.incbin</c> names. <paramref name="fileName"/> and those files' names are relative to
@@ -105,10 +128,8 @@ internal sealed partial class Ca65Oracle
     {
         var seed = new StringBuilder(commit).Append('\0').Append(binary)
             .Append('\0').Append(fileName).Append('\0').Append(source);
-        foreach (var (name, content) in alongside ?? [])
-            seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
-        var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
-        var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, key + ".txt");
+        AppendAlongside(seed, alongside);
+        var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, Hash(seed) + ".txt");
         if (cached is not null && Cached(cached) is { } counts)
             return new AssemblyResult(true, "", [.. counts.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse)]);
 
@@ -119,8 +140,7 @@ internal sealed partial class Ca65Oracle
             // directive can tell it. A wrapper sets that and includes the file unchanged, so
             // ca65's messages keep the file's own name and line numbers.
             WriteText(work.FullName, fileName, source);
-            foreach (var (name, content) in alongside ?? [])
-                WriteBytes(work.FullName, name, content);
+            WriteAlongside(work.FullName, alongside);
             var directory = Path.GetDirectoryName(Path.Combine(work.FullName, fileName))!;
             File.WriteAllText(Path.Combine(directory, "oracle-wrapper.s"),
                 $".listbytes unlimited\n.include \"{Path.GetFileName(fileName)}\"\n");
@@ -171,10 +191,8 @@ internal sealed partial class Ca65Oracle
             seed.Append('\0').Append(name).Append('\0').Append(source)
                 .Append('\0').AppendJoin(' ', options?.Invoke(name) ?? []);
         }
-        foreach (var (name, content) in alongside ?? [])
-            seed.Append('\0').Append(name).Append('\0').Append(Convert.ToHexStringLower(SHA256.HashData(content)));
-        var key = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(seed.ToString())));
-        var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, key + ".link");
+        AppendAlongside(seed, alongside);
+        var cached = cacheDirectory is null ? null : Path.Combine(cacheDirectory, Hash(seed) + ".link");
 
         // An entry is the linked image in base64 on its first line, then the debug file.
         if (cached is not null && File.Exists(cached))
@@ -256,11 +274,46 @@ internal sealed partial class Ca65Oracle
             .Where(line => !line.Contains("is defined but never used", StringComparison.Ordinal))
             .Where(line => line.Trim().Length > 0));
 
+    /// <summary>Returns the file name of the cc65 tool <paramref name="name"/> on this system.</summary>
+    private static string Tool(string name) => OperatingSystem.IsWindows() ? name + ".exe" : name;
+
+    /// <summary>Returns the SHA-256 hash of <paramref name="bytes"/> as lowercase hex.</summary>
+    private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    /// <summary>Returns the cache key for a result, which is the hash of everything that decided it.</summary>
+    private static string Hash(StringBuilder seed) => Hash(Encoding.UTF8.GetBytes(seed.ToString()));
+
+    /// <summary>
+    /// Appends the name and the content hash of each file in <paramref name="alongside"/> to a
+    /// cache key's seed, so that a result is cached per set of files beside the source.
+    /// </summary>
+    private static void AppendAlongside(StringBuilder seed, IReadOnlyList<(string Name, byte[] Content)>? alongside)
+    {
+        foreach (var (name, content) in alongside ?? [])
+            seed.Append('\0').Append(name).Append('\0').Append(Hash(content));
+    }
+
+    /// <summary>Writes <paramref name="text"/> to <paramref name="name"/> under <paramref name="root"/>, creating its folder.</summary>
     private static void WriteText(string root, string name, string text)
     {
         var path = Path.Combine(root, name);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, text);
+    }
+
+    /// <summary>Writes <paramref name="content"/> to <paramref name="name"/> under <paramref name="root"/>, creating its folder.</summary>
+    private static void WriteBytes(string root, string name, byte[] content)
+    {
+        var path = Path.Combine(root, name);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, content);
+    }
+
+    /// <summary>Writes each file in <paramref name="alongside"/> under <paramref name="root"/>.</summary>
+    private static void WriteAlongside(string root, IReadOnlyList<(string Name, byte[] Content)>? alongside)
+    {
+        foreach (var (name, content) in alongside ?? [])
+            WriteBytes(root, name, content);
     }
 
     /// <summary>
@@ -288,7 +341,6 @@ internal sealed partial class Ca65Oracle
     /// another process has the entry open. The entry is keyed by content, so one that is already
     /// there holds the same text, and the temporary file is dropped.
     /// </summary>
-
     private static void Store(string cached, string text)
     {
         var temp = cached + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -303,13 +355,10 @@ internal sealed partial class Ca65Oracle
         }
     }
 
-    private static void WriteBytes(string root, string name, byte[] content)
-    {
-        var path = Path.Combine(root, name);
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, content);
-    }
-
+    /// <summary>
+    /// Runs <paramref name="exe"/> with <paramref name="arguments"/> in
+    /// <paramref name="workingDirectory"/>, and returns its exit code with everything it printed.
+    /// </summary>
     private static (int ExitCode, string Output) Execute(string exe, string[] arguments, string? workingDirectory)
     {
         var start = new ProcessStartInfo(exe)
@@ -345,8 +394,7 @@ internal sealed partial class Ca65Oracle
         try
         {
             File.WriteAllText(Path.Combine(work.FullName, "oracle-link.cfg"), config);
-            foreach (var (name, content) in alongside ?? [])
-                WriteBytes(work.FullName, name, content);
+            WriteAlongside(work.FullName, alongside);
             var objects = new List<string>();
             foreach (var (name, source) in files)
             {

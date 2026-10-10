@@ -85,8 +85,9 @@ public sealed class IncrementalAnalysisTests
     }
 
     /// <summary>
-    /// A change to something decided for the program as a whole — the files in it, the project,
-    /// the CPU — makes the whole program be analyzed again, and the analysis reports which it was.
+    /// A change to something decided for the program as a whole, such as the files in it, the
+    /// project or the CPU, makes the whole program be analyzed again, and the analysis reports
+    /// which it was.
     /// </summary>
     [Fact]
     public void WhatIsDecidedForTheWholeProgramIsAnalyzedAgainWithAReason()
@@ -95,23 +96,23 @@ public sealed class IncrementalAnalysisTests
         var other = SyntaxTree.Parse("other.nt65", ".module other\n.const SPARE = 1\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([main], project, Nothing);
+        var first = Compiler.Analyze([main], project, Analysis.NoBinaries);
         Assert.Equal(WholeProgramReason.NoPreviousAnalysis, first.WholeProgram);
 
         // Nothing changed at all, so the analysis before it is the answer.
-        Assert.Same(first, Compiler.Analyze([main], project, Nothing, first, TestContext.Current.CancellationToken));
+        Assert.Same(first, Compiler.Analyze([main], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken));
 
         Assert.Equal(
             WholeProgramReason.ProjectChanged,
-            Compiler.Analyze([main], project with { Out = "elsewhere" }, Nothing, first, TestContext.Current.CancellationToken).WholeProgram);
+            Compiler.Analyze([main], project with { Out = "elsewhere" }, Analysis.NoBinaries, first, TestContext.Current.CancellationToken).WholeProgram);
         Assert.Equal(
             WholeProgramReason.FilesAddedOrRemoved,
-            Compiler.Analyze([main, other], project, Nothing, first, TestContext.Current.CancellationToken).WholeProgram);
+            Compiler.Analyze([main, other], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken).WholeProgram);
 
         var native = main.WithChange(new TextChange(main.Text.IndexOf("6502", StringComparison.Ordinal), 4, "65816"));
         Assert.Equal(
             WholeProgramReason.CpuChanged,
-            Compiler.Analyze([native], project, Nothing, first, TestContext.Current.CancellationToken).WholeProgram);
+            Compiler.Analyze([native], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken).WholeProgram);
     }
 
     /// <summary>
@@ -128,14 +129,14 @@ public sealed class IncrementalAnalysisTests
             ".module main\n.if hub::SPEED != 3 {\n    .error \"wrong speed\"\n}\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([cfg, hub, main], project, Nothing);
+        var first = Compiler.Analyze([cfg, hub, main], project, Analysis.NoBinaries);
         Assert.Empty(first.Diagnostics);
 
         foreach (var (find, replace) in new[] { (".export .use", ".use"), (".module hub", ".module relay") })
         {
             var edited = hub.WithChange(new TextChange(hub.Text.IndexOf(find, StringComparison.Ordinal), find.Length, replace));
-            var incremental = Compiler.Analyze([cfg, edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
-            var scratch = Compiler.Analyze([cfg, edited, main], project, Nothing);
+            var incremental = Compiler.Analyze([cfg, edited, main], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken);
+            var scratch = Compiler.Analyze([cfg, edited, main], project, Analysis.NoBinaries);
 
             Assert.Equal(WholeProgramReason.ConditionsChanged, incremental.WholeProgram);
             Assert.Contains(scratch.Diagnostics, found => found.Span.File == "main.nt65");
@@ -156,12 +157,12 @@ public sealed class IncrementalAnalysisTests
             ".module main\n.use lib::helper\n.segment CODE\n.export .proc main: keeps x {\n    jsr helper\n    rts\n}\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([lib, main], project, Nothing);
+        var first = Compiler.Analyze([lib, main], project, Analysis.NoBinaries);
         Assert.Empty(first.Diagnostics);
 
         var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("keeps x", StringComparison.Ordinal), 7, "keeps a"));
-        var incremental = Compiler.Analyze([edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
-        var scratch = Compiler.Analyze([edited, main], project, Nothing);
+        var incremental = Compiler.Analyze([edited, main], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken);
+        var scratch = Compiler.Analyze([edited, main], project, Analysis.NoBinaries);
 
         Assert.NotEmpty(scratch.Diagnostics);
         Assert.Equal(scratch.Problems(), incremental.Problems());
@@ -170,8 +171,8 @@ public sealed class IncrementalAnalysisTests
     /// <summary>
     /// An analysis that leaves the program-wide answers for later carries the program-wide
     /// diagnostics from before the edit, so a warning that a change to the routine called removes
-    /// stays at the call until the analysis is settled. Settling then finds what an analysis from scratch finds, and leaves the
-    /// unsettled analysis as it was.
+    /// stays at the call until the analysis is settled. Settling then finds what an analysis from
+    /// scratch finds, and leaves the unsettled analysis as it was.
     /// </summary>
     [Fact]
     public void AnUnsettledAnalysisSettlesToWhatAWholeAnalysisFinds()
@@ -181,17 +182,17 @@ public sealed class IncrementalAnalysisTests
             ".module main\n.use lib::helper\n.segment CODE\n.export .proc main {\n    ldy #1\n    jsr helper\n    sty $10\n    rts\n}\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([lib, main], project, Nothing);
+        var first = Compiler.Analyze([lib, main], project, Analysis.NoBinaries);
         Assert.Equal(["unpromised-keep"], first.Diagnostics.Select(d => d.Id));
 
         var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("keeps x", StringComparison.Ordinal), 7, "keeps x, y"));
-        var unsettled = Compiler.AnalyzeUnsettled([edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
+        var unsettled = Compiler.AnalyzeUnsettled([edited, main], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken);
         Assert.False(unsettled.IsSettled);
         Assert.Equal(["unpromised-keep"], unsettled.Diagnostics.Select(d => d.Id));
 
         var settled = Compiler.Settle(unsettled, TestContext.Current.CancellationToken);
         Assert.True(settled.IsSettled);
-        Assert.Equal(Compiler.Analyze([edited, main], project, Nothing).Problems(), settled.Problems());
+        Assert.Equal(Compiler.Analyze([edited, main], project, Analysis.NoBinaries).Problems(), settled.Problems());
         Assert.Empty(settled.Diagnostics);
         Assert.Equal(["unpromised-keep"], unsettled.Diagnostics.Select(d => d.Id));
         Assert.Same(settled, Compiler.Settle(settled, TestContext.Current.CancellationToken));
@@ -210,7 +211,7 @@ public sealed class IncrementalAnalysisTests
             ".module main\n.use lib::SIZE\n.segment CODE\n.export .proc main {\n    lda #SIZE\n    rts\n}\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([lib, main], project, Nothing);
+        var first = Compiler.Analyze([lib, main], project, Analysis.NoBinaries);
         var size = first.File("lib.nt65").Symbol("SIZE");
         Assert.All(first.Program.Files.SelectMany(file => file.Symbols), symbol => Assert.True(symbol.IsFrozen));
         Assert.Throws<InvalidOperationException>(() => size.Value = Value.Of(5));
@@ -218,7 +219,7 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(4, size.Value.AsNumber());
 
         var edited = main.WithChange(new TextChange(main.Text.IndexOf("rts", StringComparison.Ordinal), 3, "nop\n    rts"));
-        var second = Compiler.Analyze([lib, edited], project, Nothing, first, TestContext.Current.CancellationToken);
+        var second = Compiler.Analyze([lib, edited], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken);
         Assert.Equal(1, second.Reanalyzed);
         Assert.Same(size, second.File("lib.nt65").Symbol("SIZE"));
         Assert.NotSame(first.File("main.nt65").Symbol("main"), second.File("main.nt65").Symbol("main"));
@@ -239,12 +240,12 @@ public sealed class IncrementalAnalysisTests
             ".module main\n.use lib::helper\n.segment CODE\n.export .proc main {\n    jsr helper\n    rts\n}\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([lib, main], project, Nothing);
+        var first = Compiler.Analyze([lib, main], project, Analysis.NoBinaries);
         var region = Assert.Single(first.FlowFor("main.nt65")!.Regions);
         var (total, registers, states) = (region.Total, region.Registers, first.FlowFor("main.nt65")!.Registers);
 
         var edited = lib.WithChange(new TextChange(lib.Text.IndexOf("nop", StringComparison.Ordinal), 3, "nop\n    inx"));
-        var second = Compiler.Analyze([edited, main], project, Nothing, first, TestContext.Current.CancellationToken);
+        var second = Compiler.Analyze([edited, main], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken);
         Assert.Equal(1, second.Reanalyzed);
         var now = Assert.Single(second.FlowFor("main.nt65")!.Regions);
         Assert.NotEqual(total, now.Total);
@@ -269,12 +270,12 @@ public sealed class IncrementalAnalysisTests
         var b = SyntaxTree.Parse("b.nt65", ".module b\n.use a::f\n.export .func g(n) = f(n)\n");
         var project = ProjectSettings.None;
 
-        var first = Compiler.Analyze([a, b], project, Nothing);
+        var first = Compiler.Analyze([a, b], project, Analysis.NoBinaries);
         Assert.NotEmpty(first.Diagnostics);
 
         var edited = a.WithChange(new TextChange(a.Text.Length, 0, "; a comment\n"));
-        var incremental = Compiler.Analyze([edited, b], project, Nothing, first, TestContext.Current.CancellationToken);
-        var scratch = Compiler.Analyze([edited, b], project, Nothing);
+        var incremental = Compiler.Analyze([edited, b], project, Analysis.NoBinaries, first, TestContext.Current.CancellationToken);
+        var scratch = Compiler.Analyze([edited, b], project, Analysis.NoBinaries);
 
         Assert.Equal(1, incremental.Reanalyzed);
         Assert.Equal(scratch.Problems(), incremental.Problems());
@@ -290,10 +291,4 @@ public sealed class IncrementalAnalysisTests
         Assert.Equal(WholeProgramReason.BinaryFileChanged,
             replay.Change("main.nt65", replay.Text("main.nt65").IndexOf("inx", StringComparison.Ordinal), 3, "dex").WholeProgram);
     }
-
-    /// <summary>
-    /// Returns no length for any path, because no file of these programs has an <c>.incbin</c> in
-    /// it.
-    /// </summary>
-    private static long? Nothing(string path) => null;
 }

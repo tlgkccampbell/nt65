@@ -208,11 +208,7 @@ public sealed class FlowArrowsTests
     {
         var analysis = FlowFragment.Analyze("6502", text);
         var model = analysis.File(Analysis.Path);
-        var statement = model.Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .FirstOrDefault(statement => statement.GetText().Trim() == line);
-        Assert.True(statement is not null, $"{Analysis.Path} has no statement \"{line}\"");
+        var statement = FlowFragment.Statement(model, line);
         return Described(model.Tree, FlowArrows.At(analysis, model, statement.Span.Start));
     }
 
@@ -226,21 +222,12 @@ public sealed class FlowArrowsTests
             return null;
         return [.. found.Arrows.Select(arrow =>
         {
-            var to = LineText(tree, arrow.To);
+            var to = FlowFragment.LineText(tree, arrow.To);
             var marks = string.Concat(
                 arrow.IsDeclared ? " next" : "",
                 arrow.IsProved ? " proved" : "",
                 arrow.IsReached ? "" : " unreached");
-            return $"{LineText(tree, arrow.From)} -> {to}{marks}";
+            return $"{FlowFragment.LineText(tree, arrow.From)} -> {to}{marks}";
         })];
-    }
-
-    /// <summary>Returns the text of the line holding <paramref name="span"/>, without its indentation.</summary>
-    private static string LineText(SyntaxTree tree, TextSpan span)
-    {
-        var line = tree.GetLineIndex(span.Start);
-        var start = tree.LineStarts[line];
-        var end = line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
-        return tree.Text[start..end].Trim();
     }
 }

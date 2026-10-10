@@ -1,5 +1,4 @@
 using Norristown.Flow;
-using Norristown.Syntax;
 using Norristown.Tests.Semantics;
 
 namespace Norristown.Tests.Flow;
@@ -87,8 +86,8 @@ public sealed class NextReturnTests
 
         if (cpu == "65816")
             Assert.Equal(2, FlowFragment.StateAt(analysis, "nop").Stack?.Depth);
-        Assert.Equal(2, RegistersAt(analysis, "nop").Stack?.Depth);
-        Assert.Equal(2, RegistersAt(analysis, "sta slot").Stack?.Height);
+        Assert.Equal(2, FlowFragment.RegistersAt(analysis, "nop").Stack?.Depth);
+        Assert.Equal(2, FlowFragment.RegistersAt(analysis, "sta slot").Stack?.Height);
         Assert.Equal(["A: lda #1 via pla"], FlowFragment.SourcesAt(analysis, "sta slot"));
     }
 
@@ -126,21 +125,6 @@ public sealed class NextReturnTests
         Assert.Contains(problems, found => found.Contains(problem, StringComparison.Ordinal));
     }
 
-    private static RegisterState RegistersAt(ProgramAnalysis analysis, string line)
-    {
-        var statement = analysis.File(Analysis.Path).Tree.Root.DescendantNodes()
-            .OfType<LineSyntax>()
-            .Select(node => node.Statement)
-            .First(statement => statement.GetText().Trim() == line);
-        var state = analysis.FlowFor(Analysis.Path)?.Registers?.Before(statement);
-        Assert.NotNull(state);
-        return state;
-    }
-
-    private static StackEffect EffectOf(ProgramAnalysis analysis, string routine)
-    {
-        var flow = analysis.FlowFor(Analysis.Path);
-        Assert.NotNull(flow);
-        return flow.Effects.Of(flow.Regions.Single(region => region.Routine.DisplayName == routine).Routine);
-    }
+    private static StackEffect EffectOf(ProgramAnalysis analysis, string routine) =>
+        FlowFragment.EffectOf(analysis, routine);
 }

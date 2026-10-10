@@ -55,9 +55,6 @@ public sealed class RequirementsTests
     public void RunningOffTheEndIsAnErrorOnThe6502()
     {
         const string Text = """
-            .module main
-            .cpu 6502
-            .segment CODE
             .proc first {
                 lda #1
             }
@@ -71,9 +68,7 @@ public sealed class RequirementsTests
             }
             """;
 
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Text));
-
-        var only = Assert.Single(analysis.Diagnostics);
+        var only = Assert.Single(FlowFragment.Analyze("6502", Text).Diagnostics);
         Assert.Equal(Severity.Error, only.Severity);
         Assert.Equal("`first` runs off its end into whatever is emitted after it: add a `.fallthrough` naming the routine "
             + "it runs into, or use `.next ?` where that cannot be named", only.Message);
@@ -90,9 +85,6 @@ public sealed class RequirementsTests
     public void TheFixNamesTheRoutineNextInTheSegmentAcrossRegions()
     {
         const string Text = """
-            .module main
-            .cpu 6502
-            .segment CODE
             .proc first {
                 lda #1
             }
@@ -108,7 +100,7 @@ public sealed class RequirementsTests
             }
             """;
 
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Text));
+        var analysis = FlowFragment.Analyze("6502", Text);
 
         Assert.Equal(2, analysis.Diagnostics.Count);
         Assert.Equal(new DiagnosticFix(FixKind.Fallthrough, "second", analysis.Diagnostics[0].Fix?.At), analysis.Diagnostics[0].Fix);
@@ -124,9 +116,6 @@ public sealed class RequirementsTests
     public void ARoutineEndingInABranchOffersTheNextThatSaysItIsTaken()
     {
         const string Text = """
-            .module main
-            .cpu 6502
-            .segment CODE
             .proc first {
                 lda $10
                 bne first
@@ -136,7 +125,7 @@ public sealed class RequirementsTests
             }
             """;
 
-        var only = Assert.Single(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics);
+        var only = Assert.Single(FlowFragment.Analyze("6502", Text).Diagnostics);
 
         Assert.Equal("`first` runs off its end into whatever is emitted after it: where the branch is always taken, add a "
             + "`.next` naming its own target; otherwise add a `.fallthrough` naming the routine it runs into", only.Message);
@@ -152,9 +141,7 @@ public sealed class RequirementsTests
     [Fact]
     public void DataAtTheEndIsReportedOnceAsAnErrorOnThe6502()
     {
-        const string Text = ".module main\n.cpu 6502\n.segment CODE\n.proc p {\n    lda #1\n    .byte $2c\n}\n";
-
-        var only = Assert.Single(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics);
+        var only = Assert.Single(FlowFragment.Analyze("6502", ".proc p {\n    lda #1\n    .byte $2c\n}\n").Diagnostics);
 
         Assert.Equal("runs-into-data", only.Id);
         Assert.Equal(Severity.Error, only.Severity);
@@ -168,10 +155,9 @@ public sealed class RequirementsTests
     [Fact]
     public void DataInAMacroBodyIsReportedAtTheCall()
     {
-        const string Text = ".module main\n.cpu 6502\n.segment CODE\n.macro skip2() {\n    .byte $2c\n}\n"
-            + ".proc p {\n    lda #1\n    skip2!()\n}\n";
+        const string Text = ".macro skip2() {\n    .byte $2c\n}\n.proc p {\n    lda #1\n    skip2!()\n}\n";
 
-        var only = Assert.Single(Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics);
+        var only = Assert.Single(FlowFragment.Analyze("6502", Text).Diagnostics);
 
         Assert.Equal("runs-into-data", only.Id);
         Assert.Equal(9, only.Span.Line);
@@ -449,9 +435,6 @@ public sealed class RequirementsTests
     public void ASaveAcrossALabelAnotherRoutineEntersIsNotKept()
     {
         const string Text = """
-            .module main
-            .cpu 6502
-            .segment CODE
             .proc owner: keeps a {
                 pha
             halfway:
@@ -463,7 +446,7 @@ public sealed class RequirementsTests
             }
             """;
 
-        var problems = Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics;
+        var problems = FlowFragment.Analyze("6502", Text).Diagnostics;
 
         Assert.Equal(["keeps-broken", "return-beneath-entry"], problems.Select(problem => problem.Id));
     }
@@ -476,9 +459,6 @@ public sealed class RequirementsTests
     public void OnlyHandingOutACodeLabelsAddressNeedsAnAnnotation()
     {
         const string Text = """
-            .module main
-            .cpu 6502
-            .segment CODE
             .proc p {
             top:
                 lda top
@@ -491,7 +471,7 @@ public sealed class RequirementsTests
             .data cost: .byte .maxcycles(p::top, p::bottom)
             """;
 
-        var problems = Analysis.Program(Analysis.Fragment, ("main.nt65", Text)).Diagnostics;
+        var problems = FlowFragment.Analyze("6502", Text).Diagnostics;
 
         Assert.Equal(["code-label-as-data"], problems.Select(problem => problem.Id));
         Assert.Equal(8, problems[0].Span.Line);

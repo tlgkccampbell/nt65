@@ -15,11 +15,17 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 internal sealed class ProgramReplay
 {
+    /// <summary>The settings the program is built with, which give <c>DEBUG</c> a value.</summary>
     public static readonly ProjectSettings Project = ProjectSettings.None with
     {
         SettingValues = [new SettingValue("DEBUG", 1, default)],
     };
 
+    /// <summary>
+    /// The program's files as the replay starts, keyed by path. They reach into one another
+    /// through constants, macros, types and signatures, so that an edit to one file is felt in
+    /// the others in every way the analysis follows.
+    /// </summary>
     public static readonly Dictionary<string, string> Sources = new(StringComparer.Ordinal)
     {
         // This file is read before every other file. So when the whole program is analyzed, a
@@ -239,6 +245,7 @@ internal sealed class ProgramReplay
     private readonly Dictionary<string, SyntaxTree> trees;
     private ProgramAnalysis analysis;
 
+    /// <summary>Parses and analyzes <see cref="Sources"/> as the program stands before any edit.</summary>
     public ProgramReplay()
     {
         trees = Sources.ToDictionary(
@@ -246,12 +253,27 @@ internal sealed class ProgramReplay
         analysis = Compiler.Analyze(trees.Values, Project, BinaryLength);
     }
 
+    /// <summary>
+    /// Gets or sets the length the binary file the program's <c>.incbin</c> names has on disk.
+    /// Changing it between edits is how a test changes the file.
+    /// </summary>
     public long Length { get; set; } = 16;
 
+    /// <summary>Returns the current text of the file at <paramref name="path"/>.</summary>
     public string Text(string path) => trees[path].Text;
 
+    /// <summary>
+    /// Inserts <paramref name="text"/> into the file at <paramref name="path"/> at offset
+    /// <paramref name="at"/>, as <see cref="Change"/> does, and returns the analysis after it.
+    /// </summary>
     public ProgramAnalysis Insert(string path, int at, string text) => Change(path, at, 0, text);
 
+    /// <summary>
+    /// Replaces <paramref name="length"/> characters of the file at <paramref name="path"/>, from
+    /// offset <paramref name="at"/>, with <paramref name="text"/>. The program is analyzed again
+    /// from the previous analysis and from scratch, the two are compared, and the incremental
+    /// analysis is returned.
+    /// </summary>
     public ProgramAnalysis Change(string path, int at, int length, string text)
     {
         trees[path] = trees[path].WithChange(new TextChange(at, length, text));

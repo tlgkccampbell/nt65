@@ -2,9 +2,8 @@ namespace Norristown.Tests.Semantics;
 
 /// <summary>
 /// Replays random edits both ways, incrementally and from scratch, and compares the results after
-/// each.
-/// They are a class of their own so that they run beside the scripted edits rather than after
-/// them.
+/// each. They are a class of their own so that they run beside the scripted edits rather than
+/// after them.
 /// </summary>
 public sealed class RandomEditAnalysisTests(ITestOutputHelper output)
 {

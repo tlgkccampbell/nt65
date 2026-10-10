@@ -29,19 +29,8 @@ public sealed class CorpusTests
     {
         var programs = CorpusProgram.All();
         Repo.RequireAny(programs);
-        var failures = Repo.CollectFailures(programs, program =>
-        {
-            long? Length(string path)
-            {
-                var file = Path.Combine(program.Directory, path.Replace('/', Path.DirectorySeparatorChar));
-                return File.Exists(file) ? new FileInfo(file).Length : null;
-            }
-
-            return Fixtures.FixtureRunner.Inlined(
-                program.Name, program.Project, program.Sources, Length,
-                Compiler.Analyze(
-                    [.. program.Sources.Select(Norristown.Syntax.SyntaxTree.Parse)], program.Project, Length));
-        });
+        var failures = Repo.CollectFailures(programs, program => Fixtures.FixtureRunner.Inlined(
+            program.Name, program.Project, program.Sources, program.BinaryLength, program.Analyze()));
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
@@ -105,7 +94,7 @@ public sealed class CorpusTests
         static IEnumerable<string> Run(CorpusProgram program)
         {
             var compilation = program.Compile();
-            var linked = Ca65Oracle.Pinned.Link(program.LinkerConfig, [.. compilation.Ca65.Select(o => (o.Path, o.Text))]);
+            var linked = Ca65Oracle.Pinned.Link(program.LinkerConfig, Ca65Oracle.AtTheirPaths(compilation.Ca65));
             if (!linked.Succeeded)
             {
                 yield return $"[{program.Name}] the link failed:\n{linked.Messages}";
@@ -141,11 +130,9 @@ public sealed class CorpusTests
 
         var result = Ca65Oracle.Pinned.Link(
             program.LinkerConfig,
-            [.. program.HandWritten, .. compilation.Ca65.Select(o => (o.Path, o.Text))],
+            [.. program.HandWritten, .. Ca65Oracle.AtTheirPaths(compilation.Ca65)],
             program.Other);
-        if (!result.Succeeded)
-            yield return $"[{program.Name}] ld65 reported:\n{result.Messages}";
-        else if (result.Binary.Length == 0)
-            yield return $"[{program.Name}] linked, but wrote no bytes";
+        if (result.Problem(program.Name) is { } failed)
+            yield return failed;
     }
 }

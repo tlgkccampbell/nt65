@@ -51,19 +51,16 @@ internal sealed record CorpusProgram(
     /// (<c>scripts/test.ps1 -Ca65 -Fixture</c>). It leaves out the programs that only their own
     /// build scripts can build, which <c>scripts/corpus.ps1</c> runs.
     /// </summary>
-    public static IReadOnlyList<CorpusProgram> All()
-    {
-        var filter = Repo.Selection;
-        return [.. new[] { Repo.Path("tests", "corpus"), Repo.Path("examples") }
+    public static IReadOnlyList<CorpusProgram> All() =>
+        [.. new[] { Repo.Path("tests", "corpus"), Repo.Path("examples") }
             .SelectMany(System.IO.Directory.GetDirectories)
             .Where(dir => File.Exists(Path.Combine(dir, ProjectFile.Name)))
             .Where(dir => !BuiltOnlyByTheirScripts.Contains(Path.GetFileName(dir)))
-            .Where(dir => string.IsNullOrEmpty(filter)
-                || Path.GetFileName(dir).Contains(filter, StringComparison.OrdinalIgnoreCase))
+            .Where(dir => Repo.Selects(Path.GetFileName(dir)))
             .Order(StringComparer.Ordinal)
             .Select(Load)];
-    }
 
+    /// <summary>Reads the program in <paramref name="directory"/>.</summary>
     public static CorpusProgram Load(string directory)
     {
         var build = Path.Combine(directory, "build") + Path.DirectorySeparatorChar;
@@ -77,10 +74,7 @@ internal sealed record CorpusProgram(
         return new CorpusProgram(
             Path.GetFileName(directory),
             directory,
-            [.. project.Files.SelectMany(glob => SourceGlobs.Matching(directory, glob))
-                .Distinct(StringComparer.Ordinal)
-                .Order(StringComparer.Ordinal)
-                .Select(path => new SourceFile(path, Repo.ReadText(Path.GetFullPath(path, directory))))],
+            Repo.Sources(directory, project),
             project,
             Repo.ReadText(files.Single(f => f.Relative.EndsWith(".cfg", StringComparison.Ordinal)).Path),
             [.. files.Where(f => f.Relative.EndsWith(".s", StringComparison.Ordinal))
@@ -97,9 +91,9 @@ internal sealed record CorpusProgram(
     /// <summary>Analyzes the program under its own settings, without emitting it.</summary>
     public ProgramAnalysis Analyze() => Compiler.Analyze(Sources, Project, BinaryLength);
 
-    private long? BinaryLength(string path)
-    {
-        var file = Path.Combine(Directory, path.Replace('/', Path.DirectorySeparatorChar));
-        return File.Exists(file) ? new FileInfo(file).Length : null;
-    }
+    /// <summary>
+    /// Returns the length of a file an <c>.incbin</c> names, found in the program's directory, or
+    /// null when there is no such file.
+    /// </summary>
+    public long? BinaryLength(string path) => Repo.FileLength(Directory, path);
 }

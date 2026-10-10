@@ -15,14 +15,6 @@ public sealed class ApiSurfaceTests
     /// <summary>The namespace whose types belong to the syntax layer and to nobody else.</summary>
     private const string Internal = "Norristown.Syntax.InternalSyntax";
 
-    /// <summary>
-    /// Gets the binding flags that select every member a type declares, at every accessibility,
-    /// so that each member can be judged.
-    /// </summary>
-    private static BindingFlags Everything =>
-        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static
-        | BindingFlags.DeclaredOnly;
-
     /// <summary>No green-tree type is one a consumer of the assembly can name.</summary>
     [Fact]
     public void TheGreenTreeIsNotPartOfTheAssemblysTypes()
@@ -49,7 +41,7 @@ public sealed class ApiSurfaceTests
             Check($"{Named(type)} : interfaces", problems, type.GetInterfaces());
             foreach (var parameter in type.IsGenericTypeDefinition ? type.GetGenericArguments() : [])
                 Check($"{Named(type)}<{parameter.Name}> constraints", problems, parameter.GetGenericParameterConstraints());
-            foreach (var member in type.GetMembers(Everything).Where(Visible).Where(Own))
+            foreach (var member in type.GetMembers(TypeSignatures.Everything).Where(Visible).Where(Own))
                 Check($"{Named(type)}.{member.Name}", problems, Mentioned(member));
         }
         Assert.True(problems.Count == 0, string.Join("\n", problems));
@@ -151,39 +143,13 @@ public sealed class ApiSurfaceTests
     /// </summary>
     private static void Check(string where, List<string> problems, IEnumerable<Type> types)
     {
-        foreach (var type in types.SelectMany(Unwrapped).Distinct())
+        foreach (var type in types.SelectMany(TypeSignatures.Unwrapped).Distinct())
         {
             if (type.Namespace == Internal)
                 problems.Add($"{where} names the green type {Named(type)}");
             else if (!Public(type))
                 problems.Add($"{where} names the non-public type {Named(type)}");
         }
-    }
-
-    /// <summary>
-    /// Returns the types a signature naming <paramref name="type"/> depends on. For an array, a
-    /// by-reference or a pointer, these are the types its element is built from. For a
-    /// constructed generic type, they are its generic definition and the types its arguments are
-    /// built from. A generic parameter yields nothing, and any other type yields itself.
-    /// </summary>
-    private static IEnumerable<Type> Unwrapped(Type type)
-    {
-        if (type.IsGenericParameter)
-            yield break;
-        if (type.HasElementType)
-        {
-            foreach (var inner in Unwrapped(type.GetElementType()!))
-                yield return inner;
-            yield break;
-        }
-        if (type.IsConstructedGenericType)
-        {
-            yield return type.GetGenericTypeDefinition();
-            foreach (var argument in type.GetGenericArguments().SelectMany(Unwrapped))
-                yield return argument;
-            yield break;
-        }
-        yield return type;
     }
 
     /// <summary>Determines whether a consumer of the assembly can name <paramref name="type"/>.</summary>

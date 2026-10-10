@@ -101,7 +101,7 @@ public sealed class HostileOptionTests
         var generated = compilation.Ca65.Select(o => o.Path).ToHashSet(StringComparer.Ordinal);
         return Ca65Oracle.Pinned.Link(
             program.LinkerConfig,
-            [.. program.HandWritten, .. compilation.Ca65.Select(o => (o.Path, o.Text))],
+            [.. program.HandWritten, .. Ca65Oracle.AtTheirPaths(compilation.Ca65)],
             program.Other,
             options: name => generated.Contains(name) ? ["-W2", .. options] : []);
     }

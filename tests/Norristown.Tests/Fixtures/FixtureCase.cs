@@ -34,6 +34,7 @@ internal sealed partial record FixtureCase(
     SourceFile? ProjectFileText,
     string ExpectedDirectory)
 {
+    /// <summary>The snapshot directory of a fixture's own build, under its directory.</summary>
     public const string DefaultExpectedDirectory = "expected";
 
     /// <summary>
@@ -42,17 +43,18 @@ internal sealed partial record FixtureCase(
     /// </summary>
     private static readonly Lock Writing = new();
 
+    /// <summary>
+    /// Returns every build of every fixture, or only of the fixtures that NT65_FIXTURE selects
+    /// (<c>scripts/test.ps1 -Fixture</c>), in name order.
+    /// </summary>
     public static IReadOnlyList<FixtureCase> All()
     {
         var root = Repo.Path("tests", "fixtures");
         if (!System.IO.Directory.Exists(root))
             return [];
-
-        // NT65_FIXTURE selects fixtures whose name contains the given text (scripts/test.ps1 -Fixture).
-        var filter = Repo.Selection;
         return [.. System.IO.Directory.GetDirectories(root)
             .Select(dir => System.IO.Path.GetFileName(dir))
-            .Where(name => string.IsNullOrEmpty(filter) || name.Contains(filter, StringComparison.OrdinalIgnoreCase))
+            .Where(Repo.Selects)
             .Order(StringComparer.Ordinal)
             .SelectMany(name => Load(System.IO.Path.Combine(root, name)))];
     }
@@ -106,9 +108,14 @@ internal sealed partial record FixtureCase(
         return cases;
     }
 
+    /// <summary>
+    /// Returns <paramref name="path"/> relative to <paramref name="directory"/>, with <c>/</c>
+    /// separators, which is how a fixture's files are named on every system.
+    /// </summary>
     public static string RelativePath(string directory, string path) =>
         System.IO.Path.GetRelativePath(directory, path).Replace(System.IO.Path.DirectorySeparatorChar, '/');
 
+    /// <summary>Returns the diagnostics that the <c>;!</c> annotations of <paramref name="file"/> expect.</summary>
     public static IEnumerable<Expectation> ParseInlineDiagnostics(SourceFile file)
     {
         var lines = file.Text.ReplaceLineEndings("\n").Split('\n');
@@ -141,11 +148,7 @@ internal sealed partial record FixtureCase(
     /// Returns the length of a file an <c>.incbin</c> names, found in the fixture's directory. A
     /// fixture's binaries sit beside its sources, no matter where the tests are run from.
     /// </summary>
-    public long? BinaryLength(string path)
-    {
-        var file = System.IO.Path.Combine(Directory, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
-        return File.Exists(file) ? new FileInfo(file).Length : null;
-    }
+    public long? BinaryLength(string path) => Repo.FileLength(Directory, path);
 
     /// <summary>
     /// Returns every <c>.bin</c> file in the fixture, at its path relative to the fixture. The

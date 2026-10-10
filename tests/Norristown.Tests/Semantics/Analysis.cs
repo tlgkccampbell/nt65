@@ -10,6 +10,7 @@ namespace Norristown.Tests.Semantics;
 /// </summary>
 internal static class Analysis
 {
+    /// <summary>The path of the one file most tests analyze, whose module is <c>main</c>.</summary>
     public const string Path = "main.nt65";
 
     /// <summary>
@@ -73,6 +74,22 @@ internal static class Analysis
         ProjectSettings project, params (string Path, string Text)[] files) =>
         Compiler.Compile([.. files.Select(file => new SourceFile(file.Path, file.Text))], project)
             .Outputs.ToDictionary(output => output.Path, output => output.Text, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Compiles <paramref name="text"/> as the one file of a program, which must compile cleanly,
+    /// and returns the ca65 it becomes.
+    /// </summary>
+    public static string Compiled(string text)
+    {
+        var compilation = Compiler.Compile([new SourceFile(Path, text)]);
+        Assert.Empty(compilation.Diagnostics);
+        return Assert.Single(compilation.Ca65).Text;
+    }
+
+    /// <summary>
+    /// Returns no length for any path, for a program in which no file has an <c>.incbin</c>.
+    /// </summary>
+    public static long? NoBinaries(string path) => null;
 
     /// <summary>Returns the single symbol named <paramref name="name"/>, in any scope of the file.</summary>
     public static Symbol Symbol(this SemanticModel model, string name) =>

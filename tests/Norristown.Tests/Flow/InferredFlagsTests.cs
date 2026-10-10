@@ -10,8 +10,6 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class InferredFlagsTests
 {
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
-
     /// <summary>
     /// A routine that sets a flag, keeps one, or passes on what a routine it calls returns,
     /// decides a branch after the call to it, so the data after the branch is never run into.
@@ -109,13 +107,11 @@ public sealed class InferredFlagsTests
     }
 
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>, each with its line.</summary>
-    private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Analyze("6502", text).Problems();
 
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>.</summary>
-    private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Diagnostics;
+    private static IReadOnlyList<Diagnostic> Diagnostics(string text) => FlowFragment.Analyze("6502", text).Diagnostics;
 
     /// <summary>Returns the ca65 source nt65 writes for <paramref name="text"/>.</summary>
-    private static string Output(string text) => Analysis.Outputs(("main.nt65", Header + text))["main.s"];
+    private static string Output(string text) => FlowFragment.Output("6502", text);
 }

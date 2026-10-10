@@ -11,4 +11,12 @@ internal sealed record LinkResult(bool Succeeded, string Messages, byte[] Binary
     /// empty string otherwise.
     /// </summary>
     public string DebugFile { get; init; } = "";
+
+    /// <summary>
+    /// Returns what went wrong with the link, for a failure report labeled
+    /// <paramref name="label"/>, or null when the link succeeded and wrote bytes.
+    /// </summary>
+    public string? Problem(string label) => Succeeded
+        ? Binary.Length == 0 ? $"[{label}] linked, but wrote no bytes" : null
+        : $"[{label}] ld65 reported:\n{Messages}";
 }

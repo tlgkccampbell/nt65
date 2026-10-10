@@ -30,7 +30,7 @@ public sealed class BuiltAddressesOracleTests
     [Fact]
     public void TheAddressesAreThoseLd65Gave()
     {
-        var ca65 = Repo.Path(".cache", "cc65", "bin", OperatingSystem.IsWindows() ? "ca65.exe" : "ca65");
+        var ca65 = Ca65Oracle.PinnedPath;
         Assert.SkipUnless(File.Exists(ca65), $"the pinned ca65 is not at {ca65}; run scripts/build-cc65.ps1");
 
         var project = ProjectSettings.None with { Out = "build" };
@@ -42,7 +42,7 @@ public sealed class BuiltAddressesOracleTests
             project);
         var compilation = Compiler.Emit(analysis, project);
         Assert.DoesNotContain(compilation.Diagnostics, diagnostic => diagnostic.Severity == Severity.Error);
-        var result = Ca65Oracle.Pinned.Link(Config, [.. compilation.Ca65.Select(o => (o.Path, o.Text))], debugFile: true);
+        var result = Ca65Oracle.Pinned.Link(Config, Ca65Oracle.AtTheirPaths(compilation.Ca65), debugFile: true);
         Assert.True(result.Succeeded, result.Messages);
 
         var root = Directory.CreateTempSubdirectory("nt65-built-");

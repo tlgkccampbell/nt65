@@ -9,8 +9,6 @@ namespace Norristown.Tests.Flow;
 /// </summary>
 public sealed class FlagSignatureTests
 {
-    private const string Header = ".module main\n.cpu 6502\n.segment CODE\n";
-
     /// <summary>
     /// A ROM routine's declared exit flags decide a branch after the call, so the branch needs no
     /// <c>.next</c>. So does a flag the routine's <c>keeps</c> promises, which comes back as the
@@ -97,7 +95,7 @@ public sealed class FlagSignatureTests
 
     /// <summary>
     /// A flag a routine needs on entry is checked at each call, and is known inside the routine.
-    /// This is the guide's example of a routine that adds to a pointer.
+    /// The routine adds a row's width to a pointer, which needs the carry clear.
     /// </summary>
     [Fact]
     public void AnEntryFlagIsCheckedAtEachCall()
@@ -181,8 +179,8 @@ public sealed class FlagSignatureTests
     [Fact]
     public void ASignatureShowsItsFlags()
     {
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Header + ".proc q = $1234: c = 0 -> z = 1, n\n"));
-        var q = Assert.Single(analysis.File("main.nt65").Symbols, symbol => symbol.Name == "q");
+        var analysis = FlowFragment.Analyze("6502", ".proc q = $1234: c = 0 -> z = 1, n\n");
+        var q = Assert.Single(analysis.File(Analysis.Path).Symbols, symbol => symbol.Name == "q");
         Assert.Equal("a*, i*, native, near, c = 0 -> z = 1, n", q.Signature!.ToString());
     }
 
@@ -196,8 +194,8 @@ public sealed class FlagSignatureTests
         const string Rom = ".proc q = $1234: -> cz = 0, n = 1\n";
         Assert.Empty(Problems(Rom + ".export .proc main {\n    jsr q\n    bcc @x\n    .byte 1\n@x:\n    bne @y\n    .byte 1\n@y:\n    rts\n}\n"));
 
-        var analysis = Analysis.Program(Analysis.Fragment, ("main.nt65", Header + Rom));
-        var q = Assert.Single(analysis.File("main.nt65").Symbols, symbol => symbol.Name == "q");
+        var analysis = FlowFragment.Analyze("6502", Rom);
+        var q = Assert.Single(analysis.File(Analysis.Path).Symbols, symbol => symbol.Name == "q");
         Assert.Equal("a*, i*, native, near -> zc = 0, n = 1", q.Signature!.ToString());
 
         Assert.Contains("    clc\n    cld\n", Output("6502", ".export .proc p {\n    .ensure dc = 0\n    rts\n}\n"));
@@ -221,14 +219,11 @@ public sealed class FlagSignatureTests
     }
 
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>, each with its line.</summary>
-    private static IReadOnlyList<string> Problems(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Problems();
+    private static IReadOnlyList<string> Problems(string text) => FlowFragment.Analyze("6502", text).Problems();
 
     /// <summary>Returns the warnings and errors nt65 reports for <paramref name="text"/>.</summary>
-    private static IReadOnlyList<Diagnostic> Diagnostics(string text) =>
-        Analysis.Program(Analysis.Fragment, ("main.nt65", Header + text)).Diagnostics;
+    private static IReadOnlyList<Diagnostic> Diagnostics(string text) => FlowFragment.Analyze("6502", text).Diagnostics;
 
     /// <summary>Returns the ca65 source nt65 writes for <paramref name="text"/> on <paramref name="cpu"/>.</summary>
-    private static string Output(string cpu, string text) =>
-        Analysis.Outputs(("main.nt65", Header.Replace("6502", cpu, StringComparison.Ordinal) + text))["main.s"];
+    private static string Output(string cpu, string text) => FlowFragment.Output(cpu, text);
 }

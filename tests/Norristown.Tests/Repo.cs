@@ -1,8 +1,11 @@
+using Norristown.Project;
+
 namespace Norristown.Tests;
 
 /// <summary>Provides paths inside the repository, found from the test binary's location.</summary>
 internal static class Repo
 {
+    /// <summary>The repository's root directory, which holds the solution file.</summary>
     public static readonly string Root = FindRoot();
 
     /// <summary>
@@ -14,14 +17,19 @@ internal static class Repo
         Environment.GetEnvironmentVariable("NT65_FIXTURE") is { Length: > 0 } text ? text : null;
 
     /// <summary>
+    /// Checks whether the fixture or program named <paramref name="name"/> is run, which it is
+    /// when <see cref="Selection"/> is not set or is part of the name.
+    /// </summary>
+    public static bool Selects(string name) =>
+        Selection is not { } filter || name.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Skips the test when <see cref="Selection"/> is set and does not select
     /// <paramref name="name"/>. A test that checks one fixture or program by name calls it. The
     /// test is reported as skipped, so a selected run does not look as if it checked more than it did.
     /// </summary>
     public static void SkipUnlessSelected(string name) =>
-        Assert.SkipWhen(
-            Selection is { } filter && !name.Contains(filter, StringComparison.OrdinalIgnoreCase),
-            $"NT65_FIXTURE=\"{Selection}\" does not select {name}");
+        Assert.SkipWhen(!Selects(name), $"NT65_FIXTURE=\"{Selection}\" does not select {name}");
 
     /// <summary>
     /// Checks that a test has something to check. When <see cref="Selection"/> is set and
@@ -34,6 +42,7 @@ internal static class Repo
         Assert.NotEmpty(items);
     }
 
+    /// <summary>Returns the full path of the file or folder at <paramref name="parts"/> under the root.</summary>
     public static string Path(params string[] parts) => System.IO.Path.Combine([Root, .. parts]);
 
     /// <summary>Reads a file as the compiler sees it, as UTF-8 with <c>\r\n</c> left in place.</summary>
@@ -43,11 +52,32 @@ internal static class Repo
     /// Reads the project file in <paramref name="directory"/>, and the linker configs it links
     /// from beside it.
     /// </summary>
-    public static Norristown.Project.ProjectSettings ReadProject(string directory, string file = "nt65.json") =>
-        Norristown.Project.ProjectFile.Read(
-            Norristown.Project.ProjectFile.Name,
+    public static ProjectSettings ReadProject(string directory, string file = "nt65.json") =>
+        ProjectFile.Read(
+            ProjectFile.Name,
             ReadText(System.IO.Path.Combine(directory, file)),
             path => File.Exists(System.IO.Path.Combine(directory, path)) ? ReadText(System.IO.Path.Combine(directory, path)) : null);
+
+    /// <summary>
+    /// Returns the sources that a project's globs name, each with the path the glob gave it, read
+    /// from <paramref name="directory"/>, which holds the project file.
+    /// </summary>
+    public static List<SourceFile> Sources(string directory, ProjectSettings project) =>
+        [.. project.Files.SelectMany(glob => SourceGlobs.Matching(directory, glob))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .Select(path => new SourceFile(path, ReadText(System.IO.Path.GetFullPath(path, directory))))];
+
+    /// <summary>
+    /// Returns the length of the file at <paramref name="path"/>, which is relative to
+    /// <paramref name="directory"/> with <c>/</c> separators, or null when there is no such file.
+    /// An <c>.incbin</c> names its file this way, and the compiler asks for the length.
+    /// </summary>
+    public static long? FileLength(string directory, string path)
+    {
+        var file = System.IO.Path.Combine(directory, path.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        return File.Exists(file) ? new FileInfo(file).Length : null;
+    }
 
     /// <summary>
     /// Writes a file with <c>\n</c> line endings on every platform, creating its folder if needed.
