@@ -67,24 +67,8 @@ internal static class Paths
     public static CycleCount? Costing(BasicBlock block) => block.LoopCycles ?? block.Cycles;
 
     /// <summary>Returns which blocks a path from <paramref name="entry"/> can reach without leaving.</summary>
-    private static bool[] Reached(IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside)
-    {
-        var found = new bool[blocks.Count];
-        var pending = new Queue<int>();
-        found[entry] = true;
-        pending.Enqueue(entry);
-        while (pending.Count > 0)
-        {
-            foreach (var to in Onward(blocks[pending.Dequeue()], inside))
-            {
-                if (found[to])
-                    continue;
-                found[to] = true;
-                pending.Enqueue(to);
-            }
-        }
-        return found;
-    }
+    private static bool[] Reached(IReadOnlyList<BasicBlock> blocks, int entry, Func<int, bool> inside) =>
+        Reachability.From(blocks, entry, block => Onward(block, inside));
 
     /// <summary>
     /// Returns the blocks a path may run after this one, which are the blocks that

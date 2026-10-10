@@ -609,21 +609,9 @@ public sealed class ControlFlow
     {
         if (blocks.Count == 0)
             return;
-        foreach (var block in blocks)
-            block.IsReached = false;
-        var pending = new Queue<int>();
-        pending.Enqueue(0);
-        blocks[0].IsReached = true;
-        while (pending.Count > 0)
-        {
-            foreach (var edge in blocks[pending.Dequeue()].Successors)
-            {
-                if (blocks[edge.To].IsReached)
-                    continue;
-                blocks[edge.To].IsReached = true;
-                pending.Enqueue(edge.To);
-            }
-        }
+        var reached = Reachability.From(blocks, 0, block => block.Successors.Select(edge => edge.To));
+        for (var i = 0; i < blocks.Count; i++)
+            blocks[i].IsReached = reached[i];
     }
 
     /// <summary>

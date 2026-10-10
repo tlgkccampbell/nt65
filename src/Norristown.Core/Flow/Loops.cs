@@ -105,24 +105,8 @@ internal static class Loops
         block.Successors.Any(edge => edge.Kind != EdgeKind.Call && edge.To == to);
 
     /// <summary>Returns which blocks a path from the routine's entry reaches, ignoring call edges.</summary>
-    private static bool[] Reached(IReadOnlyList<BasicBlock> blocks)
-    {
-        var found = new bool[blocks.Count];
-        var pending = new Queue<int>();
-        found[0] = true;
-        pending.Enqueue(0);
-        while (pending.Count > 0)
-        {
-            foreach (var edge in blocks[pending.Dequeue()].Successors)
-            {
-                if (edge.Kind == EdgeKind.Call || found[edge.To])
-                    continue;
-                found[edge.To] = true;
-                pending.Enqueue(edge.To);
-            }
-        }
-        return found;
-    }
+    private static bool[] Reached(IReadOnlyList<BasicBlock> blocks) =>
+        Reachability.From(blocks, 0, block => block.Successors.Where(edge => edge.Kind != EdgeKind.Call).Select(edge => edge.To));
 
     /// <summary>
     /// Returns the blocks a loop contains. They are its header, its latch, and every block the
