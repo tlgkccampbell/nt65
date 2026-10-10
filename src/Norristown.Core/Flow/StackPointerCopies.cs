@@ -1,4 +1,5 @@
 using Norristown.Processor;
+using Norristown.Semantics;
 using Norristown.Syntax;
 
 namespace Norristown.Flow;
@@ -27,16 +28,16 @@ internal static class StackPointerCopies
     /// <typeparam name="TStack">The tracker's stack.</typeparam>
     /// <param name="mnemonic">The instruction.</param>
     /// <param name="cpu">The processor the instruction runs on.</param>
-    /// <param name="wideIndex">
-    /// A value indicating whether X is 16 bits wide before the instruction, or null where that is
-    /// not known. On every processor but the 65816 it is not asked.
+    /// <param name="processor">
+    /// The 65816 state before the instruction, or null where it is not known. On every processor
+    /// but the 65816 it is not asked.
     /// </param>
     /// <param name="pointing">The registers that hold the stack pointer after the instruction.</param>
     /// <param name="pointed">The stack the copy held before the instruction, or null.</param>
     /// <param name="stack">The stack before the instruction, or null where it is not known.</param>
     /// <returns>The stack the copy was taken from, or null.</returns>
     public static TStack? Copied<TStack>(
-        MnemonicKind mnemonic, Cpu cpu, bool? wideIndex, Registers pointing, TStack? pointed, TStack? stack)
+        MnemonicKind mnemonic, Cpu cpu, ProcessorState? processor, Registers pointing, TStack? pointed, TStack? stack)
         where TStack : class
     {
         if (pointing == Registers.None)
@@ -49,8 +50,7 @@ internal static class StackPointerCopies
             if ((pointing & ~copied) != Registers.None && !Equals(pointed, stack))
                 return null;
 
-            // An 8-bit X holds only the low byte of the stack pointer on the 65816.
-            return mnemonic == MnemonicKind.Tsx && cpu == Cpu.Wdc65816 && wideIndex != true ? null : stack;
+            return mnemonic == MnemonicKind.Tsx && !HoldsWholePointer(cpu, processor) ? null : stack;
         }
         if (Instructions.Facts(mnemonic).Pulls is not null || Instructions.IsCall(mnemonic)
             || mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl or MnemonicKind.Rti or MnemonicKind.Brk or MnemonicKind.Cop
@@ -69,9 +69,9 @@ internal static class StackPointerCopies
     /// <typeparam name="TStack">The tracker's stack.</typeparam>
     /// <param name="mnemonic">The instruction, which sets the stack pointer.</param>
     /// <param name="cpu">The processor the instruction runs on.</param>
-    /// <param name="wideIndex">
-    /// A value indicating whether X is 16 bits wide before the instruction, or null where that is
-    /// not known. A <c>txs</c> from an 8-bit X on the 65816 sets only the low byte.
+    /// <param name="processor">
+    /// The 65816 state before the instruction, or null where it is not known. On every processor
+    /// but the 65816 it is not asked.
     /// </param>
     /// <param name="pointing">The registers that hold the stack pointer before the instruction.</param>
     /// <param name="pointed">The stack the copy held, or null.</param>
@@ -82,7 +82,7 @@ internal static class StackPointerCopies
     /// </param>
     /// <returns>The stack after the move, or null.</returns>
     public static TStack? MovedBack<TStack>(
-        MnemonicKind mnemonic, Cpu cpu, bool? wideIndex, Registers pointing, TStack? pointed, TStack? stack,
+        MnemonicKind mnemonic, Cpu cpu, ProcessorState? processor, Registers pointing, TStack? pointed, TStack? stack,
         Func<TStack, TStack, bool> extends)
         where TStack : class
     {
@@ -94,6 +94,17 @@ internal static class StackPointerCopies
         };
         if ((pointing & from) == Registers.None || pointed is null || stack is null || !extends(stack, pointed))
             return null;
-        return mnemonic == MnemonicKind.Txs && cpu == Cpu.Wdc65816 && wideIndex != true ? null : pointed;
+        return mnemonic == MnemonicKind.Txs && !HoldsWholePointer(cpu, processor) ? null : pointed;
     }
+
+    /// <summary>
+    /// Returns whether a <c>tsx</c> copies the stack pointer exactly, and a <c>txs</c> moves back
+    /// to that copy exactly. On the 65816 an 8-bit X holds only the low byte. That is still exact
+    /// in emulation mode, where the high byte is always $01, but not where the mode may be native.
+    /// </summary>
+    /// <param name="cpu">The processor the instruction runs on.</param>
+    /// <param name="processor">The 65816 state before the instruction, or null where it is not known.</param>
+    /// <returns>True where the copy is exact.</returns>
+    private static bool HoldsWholePointer(Cpu cpu, ProcessorState? processor) =>
+        cpu != Cpu.Wdc65816 || processor is { Index: Width.Sixteen } or { E: ProcessorMode.Emulation };
 }

@@ -2404,7 +2404,8 @@ register a `tsx` or `tsc` filled, with nothing but pushes between them, moves th
 where the copy was taken and drops exactly those pushes, so `pha`, `tsx`, `pha`, `pha`, `txs`,
 `pla` keeps A. A pull between them, a change to the register, or a store into the stack leaves
 the stack unknown, as any other `txs` does. So does an X on the 65816 that is not 16 bits
-throughout, since an 8-bit X holds only the low byte of S.
+throughout, since an 8-bit X holds only the low byte of S, unless the mode is known to be
+emulation, where the high byte of S is always $01 and an 8-bit copy is exact, as on the 6502.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what

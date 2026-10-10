@@ -347,7 +347,7 @@ public sealed class StackEffects
                 // Moving the stack pointer back to a copy taken with only pushes since drops those
                 // pushes, and any other move leaves the height unknown.
                 if (StackPointerCopies.MovedBack(
-                    mnemonic, walk.Cpu, walk.Wide(step, index: true), before.Pointing, before.Pointed, before,
+                    mnemonic, walk.Cpu, walk.Processor(step), before.Pointing, before.Pointed, before,
                     (now, copy) => now.IsKnown && copy.IsKnown) is not { } back)
                 {
                     return Height.Unknown;
@@ -395,7 +395,7 @@ public sealed class StackEffects
             pointing &= StackWrites.Pointing(variant, mode, immediate, height.Pointing);
         var pointed = variants.Count > 0 ? null
             : StackPointerCopies.Copied(
-                mnemonic, walk.Cpu, walk.Wide(step, index: true), pointing, height.Pointed,
+                mnemonic, walk.Cpu, walk.Processor(step), pointing, height.Pointed,
                 height with { Pointing = Registers.None, Pointed = null });
         return height with { Pointing = pointing, Pointed = pointed };
     }

@@ -871,16 +871,10 @@ public sealed class StateAnalysis : IProcessorStates
         // A copy of the stack pointer is followed as the register walk follows it, except through
         // the bytes of a hidden path, as there too.
         var pointing = StackWrites.Pointing(mnemonic, mode, executing.Immediate, state.Pointing);
-        var wideIndex = processor.Index switch
-        {
-            Width.Sixteen => true,
-            Width.Eight => false,
-            _ => (bool?)null,
-        };
         var pointed = executing.Decoded is not null ? null
-            : StackPointerCopies.Copied(mnemonic, layout.Cpu, wideIndex, pointing, state.Pointed, state.Stack);
+            : StackPointerCopies.Copied(mnemonic, layout.Cpu, processor, pointing, state.Pointed, state.Stack);
         var movedBack = StackPointerCopies.MovedBack(
-            mnemonic, layout.Cpu, wideIndex, state.Pointing, executing.Decoded is null ? state.Pointed : null, state.Stack,
+            mnemonic, layout.Cpu, processor, state.Pointing, executing.Decoded is null ? state.Pointed : null, state.Stack,
             (now, copy) => now.Extends(copy));
         var intoStack = Instructions.Facts(mnemonic).Stores
             && (executing.Decoded is { } stored

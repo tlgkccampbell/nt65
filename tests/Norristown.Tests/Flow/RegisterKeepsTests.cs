@@ -315,6 +315,23 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
+    /// An 8-bit <c>tsx</c> on the 65816 copies the whole stack pointer in emulation mode, where
+    /// its high byte is always $01, so the <c>txs</c> back to it drops the push and the pull
+    /// restores A. Where the mode is not known, the copy holds only the low byte.
+    /// </summary>
+    [Theory]
+    [InlineData("emu", true)]
+    [InlineData("e?", false)]
+    public void AnEightBitCopyOfTheStackPointerIsExactInEmulationMode(string mode, bool kept)
+    {
+        var analysis = FlowFragment.Analyze(
+            "65816", $".proc p: a8, i8, {mode} {{\n    pha\n    tsx\n    pha\n    txs\n    pla\n    rts\n}}\n");
+        var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
+
+        Assert.Equal(kept, p.Registers.Kept.HasFlag(Registers.A));
+    }
+
+    /// <summary>
     /// A <c>rep</c> in a macro body whose flags come from an <c>operand</c> argument reads the
     /// argument, as the width analysis does. A flag byte without the carry leaves the carry kept.
     /// </summary>

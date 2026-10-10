@@ -249,7 +249,7 @@ internal sealed class SourceWalk
             pointing &= StackWrites.Pointing(variant, mode, immediate, before.Pointing);
         var pointed = variants.Count > 0 ? null
             : StackPointerCopies.Copied(
-                statement.MnemonicKind, layout.Cpu, registers.Wide(step, index: true), pointing, before.Pointed, before.Stack);
+                statement.MnemonicKind, layout.Cpu, registers.Processor(step), pointing, before.Pointed, before.Stack);
         return after.WithCopy(pointing, pointed);
     }
 
@@ -403,7 +403,7 @@ internal sealed class SourceWalk
         if (RegisterEffects.SetsStackPointer(mnemonic))
         {
             state = state.WithStack(StackPointerCopies.MovedBack(
-                mnemonic, layout.Cpu, registers.Wide(step, index: true), state.Pointing, state.Pointed, state.Stack,
+                mnemonic, layout.Cpu, registers.Processor(step), state.Pointing, state.Pointed, state.Stack,
                 (stack, pointed) => stack.Extends(pointed)));
         }
 

@@ -472,6 +472,12 @@ internal sealed class RegisterWalk
     }
 
     /// <summary>
+    /// Returns the 65816 state before a step, or null where it is not known or the CPU is not the
+    /// 65816.
+    /// </summary>
+    public ProcessorState? Processor(Step step) => states?.Before(step.Statement, step.On)?.Processor;
+
+    /// <summary>
     /// Determines whether a statement may make the index registers 8 bits wide when they may
     /// have been 16, which zeroes the high bytes of X and Y. A routine entered with 8-bit
     /// index registers found those bytes zero, so zeroing them again changes nothing it was
@@ -767,7 +773,7 @@ internal sealed class RegisterWalk
     /// <param name="pointing">The registers that hold the stack pointer after it.</param>
     /// <returns>The stack the copy was taken from, or null.</returns>
     private SavedStack? PointedAfter(Step step, MnemonicKind mnemonic, RegisterState before, Registers pointing) =>
-        StackPointerCopies.Copied(mnemonic, layout.Cpu, Wide(step, index: true), pointing, before.Pointed, before.Stack);
+        StackPointerCopies.Copied(mnemonic, layout.Cpu, Processor(step), pointing, before.Pointed, before.Stack);
 
     /// <summary>
     /// Returns the stack after a <c>txs</c> or <c>tcs</c> moves the stack pointer back to a copy
@@ -776,6 +782,6 @@ internal sealed class RegisterWalk
     /// </summary>
     private SavedStack? MovedBack(Step step, MnemonicKind mnemonic, RegisterState state) =>
         StackPointerCopies.MovedBack(
-            mnemonic, layout.Cpu, Wide(step, index: true), state.FromStackPointer, state.Pointed, state.Stack,
+            mnemonic, layout.Cpu, Processor(step), state.FromStackPointer, state.Pointed, state.Stack,
             (stack, pointed) => stack.Extends(pointed));
 }
