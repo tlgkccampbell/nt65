@@ -13,11 +13,17 @@
 .export main__dispatch
 .export main__dispatch_indexed
 .export main__dispatch_far
+.export main__dispatch_hook
+.export main__dispatch_far_hook
 
 .import __FARDATA_LOAD__: abs
 
 .segment "FARDATA": far
 far_table: .byte 1, 2, 3
+
+.segment "LOWRAM": absolute
+hook:     .res 2
+far_hook: .res 3
 
 .segment "DATA7E": absolute
 buffer: .res 16
@@ -32,7 +38,7 @@ main__offsets:
     .addr buffer
 
 .segment "CODE": absolute
-; .proc start: a16, i16, native  main.nt65:28
+; .proc start: a16, i16, native  main.nt65:34
 main__start:
     .i16
     ldx #.loword(buffer - $7e0000)
@@ -45,20 +51,30 @@ main__start:
 vectors:    .addr main__start
 far_vector: .faraddr main__start
 
-; .proc dispatch: a16, i16, native  main.nt65:38
+; .proc dispatch: a16, i16, native  main.nt65:44
 main__dispatch:
     ldx #0
     jsr (vectors,x)
     jmp (.loword(vectors))
 ; end of dispatch
 
-; .proc dispatch_indexed: a16, i16, native  main.nt65:46
+; .proc dispatch_indexed: a16, i16, native  main.nt65:52
 main__dispatch_indexed:
     ldx #0
     jmp (vectors,x)
 ; end of dispatch_indexed
 
-; .proc dispatch_far: a16, i16, native  main.nt65:52
+; .proc dispatch_far: a16, i16, native  main.nt65:58
 main__dispatch_far:
     jml [.loword(far_vector)]
 ; end of dispatch_far
+
+; .proc dispatch_hook: a16, i16, native  main.nt65:63
+main__dispatch_hook:
+    jmp (hook)
+; end of dispatch_hook
+
+; .proc dispatch_far_hook: a16, i16, native  main.nt65:68
+main__dispatch_far_hook:
+    jml [far_hook]
+; end of dispatch_far_hook

@@ -429,6 +429,7 @@
         "placed-nowhere",
         "placed-twice",
         "placement-cycle",
+        "pointer-outside-bank-zero",
         "project-cpu-unknown",
         "project-json-invalid",
         "project-key-unknown",

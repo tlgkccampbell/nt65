@@ -10,6 +10,7 @@
 
 .export main__pages
 .export main__main
+.export main__given
 
 .import __CODE_LOAD__: abs
 .import __FAST_LOAD__: abs
@@ -22,7 +23,7 @@
 squares: .byte 0, 1, 4, 9
 
 .segment "FAST": zeropage
-; .proc fast  main.nt65:14
+; .proc fast  main.nt65:19
 fast:
     inc a:squares
     rts
@@ -35,7 +36,7 @@ main__pages:
     .byte .lobyte(__FAST_SIZE__)
     .byte .lobyte(__FAST_RUN__)
 
-; .proc main  main.nt65:27
+; .proc main  main.nt65:32
 main__main:
     ldx #.lobyte(__FAST_SIZE__)
 main__copy:
@@ -53,3 +54,18 @@ main__copy:
     sty .lobyte(__FAST_RUN__),x
     rts
 ; end of main
+
+; .proc given  main.nt65:50
+main__given:
+    ; load!({#.spanof(FAST)})  main.nt65:51
+    lda #.lobyte(__FAST_SIZE__)
+    ; end of load!
+    ; load!(.runof(FAST))  main.nt65:52
+    lda z:.lobyte(__FAST_RUN__)
+    ; end of load!
+    ldy #0
+    ; load!({(.runof(FAST)),y})  main.nt65:54
+    lda (.lobyte(__FAST_RUN__)),y
+    ; end of load!
+    rts
+; end of given

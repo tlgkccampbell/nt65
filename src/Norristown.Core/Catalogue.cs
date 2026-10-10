@@ -2297,6 +2297,20 @@ public static class Catalogue
             + "where the target or the code is placed. The 65816 checks the same reach by the banks segments "
             + "declare, as `jump-leaves-bank` describes.");
 
+    internal static DiagnosticDescriptor PointerOutsideBankZero { get; } = Entry(
+        Area.Placement,
+        "pointer-outside-bank-zero",
+        Severity.Error,
+        "`{0}` reads its pointer from bank $00, but {1} is placed in {2}: {3}",
+        "On the 65816, `jmp (abs)` and `jml [abs]` read their pointer from bank $00, whatever the data bank and "
+            + "the program bank are. The output keeps the pointer's address within its bank so that it links, so "
+            + "a pointer that a linked configuration places in another bank, such as a table in work RAM in bank "
+            + "$7e, is read from whatever bank $00 holds at that address. nt65 reports a pointer whose linked "
+            + "range is not wholly in bank $00, unless every segment it names declares `bank` or `mirrors` that "
+            + "make it visible in bank $00. Place the pointer in bank $00 or in memory mirrored there. A `jmp` "
+            + "can instead use `jmp (abs,x)`, which reads its pointer from the program bank, with the pointer "
+            + "in the code's bank. Nothing is reported where nt65 cannot tell where the pointer is placed.");
+
     internal static DiagnosticDescriptor SpaceUndeclared { get; } = Entry(
         Area.Placement,
         "space-undeclared",

@@ -1,7 +1,14 @@
 {
   "cpu": "65816",
   "files": ["*.nt65"],
-  "links": { "rom": { "config": "link.cfg" } },
+  "links": {
+    "rom": {
+      "config": "link.cfg",
+      "memory": {
+        "ROM0": { "mirrors": ["$00"] }
+      }
+    }
+  },
   "segments": {
     "FARDATA": { "size": "far" }
   }
