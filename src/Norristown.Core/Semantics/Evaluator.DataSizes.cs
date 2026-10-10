@@ -661,20 +661,6 @@ internal sealed partial class Evaluator
     }
 
     /// <summary>
-    /// Represents a structure or a union being laid out, or an anonymous one inside it. Its items
-    /// are its members, as symbols, and the anonymous groups inside it, in the order they are
-    /// written.
-    /// </summary>
-    private sealed class MemberGroup(bool isUnion)
-    {
-        /// <summary>Gets a value indicating whether the group is a union.</summary>
-        public bool IsUnion { get; } = isUnion;
-
-        /// <summary>Gets the group's members and the groups inside it.</summary>
-        public List<object> Items { get; } = [];
-    }
-
-    /// <summary>
     /// Returns <paramref name="left"/> + <paramref name="right"/>, a step in adding up the room
     /// data takes. Returns null and reports the overflow at <paramref name="at"/> when the sum
     /// leaves 64 bits.
@@ -699,5 +685,19 @@ internal sealed partial class Evaluator
             return (long)size;
         Report(at, Catalogue.ArithmeticOverflow.Message("the room this data takes"));
         return null;
+    }
+
+    /// <summary>
+    /// Represents a structure or a union being laid out, or an anonymous one inside it. Its items
+    /// are its members, as symbols, and the anonymous groups inside it, in the order they are
+    /// written.
+    /// </summary>
+    private sealed class MemberGroup(bool isUnion)
+    {
+        /// <summary>Gets a value indicating whether the group is a union.</summary>
+        public bool IsUnion { get; } = isUnion;
+
+        /// <summary>Gets the group's members and the groups inside it.</summary>
+        public List<object> Items { get; } = [];
     }
 }

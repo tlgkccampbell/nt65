@@ -204,6 +204,11 @@ public static class Repetitions
         : item.ChildTokens is [var first, ..] ? first.Text
         : item.GetText().Trim();
 
+    /// <summary>
+    /// Reports a problem with <paramref name="node"/> found in the expansion <paramref name="outer"/>,
+    /// at the call when the node is a line of a macro body, or does nothing when the caller
+    /// collects no diagnostics.
+    /// </summary>
     private static void Report(
         SemanticModel model, List<Diagnostic>? diagnostics, SyntaxNode node, Expansion? outer, DiagnosticMessage message) =>
         diagnostics?.Add(Expansion.Problem(model.Tree, node.Tree, node.Span, outer, Severity.Error, message));
