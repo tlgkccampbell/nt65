@@ -498,7 +498,8 @@ public sealed class Emitter
             .SelectMany(node => node.DescendantNodes().OfType<CallExpressionSyntax>())
             .Select(call => SegmentFunctions.Of(call, model))
             .OfType<(BuiltinKind Function, Segment Segment)>()
-            .Select(about => (SegmentFunctions.LinkerName(about.Function, about.Segment), SegmentFunctions.SizeOf()))
+            .Select(about => (SegmentFunctions.LinkerName(about.Function, about.Segment),
+                SegmentFunctions.SizeOf(about.Function, about.Segment)))
             .Distinct()
             .OrderBy(import => import.Item1, StringComparer.Ordinal);
     }

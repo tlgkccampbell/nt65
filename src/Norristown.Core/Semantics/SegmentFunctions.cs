@@ -73,9 +73,58 @@ public static class SegmentFunctions
         $"__{segment.Name}_{function switch { BuiltinKind.Loadof => "LOAD", BuiltinKind.Runof => "RUN", _ => "SIZE" }}__";
 
     /// <summary>
-    /// Returns the address size of the three functions' results, which is absolute because ld65
-    /// defines all three that way. An operand that reaches a load address in another bank must
-    /// therefore use <c>f:</c>.
+    /// Returns the address size of what <paramref name="function"/> gives for
+    /// <paramref name="segment"/>, which is the size of its placement. A run address is as wide as
+    /// a label in the segment. A load address is zero page where every linked configuration loads
+    /// the segment into page zero. Otherwise it is far for a far segment, which may load where it
+    /// runs, and absolute for any other, as a label in the load area would be. A size is
+    /// absolute. An operand that reaches an address in another bank must therefore use
+    /// <c>f:</c>, as it must for a label there.
     /// </summary>
-    public static AddressSize SizeOf() => AddressSize.Absolute;
+    /// <param name="function">The function, which is <c>.loadof</c>, <c>.runof</c> or <c>.spanof</c>.</param>
+    /// <param name="segment">The segment the function asks about.</param>
+    public static AddressSize SizeOf(BuiltinKind function, Segment segment) => function switch
+    {
+        BuiltinKind.Runof => segment.Size,
+        BuiltinKind.Loadof when Known(segment.Loads, segment) && segment.Loads.All(area => area.First >= 0 && area.Last <= 0xff) =>
+            AddressSize.ZeroPage,
+        BuiltinKind.Loadof when segment.Size == AddressSize.Far => AddressSize.Far,
+        _ => AddressSize.Absolute,
+    };
+
+    /// <summary>
+    /// Returns the range of values what <paramref name="function"/> gives for
+    /// <paramref name="segment"/> may take once linked, or null where nt65 cannot bound it. An
+    /// address is inside the memory areas the linked configurations put the segment in, or where
+    /// they say nothing, anywhere its address size reaches. A size is at most the room of the
+    /// smallest area it is placed in, because every link holds the same bytes of the segment.
+    /// </summary>
+    /// <param name="function">The function, which is <c>.loadof</c>, <c>.runof</c> or <c>.spanof</c>.</param>
+    /// <param name="segment">The segment the function asks about.</param>
+    public static (long Low, long High)? RangeOf(BuiltinKind function, Segment segment)
+    {
+        if (function == BuiltinKind.Spanof)
+        {
+            IReadOnlyList<RunArea> areas = [.. segment.Runs, .. segment.Loads];
+            return areas.Count > 0 ? (0, areas.Min(area => area.Last - area.First + 1)) : null;
+        }
+        var placed = function == BuiltinKind.Runof ? segment.Runs : segment.Loads;
+        if (Known(placed, segment))
+            return (placed.Min(area => area.First), placed.Max(area => area.Last));
+        return SizeOf(function, segment) switch
+        {
+            AddressSize.ZeroPage => (0, 0xff),
+            AddressSize.Absolute => (0, 0xffff),
+            AddressSize.Far => (0, 0xffffff),
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="areas"/> holds an area for every linked
+    /// configuration that places <paramref name="segment"/>, so that together they bound where it
+    /// is.
+    /// </summary>
+    private static bool Known(IReadOnlyList<RunArea> areas, Segment segment) =>
+        areas.Count > 0 && areas.Count == segment.Placements.Count;
 }

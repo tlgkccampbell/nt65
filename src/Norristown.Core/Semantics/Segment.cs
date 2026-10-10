@@ -50,6 +50,13 @@ public sealed record Segment(string Name, AddressSize Size, Span? Declaration, l
     public IReadOnlyList<RunArea> Runs { get; init; } = [];
 
     /// <summary>
+    /// Gets the memory areas the project's linked configurations load the segment into, one for
+    /// each configuration whose area has a start and a size nt65 can work out. It is empty for a
+    /// program without <c>links</c>, where nt65 does not know where a segment loads.
+    /// </summary>
+    public IReadOnlyList<RunArea> Loads { get; init; } = [];
+
+    /// <summary>
     /// Gets the address that the first linked configuration placing the segment gives with
     /// <c>start</c>, or null when it gives none or nt65 cannot work it out.
     /// </summary>

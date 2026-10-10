@@ -124,9 +124,8 @@ public static class SegmentLinks
             Space = note?.Space ?? link.Space,
             Mirrors = note?.Mirrors ?? [],
             Placements = [placed.Declaration],
-            Runs = area is { Start: { } first, Size: { } length } && length > 0
-                ? [new RunArea(config.Path, area.Name, first, first + length - 1, area.Declaration)]
-                : [],
+            Runs = KnownArea(config, area),
+            Loads = KnownArea(config, placed.Load is null ? null : config.Area(placed.Load)),
             Start = placed.Start?.Value,
             Offset = placed.Offset?.Value,
             Align = placed.Align?.Value,
@@ -136,6 +135,15 @@ public static class SegmentLinks
         };
         return new Placed(segment, config.Path, note);
     }
+
+    /// <summary>
+    /// Returns <paramref name="area"/> as the one area of <paramref name="config"/> a segment runs
+    /// or loads in, or no area when its start or its size is not known.
+    /// </summary>
+    private static IReadOnlyList<RunArea> KnownArea(LinkerConfig config, LinkerConfig.MemoryArea? area) =>
+        area is { Start: { } first, Size: { } length } && length > 0
+            ? [new RunArea(config.Path, area.Name, first, first + length - 1, area.Declaration)]
+            : [];
 
     /// <summary>
     /// Returns why ld65 writes none of a segment's bytes, or null when it writes them. ld65 writes
@@ -228,6 +236,7 @@ public static class SegmentLinks
             Bank = first.Bank ?? segment.Bank,
             Placements = [.. first.Placements, .. segment.Placements],
             Runs = [.. first.Runs, .. segment.Runs],
+            Loads = [.. first.Loads, .. segment.Loads],
             IsDefined = first.IsDefined || segment.IsDefined,
             Unwritten = segment.Unwritten is null ? null : first.Unwritten,
 

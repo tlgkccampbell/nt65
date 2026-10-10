@@ -5,8 +5,9 @@ namespace Norristown.Semantics;
 
 /// <summary>
 /// Works out the range of values an expression that only the linker can finish may take. An
-/// address is somewhere in the space its address size reaches, and each operator narrows or
-/// widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
+/// address is somewhere in the space its address size reaches. A segment's linker symbol is
+/// inside the memory areas the linked configurations place the segment in. Each operator
+/// narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
 /// <c>main</c> lands. A call to a <c>.func</c> takes the range of its body, with each parameter
 /// taking the range of what it is given. ca65 refuses an expression that names an absolute or
 /// far address in a one-byte slot, whatever its value, unless a byte operator takes one byte of
@@ -65,6 +66,10 @@ internal static class LinkRange
             case NameExpressionSyntax name:
                 return model.SymbolOf(name, on) is { IsAddress: true }
                     && model.AddressSizeOf(name, null, on) is AddressSize.Absolute or AddressSize.Far;
+
+            // A segment function is a symbol ld65 defines, as wide as the segment's placement.
+            case CallExpressionSyntax segmental when SegmentFunctions.Of(segmental, model) is { } about:
+                return SegmentFunctions.SizeOf(about.Function, about.Segment) is AddressSize.Absolute or AddressSize.Far;
 
             // An argument counts only where the body uses its parameter outside every byte
             // operator, so `low(main)` for `.func low(n) = .lobyte(n)` names nothing wide.
@@ -201,6 +206,10 @@ internal static class LinkRange
                     SyntaxKind.Minus when operand is { } negated => Within(-(Int128)negated.High, -(Int128)negated.Low),
                     _ => null,
                 };
+
+            // A segment function is bounded by where the linked configurations place the segment.
+            case CallExpressionSyntax segmental when SegmentFunctions.Of(segmental, model) is { } about:
+                return SegmentFunctions.RangeOf(about.Function, about.Segment);
 
             // A byte or a word of a value is bounded by its width, whatever the value is.
             case CallExpressionSyntax { BuiltinKind: BuiltinKind.Lobyte or BuiltinKind.Hibyte or BuiltinKind.Bankbyte or BuiltinKind.Bankof }:

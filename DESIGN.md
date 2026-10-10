@@ -635,10 +635,16 @@ sides use.
 - **A segment's addresses are the linker's, and nt65 names them.** `.loadof(S)`, `.runof(S)`
   and `.spanof(S)` stand for the `__S_LOAD__`, `__S_RUN__` and `__S_SIZE__` that ld65 defines
   for a segment its configuration gives `define=yes`: where the image was loaded, where it
-  runs and how many bytes it is. The output imports them, absolute as ld65 defines them, so a
-  read of the image in another bank writes `f:`. `.runof(S)` is an address in `S`'s space and
-  is checked as one; the other two are the host's. `.spanof` of a name that is a symbol
-  measures the symbol (§7.6), and of a segment's name, the segment.
+  runs and how many bytes it is. The output imports each as wide as its placement: `.runof(S)`
+  as a label in `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page
+  zero, far for a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the
+  image in another bank therefore writes `f:`, as it would for a label there. Each is also
+  bounded by the memory areas the linked configs put `S` in, so in a one-byte slot it follows
+  the rule for any value that names an address (§8): `.loadof(CODE) / 256` is written inside
+  `.lobyte()` where CODE's area shows it fits, and is an error that asks for `<` where it may
+  not. `.runof(S)` is an address in `S`'s space and is checked as one; the other two are the
+  host's. `.spanof` of a name that is a symbol measures the symbol (§7.6), and of a segment's
+  name, the segment.
 
 ```nt65
 .import spc_entry: abs in SPCIMAGE

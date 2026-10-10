@@ -1888,7 +1888,10 @@ A name in another space is only a number to this processor. Code may load it as 
 and data may hold it, which is how the host tells the other processor where to start, but a
 jump, a call or a memory access through it is an error. `.loadof(S)`, `.runof(S)` and
 `.spanof(S)` give a segment's load address, run address and size, as ld65 defines them for a
-segment with `define = yes`:
+segment with `define = yes`. Each is as wide as where the linked config puts the segment, and
+in a byte it is checked like any value the linker works out: `.loadof(CODE) / 256` is accepted
+where CODE's memory area shows it fits a byte, and refused with a suggestion of `<` where it
+may not:
 
 ```nt65
 .import spc_entry: abs in SPCIMAGE
