@@ -63,10 +63,7 @@ internal static class CaretSources
     private static Protocol.Range Line(SyntaxTree tree, int position)
     {
         var line = tree.GetLineIndex(position);
-        var start = tree.LineStarts[line];
-        var end = line + 1 < tree.LineStarts.Length ? tree.LineStarts[line + 1] : tree.Text.Length;
-        while (end > start && tree.Text[end - 1] is '\n' or '\r')
-            end--;
-        return new Protocol.Range(new Protocol.Position(line, 0), new Protocol.Position(line, end - start));
+        var width = Lines.EndOf(tree, line) - tree.LineStarts[line];
+        return new Protocol.Range(new Protocol.Position(line, 0), new Protocol.Position(line, width));
     }
 }

@@ -150,6 +150,10 @@ internal sealed class Outgoing(Workspace workspace, ClientCapabilities client)
     public object ToClient(string uri, IReadOnlyList<DocumentSymbol> outline) =>
         client.HierarchicalSymbols ? outline : Flat(ToClient(uri), outline, null);
 
+    /// <summary>
+    /// Returns an outline as a flat list, in which each entry names the entry that contains it,
+    /// parents before their children.
+    /// </summary>
     private static IReadOnlyList<SymbolInformation> Flat(
         string uri, IReadOnlyList<DocumentSymbol> outline, string? container) =>
         [.. outline.SelectMany(symbol => (IEnumerable<SymbolInformation>)

@@ -57,8 +57,8 @@
   // reaches. It is drawn dim, and counted apart from the bytes nothing uses.
   const declared = location => location.relation === 'hw' && location.reached === false;
 
-  // Returns the colour of a location's relation, with address-taken locations in their own.
-  const colourOf = location => (taken(location) ? 'var(--referenced)'
+  // Returns the color of a location's relation, with address-taken locations in their own.
+  const colorOf = location => (taken(location) ? 'var(--referenced)'
     : `var(--${location.relation in RELATIONS ? location.relation : 'own'})`);
 
   // Returns how hot a location is: how many times its instructions run in a pass, counting the
@@ -154,16 +154,16 @@
   }
 
   // Shows a tooltip beside an element: a header with a name and a few words, then rows of a
-  // coloured glyph and a phrase.
+  // colored glyph and a phrase.
   function showTip(element, name, meta, rows) {
     tip.replaceChildren();
     const head = h('div', 'hd');
     head.append(h('span', '', name), h('span', 'm', meta));
     tip.append(head);
-    for (const [glyph, colour, text] of rows) {
+    for (const [glyph, color, text] of rows) {
       const row = h('div', 'r');
       const key = h('span', 'k', glyph);
-      key.style.color = colour;
+      key.style.color = color;
       row.append(key, phrase(text));
       tip.append(row);
     }
@@ -286,7 +286,7 @@
     grid.append(h('span'));
     for (let c = 0; c < 16; c++) grid.append(h('span', 'colh', c.toString(16).toUpperCase()));
 
-    // Returns the block a byte belongs to, and the colour of that block's outline.
+    // Returns the block a byte belongs to, and the color of that block's outline.
     const blockOf = at => {
       if (at < 0 || at >= 256) return { key: 'out' };
       const mine = own[at];
@@ -338,7 +338,7 @@
           cell.classList.add('declared');
         } else if (mine && mine.relation !== 'unused' && !clash && same[at] !== 'collision' && same[at] !== 'unverified') {
           const share = Math.round(30 + 70 * heatOf(mine) / maxHeat);
-          cell.style.background = `color-mix(in srgb, ${colourOf(mine)} ${share}%, transparent)`;
+          cell.style.background = `color-mix(in srgb, ${colorOf(mine)} ${share}%, transparent)`;
         }
         if (mine && never(mine)) cell.classList.add('unused');
         else if (mine && taken(mine)) cell.classList.add('taken');
@@ -366,7 +366,7 @@
           const into = address - location.address;
           const name = `\`${location.name}\`${into > 0 ? ` +${into}` : ''}`;
           if (index === 0) {
-            rows.push([glyphOf(location), never(location) || declared(location) ? 'var(--dim)' : colourOf(location), name]);
+            rows.push([glyphOf(location), never(location) || declared(location) ? 'var(--dim)' : colorOf(location), name]);
             rows.push(['#', 'var(--dim)', heatText(location)]);
           } else {
             rows.push([same[at] === 'unverified' ? '?' : '=', same[at] === 'collision' ? 'var(--nested)' : 'var(--dim)',
@@ -458,7 +458,7 @@
       if (entry.foreign) swatch.classList.add('foreign');
       else if (never(location)) swatch.classList.add('never');
       else if (declared(location)) swatch.classList.add('declared');
-      else swatch.style.background = colourOf(location);
+      else swatch.style.background = colorOf(location);
       const name = h('span', 'nm', location.name);
       if (entry.foreign) name.append(h('span', 'rg', ` ${pageName(entry.page)}`));
       const range = entry.first === null ? '?' : offsets(entry.first, entry.last);
@@ -569,10 +569,10 @@
     const section = h('div');
     section.append(h('h3', '', 'Checks'));
     const list = h('div', 'lst');
-    for (const [glyph, colour, text, where] of items) {
+    for (const [glyph, color, text, where] of items) {
       const item = h('div', 'it');
       const key = h('span', 'k', glyph);
-      key.style.color = colour;
+      key.style.color = color;
       item.append(key, phrase(text), h('span', 'ref', where));
       list.append(item);
     }
@@ -580,7 +580,7 @@
     return section;
   }
 
-  // Returns the strip under the grid that says what its colours and shapes mean.
+  // Returns the strip under the grid that says what its colors and shapes mean.
   function legend() {
     const strip = h('div', 'legend');
     // The keys sit in groups under small headings, two to a row. Each key is a swatch drawn the
@@ -594,7 +594,7 @@
       span.append(swatch, document.createTextNode(text));
       strip.append(span);
     };
-    const fill = colour => swatch => { swatch.style.background = colour; };
+    const fill = color => swatch => { swatch.style.background = color; };
     const classes = (...names) => swatch => swatch.classList.add(...names);
     group('who uses a location');
     key(RELATIONS.own, 'one routine uses it', fill('var(--own)'));

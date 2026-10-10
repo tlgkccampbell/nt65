@@ -54,8 +54,7 @@ internal static class Lsp
     {
         for (var line = 0; line < tree.LineCount; line++)
         {
-            var width = tree.Text.AsSpan(tree.LineStarts[line], tree.GetLineEnd(line) - tree.LineStarts[line])
-                .TrimEnd("\r\n").Length;
+            var width = Lines.EndOf(tree, line) - tree.LineStarts[line];
             if (width <= lineLength
                 || (ItemBlocks.Breakable(tree, line, lineLength) ?? LineBreaks.Breakable(tree, line, lineLength)) is not { } span)
             {

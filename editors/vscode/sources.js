@@ -4,14 +4,16 @@
 // value passed through or leaves the routine by, and a chip per input and per output on the caret
 // line. A reader's tag starts with `→` and an exit's ends with `↱`, so that a line that reads the
 // caret's value is told apart from one that set a value the caret reads. A store into code and the
-// instruction it patches are linked the same way, in the memory colour. Meaning is carried by colour and short glyphs, and anything longer goes in the
-// hover, because lines crowded with inlays are hard to read.
+// instruction it patches are linked the same way, in the memory color. Meaning is carried by
+// color and short glyphs, and anything longer goes in the hover, because lines crowded with
+// inlays are hard to read.
 const vscode = require('vscode');
+const { showsSource, Requests } = require('./documents');
 
 // How long the caret has to rest on a line before the server is asked about it.
 const DELAY = 100;
 
-// The colour groups. Each register has its own colour, the flags share one and are told apart
+// The color groups. Each register has its own color, the flags share one and are told apart
 // by their letter, the two widths share one, and memory has one.
 const GROUPS = ['a', 'x', 'y', 'flags', 'widths', 'memory'];
 
@@ -27,7 +29,7 @@ function groupOf(input) {
   }
 }
 
-function colour(group) {
+function color(group) {
   return new vscode.ThemeColor(`nt65.sources.${group}`);
 }
 
@@ -40,10 +42,10 @@ function background(group) {
 // attachment option, so they go in through `textDecoration`, which is written into the style.
 function label(group, border, filled) {
   return {
-    color: colour(group),
+    color: color(group),
     backgroundColor: filled ? background(group) : undefined,
     border: `1px ${border}`,
-    borderColor: colour(group),
+    borderColor: color(group),
     fontWeight: 'bold',
     margin: '0 0 0 0.6em',
     textDecoration: 'none; border-radius: 3px; padding: 0 3px; font-size: 90%',
@@ -60,8 +62,8 @@ function decorationTypes() {
         backgroundColor: background(group),
         borderWidth: '0 0 0 3px',
         borderStyle: 'solid',
-        borderColor: colour(group),
-        overviewRulerColor: colour(group),
+        borderColor: color(group),
+        overviewRulerColor: color(group),
         overviewRulerLane: vscode.OverviewRulerLane.Left,
         after: label(group, 'solid', true),
       }),
@@ -69,19 +71,19 @@ function decorationTypes() {
         isWholeLine: true,
         borderWidth: '0 0 0 3px',
         borderStyle: 'dotted',
-        borderColor: colour(group),
+        borderColor: color(group),
         after: label(group, 'dotted', false),
       }),
       // A best-effort source is fainter than a proven one, with a tint of its own and dashes
-      // where a proven source is solid. Its ruler mark goes in the centre lane instead of the
+      // where a proven source is solid. Its ruler mark goes in the center lane instead of the
       // left one, since a ruler mark has no dashed form. Only memory has best-effort sources.
       guess: vscode.window.createTextEditorDecorationType({
         isWholeLine: true,
         backgroundColor: new vscode.ThemeColor(`nt65.sources.${group}FaintBackground`),
         borderWidth: '0 0 0 3px',
         borderStyle: 'dashed',
-        borderColor: colour(group),
-        overviewRulerColor: colour(group),
+        borderColor: color(group),
+        overviewRulerColor: color(group),
         overviewRulerLane: vscode.OverviewRulerLane.Center,
         after: label(group, 'dashed', false),
       }),
@@ -92,7 +94,7 @@ function decorationTypes() {
         isWholeLine: true,
         borderWidth: '0 0 0 2px',
         borderStyle: 'dashed',
-        borderColor: colour(group),
+        borderColor: color(group),
         after: {
           ...label(group, 'dashed', false),
           fontStyle: 'italic',
@@ -109,7 +111,7 @@ function decorationTypes() {
   types.hover = vscode.window.createTextEditorDecorationType({});
 
   // The `+N` box that says how many chips did not fit. It is made last, so it comes after the
-  // chips, and drawn in a neutral colour, because it stands for inputs of any colour.
+  // chips, and drawn in a neutral color, because it stands for inputs of any color.
   const muted = new vscode.ThemeColor('descriptionForeground');
   types.more = vscode.window.createTextEditorDecorationType({
     after: {
@@ -131,12 +133,12 @@ function addLabel(labels, line, name) {
 }
 
 // Turns a map of labels into decorations, one per line, each with its names after the code.
-function labelled(document, labels) {
+function labeled(document, labels) {
   return [...labels].flatMap(([line, names]) => boxes(document.lineAt(line).range, names));
 }
 
 // One decoration per label, so that each input gets a box of its own rather than sharing one
-// with the others of its colour.
+// with the others of its color.
 function boxes(range, texts) {
   return texts.map(text => ({ range, renderOptions: { after: { contentText: text } } }));
 }
@@ -334,10 +336,9 @@ function hoverOf(document, result, line) {
 
 class Sources {
   constructor(client) {
-    this.client = client;
+    this.requests = new Requests(client);
     this.types = decorationTypes();
     this.timer = undefined;
-    this.cancel = undefined;
 
     // What is shown: the editor, the document version and the line asked about, and the answer.
     this.shown = undefined;
@@ -357,7 +358,7 @@ class Sources {
   // Waits for the caret to rest, then asks about its line.
   schedule(editor) {
     clearTimeout(this.timer);
-    if (!this.enabled || !this.applies(editor)) {
+    if (!this.enabled || !showsSource(editor)) {
       this.clear();
       return;
     }
@@ -371,34 +372,19 @@ class Sources {
     this.timer = setTimeout(() => this.ask(editor, position), DELAY);
   }
 
-  applies(editor) {
-    return editor && editor.document.languageId === 'nt65'
-      && (editor.document.uri.scheme === 'file' || editor.document.uri.scheme === 'untitled');
-  }
-
   async ask(editor, position) {
     const document = editor.document;
     const version = document.version;
     const key = `${document.uri}@${version}:${position.line}`;
     if (key === this.asked && this.shown) return;
     this.asked = key;
-
-    // A newer question makes any older one moot.
-    if (this.cancel) this.cancel.cancel();
-    const cancel = new vscode.CancellationTokenSource();
-    this.cancel = cancel;
-    let result;
-    try {
-      result = await this.client.sendRequest('nt65/sources', {
-        textDocument: { uri: document.uri.toString() },
-        position: { line: position.line, character: position.character },
-      }, cancel.token);
-    } catch {
-      result = null;
-    }
+    const result = await this.requests.send('nt65/sources', {
+      textDocument: { uri: document.uri.toString() },
+      position: { line: position.line, character: position.character },
+    });
 
     // An answer that arrives after the caret has moved on, or the text has changed, is dropped.
-    if (cancel.token.isCancellationRequested || document.version !== version
+    if (result === undefined || document.version !== version
       || vscode.window.activeTextEditor !== editor || editor.selection.active.line !== position.line) {
       return;
     }
@@ -470,10 +456,10 @@ class Sources {
         }
       }
       const types = this.types[group];
-      editor.setDecorations(types.source, labelled(document, sources));
-      editor.setDecorations(types.guess, labelled(document, guesses));
-      editor.setDecorations(types.through, labelled(document, through));
-      editor.setDecorations(types.possible, labelled(document, possible));
+      editor.setDecorations(types.source, labeled(document, sources));
+      editor.setDecorations(types.guess, labeled(document, guesses));
+      editor.setDecorations(types.through, labeled(document, through));
+      editor.setDecorations(types.possible, labeled(document, possible));
     }
 
     // The chips go after the code on the caret line, and the routine's opening line gets a `↰`
@@ -500,8 +486,7 @@ class Sources {
 
   clear() {
     clearTimeout(this.timer);
-    if (this.cancel) this.cancel.cancel();
-    this.cancel = undefined;
+    this.requests.cancel();
     this.asked = undefined;
     this.moved = undefined;
     if (!this.shown) return;

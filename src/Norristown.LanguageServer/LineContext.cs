@@ -1,5 +1,8 @@
 using Norristown.Syntax;
 
+// A token of the line as the context keeps it: its kind, its text and where it starts in the file.
+using LineToken = (Norristown.Syntax.SyntaxKind Kind, string Text, int Start);
+
 namespace Norristown.LanguageServer;
 
 /// <summary>
@@ -10,7 +13,7 @@ namespace Norristown.LanguageServer;
 internal sealed class LineContext
 {
     private LineContext(
-        IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> tokens, int caret, bool partial,
+        IReadOnlyList<LineToken> tokens, int caret, bool partial,
         Surrounding around, bool inText, bool first)
     {
         Caret = caret;
@@ -36,10 +39,10 @@ internal sealed class LineContext
     /// Gets the name the caret is at the end of, which a completion replaces, or null if there is
     /// none.
     /// </summary>
-    public (SyntaxKind Kind, string Text, int Start)? Partial { get; }
+    public LineToken? Partial { get; }
 
     /// <summary>Gets the tokens before that name, or before the caret when there is no name.</summary>
-    public IReadOnlyList<(SyntaxKind Kind, string Text, int Start)> Before { get; }
+    public IReadOnlyList<LineToken> Before { get; }
 
     /// <summary>Gets the kind of context the line is in, which decides what may appear there.</summary>
     public ContextKind Context { get; }
@@ -145,7 +148,7 @@ internal sealed class LineContext
     /// Returns all of a line's tokens except its line break, each with its start position in the
     /// file.
     /// </summary>
-    public static List<(SyntaxKind Kind, string Text, int Start)> TokensOf(SyntaxTree tree, int line) =>
+    public static List<LineToken> TokensOf(SyntaxTree tree, int line) =>
         [.. tree.GetLine(line).Tokens
             .Where(token => token.Kind != SyntaxKind.EndOfLine)
             .Select(token => (token.Kind, token.Text, token.Span.Start))];
@@ -244,7 +247,7 @@ internal sealed class LineContext
     /// <c>$1</c> to someone who has typed that far, and a completion is about what they have
     /// typed.
     /// </summary>
-    private static List<(SyntaxKind Kind, string Text, int Start)> Lexed(SyntaxTree tree, int start, int end) =>
+    private static List<LineToken> Lexed(SyntaxTree tree, int start, int end) =>
         [.. SyntaxTree.Parse(tree.Path, tree.Text[start..end]).GetLine(0).Tokens
             .Where(token => token.Kind != SyntaxKind.EndOfLine)
             .Select(token => (token.Kind, token.Text, start + token.Span.Start))];

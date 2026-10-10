@@ -6,6 +6,7 @@
 // for an icon there, so the status bar says in words what the caret line's stripes mean, with
 // each stripe beside the register it stands for, and its tooltip gives the whole key.
 const vscode = require('vscode');
+const { showsSource, Requests } = require('./documents');
 
 // How long the text has to rest after an edit before the widths are asked for again. Until then
 // the old icons stay, since VS Code moves them with the text.
@@ -71,14 +72,13 @@ function keyOf(run) {
 
 class Widths {
   constructor(client) {
-    this.client = client;
+    this.requests = new Requests(client);
 
     // One decoration type per state, made the first time a state is drawn. There are at most
     // nine: each width 8, 16 or unknown, less both unknown, and emulation.
     this.types = new Map();
 
     this.timer = undefined;
-    this.cancel = undefined;
 
     // The editor shown, the document version its icons are for, and the runs drawn.
     this.shown = undefined;
@@ -99,11 +99,6 @@ class Widths {
     return vscode.workspace.getConfiguration('nt65').get('widths.enabled', true);
   }
 
-  applies(editor) {
-    return editor && editor.document.languageId === 'nt65'
-      && (editor.document.uri.scheme === 'file' || editor.document.uri.scheme === 'untitled');
-  }
-
   typeOf(run) {
     const key = keyOf(run);
     let type = this.types.get(key);
@@ -120,7 +115,7 @@ class Widths {
   // Asks for the widths of the editor's document after `delay`, and draws them when they come.
   schedule(editor, delay = 0) {
     clearTimeout(this.timer);
-    if (!this.enabled || !this.applies(editor)) {
+    if (!this.enabled || !showsSource(editor)) {
       this.clear();
       return;
     }
@@ -132,26 +127,11 @@ class Widths {
     const document = editor.document;
     const version = document.version;
     if (this.shown && this.shown.editor === editor && this.shown.version === version) return;
-
-    // A newer question makes any older one moot.
-    if (this.cancel) this.cancel.cancel();
-    const cancel = new vscode.CancellationTokenSource();
-    this.cancel = cancel;
-    let result;
-    try {
-      result = await this.client.sendRequest('nt65/widths', {
-        textDocument: { uri: document.uri.toString() },
-      }, cancel.token);
-    } catch {
-      result = null;
-    }
+    const result = await this.requests.send('nt65/widths', { textDocument: { uri: document.uri.toString() } });
 
     // An answer that arrives after the text has changed, or for an editor no longer active, is
     // dropped.
-    if (cancel.token.isCancellationRequested || document.version !== version
-      || vscode.window.activeTextEditor !== editor) {
-      return;
-    }
+    if (result === undefined || document.version !== version || vscode.window.activeTextEditor !== editor) return;
     this.shown = { editor, version, runs: result ? result.runs : [] };
     this.render(editor, this.shown.runs);
     this.showCaret(editor);
@@ -203,8 +183,7 @@ class Widths {
 
   clear() {
     clearTimeout(this.timer);
-    if (this.cancel) this.cancel.cancel();
-    this.cancel = undefined;
+    this.requests.cancel();
     if (this.shown) {
       for (const type of this.types.values()) this.shown.editor.setDecorations(type, []);
     }

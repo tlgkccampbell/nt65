@@ -183,7 +183,8 @@ internal static class Ca65Expressions
         switch (node)
         {
             case Binary binary:
-                marks.Spelling[binary.Symbol] = binary.Operator == "==" ? "==" : null;
+                if (binary.Operator == "==")
+                    marks.Spelling[binary.Symbol] = "==";
                 if (Wrapped(binary.Operator, binary.Left, right: false))
                     marks.Wrap(binary.Left);
                 if (Wrapped(binary.Operator, binary.Right, right: true))

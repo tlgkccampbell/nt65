@@ -89,5 +89,6 @@ internal static class SegmentNavigation
     private static IEnumerable<Span> Declarations(Segment segment) =>
         segment.Placements.Count > 0 ? segment.Placements : segment.Declaration is { } declared ? [declared] : [];
 
+    /// <summary>Converts a diagnostic span to a protocol location.</summary>
     private static Protocol.Location Location(Span span) => new(Uris.ToUri(span.File), Lsp.ToRange(span));
 }

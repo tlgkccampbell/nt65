@@ -7,11 +7,11 @@ const vscode = require('vscode');
 // How long the caret has to rest before the routine and the name under it are looked up.
 const DELAY = 120;
 
-// The scheme of the URIs that tree rows carry so that the tree can colour them.
+// The scheme of the URIs that tree rows carry so that the tree can color them.
 const SCHEME = 'nt65-direct-page';
 
-// The colour of a location the caret's routine reaches, and of the one under the caret.
-const COLOUR = new vscode.ThemeColor('nt65.directPages.caret');
+// The color of a location the caret's routine reaches, and of the one under the caret.
+const COLOR = new vscode.ThemeColor('nt65.directPages.caret');
 
 // Returns the key a location goes by in the tree and the grid: its page or segment and its name.
 function keyOf(page, location) {
@@ -153,8 +153,8 @@ class Caret {
   provideFileDecoration(uri) {
     if (uri.scheme !== SCHEME) return undefined;
     const key = uri.path.slice(1);
-    if (key === this.direct) return { badge: '◆', color: COLOUR, tooltip: 'Under the caret' };
-    if (this.keys.has(key)) return { badge: '•', color: COLOUR, tooltip: `Used by ${this.routine}` };
+    if (key === this.direct) return { badge: '◆', color: COLOR, tooltip: 'Under the caret' };
+    if (this.keys.has(key)) return { badge: '•', color: COLOR, tooltip: `Used by ${this.routine}` };
     return undefined;
   }
 

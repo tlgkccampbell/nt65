@@ -1,7 +1,7 @@
 namespace Norristown.LanguageServer.Protocol;
 
 /// <summary>
-/// Represents the reason an offered change cannot be applied. A client shows the change greyed
+/// Represents the reason an offered change cannot be applied. A client shows the change grayed
 /// out with the reason, so a rewrite that would alter the meaning of the line explains itself
 /// instead of silently missing from the menu.
 /// </summary>

@@ -56,7 +56,7 @@ internal static partial class Ca65Conversion
         var changed = false;
         for (var line = first; line <= last; line++)
         {
-            var text = tree.Text[tree.LineStarts[line]..tree.GetLineEnd(line)].TrimEnd('\r', '\n');
+            var text = Lines.TextOf(tree, line);
             var read = Converted(text);
             changed |= read != text;
             if (read is not null)
@@ -79,19 +79,16 @@ internal static partial class Ca65Conversion
         var (indent, code, comment) = Split(line);
         if (code.Length == 0)
             return line;
-
-        var first = Word(code);
-        if (first is not null && dropped.Contains(first))
+        if (Word(code) is not { } first)
+            return indent + Ca65Expressions.Line(code) + comment;
+        if (dropped.Contains(first))
             return null;
-        if (first is not null && closers.Contains(first))
+        if (closers.Contains(first))
             return indent + "}" + comment;
 
-        var converted = code;
-        if (first is not null && segments.TryGetValue(first, out var segment) && Rest(code, first).Length == 0)
-            converted = $".segment {segment}";
-        else if (first is not null)
-            converted = Opened(Renamed(code, first), first);
-
+        var converted = segments.TryGetValue(first, out var segment) && Rest(code, first).Length == 0
+            ? $".segment {segment}"
+            : Opened(Renamed(code, first), first);
         return indent + Ca65Expressions.Line(converted) + comment;
     }
 
@@ -169,16 +166,16 @@ internal static partial class Ca65Conversion
                 return code.TrimEnd() + " {";
 
             default:
-                return LabelledData(code);
+                return LabeledData(code);
         }
     }
 
     /// <summary>
     /// Rewrites a label in front of a data directive as a <c>.data</c> declaration of that name.
     /// </summary>
-    private static string LabelledData(string code)
+    private static string LabeledData(string code)
     {
-        var match = Labelled().Match(code);
+        var match = Labeled().Match(code);
         if (!match.Success)
             return code;
         var name = match.Groups["name"].Value;
@@ -235,5 +232,5 @@ internal static partial class Ca65Conversion
     /// Matches a name in front of a data directive, which nt65 declares rather than labels.
     /// </summary>
     [GeneratedRegex(@"^(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*:\s*(?<directive>\.(?:byte|word|dword|addr|faraddr|res|asciiz|strz|byt|dbyt|lobytes|hibytes|bankbytes|incbin))\b(?<rest>.*)$")]
-    private static partial Regex Labelled();
+    private static partial Regex Labeled();
 }

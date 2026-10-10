@@ -29,6 +29,7 @@ internal sealed class Framing : MessageHandlerBase
     /// <summary>LSP's own code for a request that arrives before <c>initialize</c>.</summary>
     private const JsonRpcErrorCode ServerNotInitialized = (JsonRpcErrorCode)(-32002);
 
+    /// <summary>The header that gives a frame's length, which is the only header read.</summary>
     private const string ContentLength = "Content-Length:";
 
     /// <summary>The value <see cref="NextLengthAsync"/> returns for a stream that has ended.</summary>
@@ -65,10 +66,13 @@ internal sealed class Framing : MessageHandlerBase
     /// </summary>
     public ServerPhase Phase { get; private set; }
 
+    /// <inheritdoc/>
     public override bool CanRead => true;
 
+    /// <inheritdoc/>
     public override bool CanWrite => true;
 
+    /// <inheritdoc/>
     protected override async ValueTask<JsonRpcMessage?> ReadCoreAsync(CancellationToken cancellationToken)
     {
         while (true)
@@ -92,6 +96,7 @@ internal sealed class Framing : MessageHandlerBase
         }
     }
 
+    /// <inheritdoc/>
     protected override async ValueTask WriteCoreAsync(JsonRpcMessage content, CancellationToken cancellationToken)
     {
         var written = new ArrayBufferWriter<byte>();
@@ -101,11 +106,14 @@ internal sealed class Framing : MessageHandlerBase
         await output.WriteAsync(written.WrittenMemory, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <inheritdoc/>
     protected override ValueTask FlushAsync(CancellationToken cancellationToken) =>
         new(output.FlushAsync(cancellationToken));
 
+    /// <inheritdoc/>
     protected override void DisposeReader() => input.Dispose();
 
+    /// <inheritdoc/>
     protected override void DisposeWriter() => output.Dispose();
 
     /// <summary>
@@ -289,6 +297,9 @@ internal sealed class Framing : MessageHandlerBase
         return true;
     }
 
+    /// <summary>
+    /// Refills the buffer from the stream, and returns false if the stream has ended.
+    /// </summary>
     private async ValueTask<bool> ReadMoreAsync(CancellationToken cancellationToken)
     {
         at = 0;

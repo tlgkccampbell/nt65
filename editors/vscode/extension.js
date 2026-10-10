@@ -193,9 +193,10 @@ async function keepUnsavedProjects(event, next) {
 
 async function activate(context) {
   // The active configuration, the hints to show and the line length go to the server when it
-  // starts, and again whenever the `nt65` settings change. The client watches the kinds of file every program is made of: the sources
-  // and the project files. Which binaries an `.incbin` reads depends on the program, so the
-  // server registers its own watch for those once it has read the program.
+  // starts, and again whenever the `nt65` settings change. The client watches the kinds of file
+  // every program is made of: the sources and the project files. Which binaries an `.incbin`
+  // reads depends on the program, so the server registers its own watch for those once it has
+  // read the program.
   client = new LanguageClient('nt65', 'nt65',
     serverOptions(context),
     {
