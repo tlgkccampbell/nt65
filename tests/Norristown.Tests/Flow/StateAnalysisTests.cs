@@ -485,6 +485,29 @@ public sealed class StateAnalysisTests
             Problems(".proc p: dp = $2100 {\n    rts\n@entry:\n    .state a8, i8, native\n    rts\n}\n"));
     }
 
+    /// <summary>
+    /// The instructions that the bytes from a <c>.label</c> inside an instruction decode as change
+    /// the state as the same instructions written there would. A decoded <c>tcd</c> leaves D
+    /// unknown, a decoded <c>mvn</c> leaves B at its destination, and a decoded <c>nop</c>
+    /// changes nothing.
+    /// </summary>
+    [Theory]
+    // $A9 $5B: from the second byte the processor runs `tcd`.
+    [InlineData("lda #$5B", "a8, i8, native, dp?, dbr = $7e")]
+    // $A5 $EA: from the second byte the processor runs `nop`.
+    [InlineData("lda $EA", "a8, i8, native, dp = $2100, dbr = $7e")]
+    // $AF $54 $00 $7E: from the second byte the processor runs `mvn #$7e, #$00`.
+    [InlineData("lda f:$7E0054", "a8, i8, native, dp = $2100, dbr = $00")]
+    public void AHiddenInstructionChangesTheStateAsAWrittenOne(string instruction, string expected)
+    {
+        var state = StateAt(
+            ".proc p: a8, i8, native, dbr = $7e -> dp?, dbr? {\n    pea $2100\n    pld\n    bra inside\n@top:\n"
+                + $"    {instruction}\n    .label inside = @top + 1\n    nop\n    rts\n}}\n",
+            "nop");
+
+        Assert.Equal(expected, state.Processor.ToString());
+    }
+
     private static int MaximumWalks(string text) =>
         Assert.Single(FlowFragment.Analyze("65816", text).Files).State!.MaximumWalks;
 

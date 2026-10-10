@@ -1801,7 +1801,10 @@ label:
   from 1 to the instruction's length less 1 (label-position-invalid). nt65 decodes the bytes
   from there as the CPU runs them, through the next instructions if need be, until they reach
   the start of an instruction as written, and the flow analysis gives the decoded instructions
-  a block of their own that goes on there. No code runs into that block. Every byte has to be
+  a block of their own that goes on there. No code runs into that block. Each decoded
+  instruction has its full effect on the flags, the registers, the stack and the processor
+  state, as the same instruction written there would, so a decoded `tcd` leaves D unknown and
+  a decoded `mvn` moves B. Every byte has to be
   known before linking: an opcode, a constant operand, or a branch's distance within the same
   run of bytes. Each decoded byte must be an instruction the CPU has, and none may change where
   control goes, move the stack or change the widths; a run whose last instruction starts 32 bytes

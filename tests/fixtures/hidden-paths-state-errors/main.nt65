@@ -1,0 +1,78 @@
+; On the 65816 the instructions that the bytes from a `.label` inside an instruction decode as
+; change the processor state as the same instructions written there would.
+.module main
+
+.cpu 65816
+
+.export hidden_tcd, hidden_nop, hidden_move, hidden_store, hidden_tsx
+
+.segment WRAM
+.data score: .byte
+
+.segment CODE
+
+; `lda #$5B` is $A9 $5B, and from its second byte the processor runs `tcd`, so D is not known
+; after the loop.
+.proc hidden_tcd: native, a8, i8 -> a8, i8, dp? {
+    pea $2100
+    pld
+@top:
+    lda #$5B
+    .label load_d = @top + 1
+    lsr a
+    bcc load_d
+    lda d:$2105 ;! error[direct-page-unknown]: `d:$2105` is reached through the direct page, and D is not known here: a `.state dp = ...` declares what it is
+    rts
+}
+
+; `lda $EA` runs `nop` from its second byte, which leaves D as it was.
+.proc hidden_nop: native, a8, i8 -> a8, i8, dp? {
+    pea $2100
+    pld
+@top:
+    lda $EA
+    .label pass = @top + 1
+    lsr a
+    bcc pass
+    lda d:$2105
+    rts
+}
+
+; `lda f:$7E0054` runs `mvn` from its second byte, which leaves the data bank at $00.
+.proc hidden_move: native, a8, i8, dbr = $7e -> a8, i8, dbr? {
+    bra move
+@top:
+    lda f:$7E0054
+    .label move = @top + 1
+    sta score ;! error[bank-mismatch]: `score` is in segment `WRAM`, which is in bank $7e, but B is $00 here
+    rts
+}
+
+; `lda f:$01058D` runs `sta $0105` from its second byte, which writes into the bytes on the
+; stack, so the status that `php` saved is no longer known.
+.proc hidden_store: native, a8, i8 -> a8, i8 {
+    php
+@top:
+    lda f:$01058D
+    .label poke = @top + 1
+    lsr a
+    bcc poke
+    plp
+    rts ;! error[return-state-mismatch]: `rts`: `hidden_store` declares it returns with `a8`, but the width of A is not known here ;! error[return-state-mismatch]: `rts`: `hidden_store` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
+; From the third byte of `lda f:$9DBA00` the processor runs `tsx`, then `sta $0101,x` through
+; the bytes of `ora ($01,x)`. X holds the stack pointer there, so the store writes into the
+; bytes on the stack.
+.proc hidden_tsx: native, a8, i8 -> a8, i8 {
+    php
+@top:
+    lda f:$9DBA00
+    .label copy = @top + 2
+    ora ($01,x)
+    lsr a
+    bcc copy
+    plp
+    rts ;! error[return-state-mismatch]: `rts`: `hidden_tsx` declares it returns with `a8`, but the width of A is not known here ;! error[return-state-mismatch]: `rts`: `hidden_tsx` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
