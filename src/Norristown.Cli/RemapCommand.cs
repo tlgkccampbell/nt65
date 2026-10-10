@@ -33,31 +33,23 @@ public static class RemapCommand
                     target = arguments[++i];
                     break;
                 case "--out":
-                    error.WriteLine("nt65: `--out` needs a file to write");
-                    return ExitCode.UsageError;
+                    return Commands.Wrong(error, "`--out` needs a file to write");
                 case "--labels" when i + 1 < arguments.Count:
                     labels = arguments[++i];
                     break;
                 case "--labels":
-                    error.WriteLine("nt65: `--labels` needs a file to write");
-                    return ExitCode.UsageError;
+                    return Commands.Wrong(error, "`--labels` needs a file to write");
                 default:
-                    if (arguments[i].StartsWith('-') || file is not null)
-                    {
-                        error.WriteLine(arguments[i].StartsWith('-')
-                            ? $"nt65: `{arguments[i]}` is not an option"
-                            : "nt65: `remap-dbg` takes one debug file, and was given more than one");
-                        return ExitCode.UsageError;
-                    }
+                    if (arguments[i].StartsWith('-'))
+                        return Commands.Wrong(error, $"`{arguments[i]}` is not an option");
+                    if (file is not null)
+                        return Commands.Wrong(error, "`remap-dbg` takes one debug file, and was given more than one");
                     file = arguments[i];
                     break;
             }
         }
         if (file is null)
-        {
-            error.WriteLine("nt65: `remap-dbg` needs the debug file ld65 wrote with `--dbgfile`");
-            return ExitCode.UsageError;
-        }
+            return Commands.Wrong(error, "`remap-dbg` needs the debug file ld65 wrote with `--dbgfile`");
 
         var path = Path.GetFullPath(file, directory);
         if (!File.Exists(path))
