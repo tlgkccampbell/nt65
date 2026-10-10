@@ -89,7 +89,7 @@ public sealed partial class OracleTests
     [Fact]
     public void GeneratedOutputLinksWithHandWrittenCa65()
     {
-        var linkable = FixtureCase.All().Where(fixture => LinkFiles(fixture) is not null).ToList();
+        var linkable = FixtureCase.All().Where(fixture => FixtureLink.Of(fixture) is not null).ToList();
         Repo.RequireAny(linkable);
 
         var failures = Repo.CollectFailures(linkable, Check);
@@ -97,13 +97,11 @@ public sealed partial class OracleTests
 
         static IEnumerable<string> Check(FixtureCase fixture)
         {
-            var (config, handWritten) = LinkFiles(fixture)!.Value;
+            var (config, handWritten) = FixtureLink.Of(fixture)!;
             var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
             var result = Ca65Oracle.Pinned.Link(config, [.. Ca65Oracle.ByFileName(compilation.Ca65), .. handWritten]);
-            if (!result.Succeeded)
-                yield return $"[{fixture.Name}] ld65 reported:\n{result.Messages}";
-            else if (result.Binary.Length == 0)
-                yield return $"[{fixture.Name}] linked, but wrote no bytes";
+            if (result.Problem(fixture.Name) is { } problem)
+                yield return problem;
         }
     }
 
@@ -117,7 +115,7 @@ public sealed partial class OracleTests
     {
         Repo.SkipUnlessSelected("modules");
         var fixture = FixtureCase.All().Single(f => f.Name == "modules");
-        var (config, handWritten) = LinkFiles(fixture)!.Value;
+        var (config, handWritten) = FixtureLink.Of(fixture)!;
         var wrong = handWritten
             .Select(file => (file.Name, Source: file.Source.Replace("HOST_VERSION = $0102", "HOST_VERSION = $0103")))
             .ToList();
@@ -522,23 +520,6 @@ public sealed partial class OracleTests
                     $"ca65 generated {result.LineBytes[i]}:\n  {lines[i]}";
             }
         }
-    }
-
-    /// <summary>
-    /// Returns the linker configuration and the hand-written modules of a fixture, or null if the
-    /// fixture has no linker configuration.
-    /// </summary>
-    private static (string Config, IReadOnlyList<(string Name, string Source)> Modules)? LinkFiles(FixtureCase fixture)
-    {
-        var directory = Path.Combine(fixture.Directory, "link");
-        if (!Directory.Exists(directory))
-            return null;
-        var config = Path.Combine(directory, "link.cfg");
-        if (!File.Exists(config))
-            return null;
-        return (Repo.ReadText(config), [.. Directory.GetFiles(directory, "*.s")
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path.GetFileName(path), Repo.ReadText(path)))]);
     }
 
     /// <summary>

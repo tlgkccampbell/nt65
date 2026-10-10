@@ -74,6 +74,22 @@ internal static class Analysis
         Compiler.Compile([.. files.Select(file => new SourceFile(file.Path, file.Text))], project)
             .Outputs.ToDictionary(output => output.Path, output => output.Text, StringComparer.Ordinal);
 
+    /// <summary>
+    /// Compiles <paramref name="text"/> as the one file of a program, which must compile cleanly,
+    /// and returns the ca65 it becomes.
+    /// </summary>
+    public static string Compiled(string text)
+    {
+        var compilation = Compiler.Compile([new SourceFile(Path, text)]);
+        Assert.Empty(compilation.Diagnostics);
+        return Assert.Single(compilation.Ca65).Text;
+    }
+
+    /// <summary>
+    /// Returns no length for any path, for a program in which no file has an <c>.incbin</c>.
+    /// </summary>
+    public static long? NoBinaries(string path) => null;
+
     /// <summary>Returns the single symbol named <paramref name="name"/>, in any scope of the file.</summary>
     public static Symbol Symbol(this SemanticModel model, string name) =>
         model.Symbols.Single(symbol => symbol.DisplayName == name);

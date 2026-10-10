@@ -114,7 +114,7 @@ public sealed class DebugFileTests
 
     /// <summary>Returns the fixtures that hold a linker configuration, which are the ones that can link.</summary>
     private static IReadOnlyList<FixtureCase> Linkable() =>
-        [.. FixtureCase.All().Where(fixture => File.Exists(LinkConfigPath(fixture)))];
+        [.. FixtureCase.All().Where(fixture => FixtureLink.Of(fixture) is not null)];
 
     /// <summary>
     /// Compiles <paramref name="fixture"/> and links its output with <c>ld65 --dbgfile</c>, with
@@ -123,13 +123,14 @@ public sealed class DebugFileTests
     /// </summary>
     private static (Dictionary<string, string> Maps, LinkResult Result) Linked(FixtureCase fixture, bool withHandWritten)
     {
+        var link = FixtureLink.Of(fixture)!;
         var compilation = Compiler.Compile(fixture.Sources, fixture.Project);
         var maps = compilation.Outputs
             .Where(output => output.Kind == OutputKind.LineMap)
             .ToDictionary(output => Path.GetFileName(output.Path), output => output.Text, StringComparer.Ordinal);
         var result = Ca65Oracle.Pinned.Link(
-            LinkConfig(fixture),
-            [.. Ca65Oracle.ByFileName(compilation.Ca65), .. withHandWritten ? HandWritten(fixture) : []],
+            link.Config,
+            [.. Ca65Oracle.ByFileName(compilation.Ca65), .. withHandWritten ? link.Modules : []],
             debugFile: true);
         return (maps, result);
     }
@@ -140,17 +141,6 @@ public sealed class DebugFileTests
     /// </summary>
     private static Func<string, string?> MapOf(Dictionary<string, string> maps) =>
         name => maps.GetValueOrDefault(name + LineMap.Extension);
-
-    private static string LinkConfig(FixtureCase fixture) => Repo.ReadText(LinkConfigPath(fixture));
-
-    private static string LinkConfigPath(FixtureCase fixture) =>
-        Path.Combine(fixture.Directory, "link", "link.cfg");
-
-    /// <summary>Returns the hand-written ca65 modules that a fixture links its output against.</summary>
-    private static IReadOnlyList<(string Name, string Source)> HandWritten(FixtureCase fixture) =>
-        [.. Directory.GetFiles(Path.Combine(fixture.Directory, "link"), "*.s")
-            .Order(StringComparer.Ordinal)
-            .Select(path => (Path.GetFileName(path), Repo.ReadText(path)))];
 
     /// <summary>Returns the <c>file</c> records of a debug file, mapping each id to its file name.</summary>
     private static Dictionary<string, string> Files(string text) =>

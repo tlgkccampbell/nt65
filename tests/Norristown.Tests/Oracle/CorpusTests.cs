@@ -132,9 +132,7 @@ public sealed class CorpusTests
             program.LinkerConfig,
             [.. program.HandWritten, .. Ca65Oracle.AtTheirPaths(compilation.Ca65)],
             program.Other);
-        if (!result.Succeeded)
-            yield return $"[{program.Name}] ld65 reported:\n{result.Messages}";
-        else if (result.Binary.Length == 0)
-            yield return $"[{program.Name}] linked, but wrote no bytes";
+        if (result.Problem(program.Name) is { } failed)
+            yield return failed;
     }
 }
