@@ -67,7 +67,7 @@ public sealed class StateAnalysis : IProcessorStates
         this.effects = effects;
         this.signatures = signatures;
         checks = new StateChecks(model, layout, ranges, SignatureOf, signatures);
-        outside = new OutsideEntries(model, layout);
+        outside = new OutsideEntries(model, layout, flow);
     }
 
     /// <summary>Gets what is wrong with the widths, the mode and the calls in this file.</summary>

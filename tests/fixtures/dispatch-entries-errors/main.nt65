@@ -1,0 +1,42 @@
+; A label that a table names is entered from outside its routine when anything but the routine's
+; own jumps dispatches through the table, and the register walk then assumes no more there than a
+; jump in brings. A table only the routine's own jumps dispatch through enters its labels along
+; those jumps alone.
+.module main
+
+.cpu 6502
+
+.export jumps_through, saves_across, own_dispatch
+
+.segment CODE
+
+; Another routine's `.next` spreads the same table, so it reaches `halfway` without the `pha`.
+.proc jumps_through {
+    ldx #0
+    jmp (shared)
+    .next shared
+}
+
+.proc saves_across: keeps a {
+    pha
+    jmp (shared)
+    .next shared
+    halfway:
+    pla
+    rts                     ;! error[keeps-broken]: `saves_across` promises `keeps a`, but A is not the same as on entry here, because `halfway` can be entered from outside `saves_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `halfway` to the same side of it as the code that reads them; on `saves_across`, `pushed n` declares what the caller pushed beneath the return address, and `pulls n` the bytes handed above it ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address when the routine is entered at `halfway`, having pulled more than the routine pushed: keep each push and its pull on one side of `halfway`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
+}
+
+; Only this routine's jump dispatches through `by_itself`, so the `pha` above it reaches
+; `halfway` on every path, and the `pla` restores A.
+.proc own_dispatch: keeps a {
+    pha
+    jmp (by_itself)
+    .next by_itself
+    halfway:
+    pla
+    rts
+}
+
+.segment RODATA
+.data shared:    .addr saves_across::halfway
+.data by_itself: .addr own_dispatch::halfway

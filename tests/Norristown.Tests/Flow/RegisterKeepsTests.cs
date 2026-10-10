@@ -376,6 +376,24 @@ public sealed class RegisterKeepsTests
     }
 
     /// <summary>
+    /// A label that a table names is entered from outside its routine when another routine's
+    /// <c>.next</c> spreads the table, so a save above the label does not reach the restore
+    /// below it. Where only the routine's own jump dispatches through the table, the save does.
+    /// </summary>
+    [Fact]
+    public void ALabelAnotherRoutineReachesThroughATableIsEnteredFromOutside()
+    {
+        const string Owner = ".proc owner: keeps a {\n    pha\n    jmp (table)\n    .next table\nhalfway:\n    pla\n    rts\n}\n";
+        const string Table = ".segment RODATA\n.data table: .addr owner::halfway\n";
+
+        Assert.Empty(Problems(Owner + ".export owner\n" + Table));
+        Assert.Contains(
+            Problems(Owner + ".proc other {\n    jmp (table)\n    .next table\n}\n.export owner, other\n" + Table),
+            problem => problem.StartsWith("main.nt65:7: `owner` promises `keeps a`, but A is not the same as on entry here, "
+                + "because `halfway` can be entered from outside `owner`", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// A <c>.next ?</c> hands control to somewhere nt65 is not told about, which may change
     /// anything. A routine whose only way out is one keeps nothing, and the answer is incomplete,
     /// so a caller that relies on the routine is not told it keeps more than it does.
