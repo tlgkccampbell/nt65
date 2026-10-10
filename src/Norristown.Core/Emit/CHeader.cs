@@ -228,7 +228,7 @@ public sealed class CHeader
             if (type is not null)
             {
                 diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                    Catalogue.CHeaderUntyped.Message(symbol.Name, type.PathName)));
+                    Catalog.CHeaderUntyped.Message(symbol.Name, type.PathName)));
             }
             return $"unsigned char {name}[{size}]";
         }

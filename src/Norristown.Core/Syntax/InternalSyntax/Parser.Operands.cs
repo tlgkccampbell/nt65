@@ -102,7 +102,7 @@ internal sealed partial class Parser
     {
         var openBracket = Advance();
         var address = ParseExpression();
-        var closeBracket = Require(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
+        var closeBracket = Require(SyntaxKind.CloseBracket, Catalog.ExpectedBracket.Message("`]`"));
         return Kind == SyntaxKind.Comma && IsRegister(1, "y")
             ? new LongIndirectOperandSyntax(openBracket, address, closeBracket, Advance(), Advance())
             : new LongIndirectOperandSyntax(openBracket, address, closeBracket, null, null);

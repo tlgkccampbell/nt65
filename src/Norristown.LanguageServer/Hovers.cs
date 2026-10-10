@@ -231,7 +231,7 @@ internal static class Hovers
     {
         var token = model.Tree.Root.FindToken(position);
         if (token.Parent is not AllowDirectiveSyntax allow || token.Span != allow.Name.Span
-            || Literals.Text(token.Text) is not { } name || Catalogue.Find(name) is not { } descriptor)
+            || Literals.Text(token.Text) is not { } name || Catalog.Find(name) is not { } descriptor)
         {
             return null;
         }

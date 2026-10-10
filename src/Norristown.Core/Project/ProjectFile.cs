@@ -175,14 +175,14 @@ public static class ProjectFile
         var span = new Span("-D", 1, 1, argument.Length + 1);
         if (!IsName(name))
         {
-            diagnostics.Add(new Diagnostic(span, Catalogue.SettingNameInvalid.Message(name)));
+            diagnostics.Add(new Diagnostic(span, Catalog.SettingNameInvalid.Message(name)));
             return null;
         }
         if (at < 0)
             return new SettingValue(name, 1, span);
         if (Number(argument[(at + 1)..]) is not { } value)
         {
-            diagnostics.Add(new Diagnostic(span, Catalogue.SettingNotANumber.Message(name)));
+            diagnostics.Add(new Diagnostic(span, Catalog.SettingNotANumber.Message(name)));
             return null;
         }
         return new SettingValue(name, value, span);
@@ -210,14 +210,14 @@ public static class ProjectFile
             var column = Column(text, line, (int)(exception.BytePositionInLine ?? 0));
             diagnostics.Add(new Diagnostic(
                 new Span(path, line + 1, column + 1, column + 2),
-                Catalogue.ProjectJsonInvalid.Message(exception.Message.TrimEnd('.').Split(" LineNumber")[0])));
+                Catalog.ProjectJsonInvalid.Message(exception.Message.TrimEnd('.').Split(" LineNumber")[0])));
             return null;
         }
 
         if (document.RootElement.ValueKind == JsonValueKind.Object)
             return document;
         document.Dispose();
-        diagnostics.Add(new Diagnostic(new Span(path, 1, 1, 2), Severity.Error, Catalogue.ProjectNotAnObject.Message(Name)));
+        diagnostics.Add(new Diagnostic(new Span(path, 1, 1, 2), Severity.Error, Catalog.ProjectNotAnObject.Message(Name)));
         return null;
     }
 
@@ -253,7 +253,7 @@ public static class ProjectFile
     private static DiagnosticMessage Unknown(string key)
     {
         var nearest = Spelling.Nearest(key, known);
-        return Catalogue.ProjectKeyUnknown.Message(key, Name, nearest is null ? "" : $"; did you mean `{nearest}`?");
+        return Catalog.ProjectKeyUnknown.Message(key, Name, nearest is null ? "" : $"; did you mean `{nearest}`?");
     }
 
     /// <summary>
@@ -375,7 +375,7 @@ public static class ProjectFile
                 return null;
             if (CpuNames.Parse(named) is { } cpu)
                 return cpu;
-            Report(keys[CpuKey], Catalogue.ProjectCpuUnknown.Message(named, CpuNames.Listed));
+            Report(keys[CpuKey], Catalog.ProjectCpuUnknown.Message(named, CpuNames.Listed));
             return null;
         }
 
@@ -396,12 +396,12 @@ public static class ProjectFile
                 var key = within?[property.Name];
                 if (!IsName(property.Name))
                 {
-                    Report(key, Catalogue.SettingNameInvalid.Message(property.Name));
+                    Report(key, Catalog.SettingNameInvalid.Message(property.Name));
                     continue;
                 }
                 if (Number(property.Value) is not { } value)
                 {
-                    Report(key, Catalogue.SettingNotANumber.Message(property.Name));
+                    Report(key, Catalog.SettingNotANumber.Message(property.Name));
                     continue;
                 }
                 read.Add(new SettingValue(property.Name, value, At(key)));
@@ -412,7 +412,7 @@ public static class ProjectFile
         /// <summary>
         /// Reads a <c>diagnostics</c> object, such as
         /// <c>"diagnostics": { "unused-symbol": "off" }</c>, which gives the severity at which the
-        /// project reports each named diagnostic, overriding the one the catalogue gives it.
+        /// project reports each named diagnostic, overriding the one the catalog gives it.
         /// <paramref name="keys"/> is where the keys of the object being read are written, so a
         /// configuration's entry is reported where that configuration gives it.
         /// </summary>
@@ -426,24 +426,24 @@ public static class ProjectFile
             foreach (var property in section.EnumerateObject())
             {
                 var key = within?[property.Name];
-                if (Catalogue.Find(property.Name) is not { } descriptor)
+                if (Catalog.Find(property.Name) is not { } descriptor)
                 {
-                    var nearest = Spelling.Nearest(property.Name, Catalogue.All.Select(d => d.Id));
+                    var nearest = Spelling.Nearest(property.Name, Catalog.All.Select(d => d.Id));
                     Report(
                         key,
-                        Catalogue.DiagnosticNameUnknown.Message(
+                        Catalog.DiagnosticNameUnknown.Message(
                             property.Name, nearest is null ? "" : $"; did you mean `{nearest}`?"));
                     continue;
                 }
                 if (property.Value.ValueKind != JsonValueKind.String
                     || Level(property.Value.GetString(), out var level) is false)
                 {
-                    Report(key, Catalogue.DiagnosticSeverityUnknown.Message(property.Name));
+                    Report(key, Catalog.DiagnosticSeverityUnknown.Message(property.Name));
                     continue;
                 }
                 if (descriptor.Severity == Severity.Error && level != Severity.Error)
                 {
-                    Report(key, Catalogue.DiagnosticNotTurnedDown.Message(property.Name));
+                    Report(key, Catalog.DiagnosticNotTurnedDown.Message(property.Name));
                     continue;
                 }
                 read[property.Name] = level;
@@ -468,18 +468,18 @@ public static class ProjectFile
                 var key = within?[property.Name];
                 if (property.Name.Length == 0 || !property.Name.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-'))
                 {
-                    Report(key, Catalogue.ConfigurationNameInvalid.Message(property.Name));
+                    Report(key, Catalog.ConfigurationNameInvalid.Message(property.Name));
                     continue;
                 }
                 if (property.Value.ValueKind != JsonValueKind.Object)
                 {
-                    Report(key, Catalogue.ConfigurationNotAnObject.Message(property.Name));
+                    Report(key, Catalog.ConfigurationNotAnObject.Message(property.Name));
                     continue;
                 }
                 foreach (var setting in property.Value.EnumerateObject())
                 {
                     if (!ConfigurationKeys.Contains(setting.Name, StringComparer.Ordinal))
-                        Report(key?[setting.Name], Catalogue.ConfigurationKeyUnknown.Message(property.Name, setting.Name));
+                        Report(key?[setting.Name], Catalog.ConfigurationKeyUnknown.Message(property.Name, setting.Name));
                 }
                 read.Add(new BuildConfiguration(
                     property.Name,
@@ -504,7 +504,7 @@ public static class ProjectFile
                 return null;
             if (configurations.FirstOrDefault(configuration => configuration.Name == name) is { } chosen)
                 return chosen;
-            Report(keys[DefaultKey], Catalogue.ConfigurationUnknown.Message(name, ProjectSettings.Listed(configurations)));
+            Report(keys[DefaultKey], Catalog.ConfigurationUnknown.Message(name, ProjectSettings.Listed(configurations)));
             return null;
         }
 
@@ -525,7 +525,7 @@ public static class ProjectFile
                 var key = within?[property.Name];
                 if (property.Value.ValueKind != JsonValueKind.Object)
                 {
-                    Report(key, Catalogue.ProjectSegmentNotAnObject.Message(property.Name));
+                    Report(key, Catalog.ProjectSegmentNotAnObject.Message(property.Name));
                     continue;
                 }
 
@@ -539,7 +539,7 @@ public static class ProjectFile
                             segment = segment with { Size = size };
                             break;
                         case SizeKey:
-                            Report(key, Catalogue.ProjectSegmentSizeMissing.Message(property.Name));
+                            Report(key, Catalog.ProjectSegmentSizeMissing.Message(property.Name));
                             break;
                         case SpaceKey:
                             if (SpaceName(attribute.Value, key) is { } space)
@@ -550,7 +550,7 @@ public static class ProjectFile
                             break;
                         default:
                             if (!SegmentKeys.Contains(attribute.Name, StringComparer.Ordinal))
-                                Report(key, Catalogue.ProjectSegmentKeyUnknown.Message(property.Name, attribute.Name));
+                                Report(key, Catalog.ProjectSegmentKeyUnknown.Message(property.Name, attribute.Name));
                             else if (StateRegister.FromAttribute(attribute.Name) is { } register)
                             {
                                 var value = new Given(Number(attribute.Value));
@@ -583,7 +583,7 @@ public static class ProjectFile
                     || !property.Value.TryGetProperty(ConfigKey, out var config)
                     || config.ValueKind != JsonValueKind.String || config.GetString() is not { Length: > 0 } configPath)
                 {
-                    Report(key, Catalogue.LinkNotAnObject.Message(property.Name));
+                    Report(key, Catalog.LinkNotAnObject.Message(property.Name));
                     continue;
                 }
 
@@ -593,7 +593,7 @@ public static class ProjectFile
                 {
                     if (!LinkKeys.Contains(setting.Name, StringComparer.Ordinal))
                     {
-                        Report(key?[setting.Name], Catalogue.LinkKeyUnknown.Message(
+                        Report(key?[setting.Name], Catalog.LinkKeyUnknown.Message(
                             $"link `{property.Name}`", setting.Name, "a link may set only `config`, `memory` and `space`"));
                     }
                 }
@@ -618,7 +618,7 @@ public static class ProjectFile
                 var key = keys?[property.Name];
                 if (property.Value.ValueKind != JsonValueKind.Object)
                 {
-                    Report(key, Catalogue.ProjectValueNotAnObject.Message(property.Name));
+                    Report(key, Catalog.ProjectValueNotAnObject.Message(property.Name));
                     continue;
                 }
                 var area = new Link.Area(property.Name, At(key));
@@ -635,7 +635,7 @@ public static class ProjectFile
                     }
                     else
                     {
-                        Report(key?[setting.Name], Catalogue.LinkKeyUnknown.Message(
+                        Report(key?[setting.Name], Catalog.LinkKeyUnknown.Message(
                             $"memory area `{property.Name}`", setting.Name, "a memory area may set only `mirrors` and `space`"));
                     }
                 }
@@ -660,7 +660,7 @@ public static class ProjectFile
                 var holds = property.Value.ValueKind == JsonValueKind.String ? property.Value.GetString() : null;
                 if (holds is null || !SpaceHolds.Contains(holds, StringComparer.Ordinal))
                 {
-                    Report(key, Catalogue.ProjectSpaceHoldsUnknown.Message(property.Name));
+                    Report(key, Catalog.ProjectSpaceHoldsUnknown.Message(property.Name));
                     continue;
                 }
                 read.Add(new AddressSpace(property.Name, holds == Code, At(key)));
@@ -686,18 +686,18 @@ public static class ProjectFile
                 var key = within?[property.Name];
                 if (Interval(property.Name, 0xffff) is not { } addresses)
                 {
-                    Report(key, Catalogue.RangeInvalid.Message(property.Name));
+                    Report(key, Catalog.RangeInvalid.Message(property.Name));
                     continue;
                 }
                 if (property.Value.ValueKind != JsonValueKind.Array)
                 {
-                    Report(key, Catalogue.BanksNotAList.Message(property.Name));
+                    Report(key, Catalog.BanksNotAList.Message(property.Name));
                     continue;
                 }
                 var range = new AccessRange(addresses.First, addresses.Last, Banks(property.Name, key, property.Value));
                 if (read.FirstOrDefault(other => other.First <= range.Last && range.First <= other.Last) is { } overlapping)
                 {
-                    Report(key, Catalogue.RangesOverlap.Message(
+                    Report(key, Catalog.RangesOverlap.Message(
                         property.Name, StateValue.Hex(overlapping.First, 4), StateValue.Hex(overlapping.Last, 4)));
                     continue;
                 }
@@ -716,7 +716,7 @@ public static class ProjectFile
             var banks = new List<(long First, long Last)>();
             if (value.ValueKind != JsonValueKind.Array)
             {
-                Report(key, Catalogue.BanksNotAList.Message(name));
+                Report(key, Catalog.BanksNotAList.Message(name));
                 return banks;
             }
             foreach (var item in value.EnumerateArray())
@@ -727,7 +727,7 @@ public static class ProjectFile
                 if (bank is { } valid)
                     banks.Add(valid);
                 else
-                    Report(key, Catalogue.BankInvalid.Message(name, item.GetRawText()));
+                    Report(key, Catalog.BankInvalid.Message(name, item.GetRawText()));
             }
             return banks;
         }
@@ -743,7 +743,7 @@ public static class ProjectFile
                 return [];
             if (value.ValueKind != JsonValueKind.Array)
             {
-                Report(keys?[name], Catalogue.ProjectNotAList.Message(name));
+                Report(keys?[name], Catalog.ProjectNotAList.Message(name));
                 return [];
             }
 
@@ -753,7 +753,7 @@ public static class ProjectFile
                 if (item.ValueKind == JsonValueKind.String)
                     read.Add(item.GetString() ?? "");
                 else
-                    Report(keys?[name], Catalogue.ProjectNotAList.Message(name));
+                    Report(keys?[name], Catalog.ProjectNotAList.Message(name));
             }
             return read;
         }
@@ -768,7 +768,7 @@ public static class ProjectFile
                 return null;
             if (value.ValueKind == JsonValueKind.String)
                 return value.GetString();
-            Report(keys?[name], Catalogue.ProjectNotAString.Message(name));
+            Report(keys?[name], Catalog.ProjectNotAString.Message(name));
             return null;
         }
 
@@ -798,7 +798,7 @@ public static class ProjectFile
         {
             if (value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 0 } space)
                 return space;
-            Report(key, Catalogue.SpaceNotAName);
+            Report(key, Catalog.SpaceNotAName);
             return null;
         }
 
@@ -843,7 +843,7 @@ public static class ProjectFile
                 return false;
             if (value.ValueKind == JsonValueKind.Object)
                 return true;
-            Report(keys?[name], Catalogue.ProjectValueNotAnObject.Message(name));
+            Report(keys?[name], Catalog.ProjectValueNotAnObject.Message(name));
             return false;
         }
 

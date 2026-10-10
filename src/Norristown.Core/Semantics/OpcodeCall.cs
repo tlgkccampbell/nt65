@@ -53,7 +53,7 @@ internal static class OpcodeCall
         if (given[0] is not NameExpressionSyntax { Names.Length: 1, SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic }
             || (given.Count == 2 && word is null))
         {
-            report(Catalogue.OpcodeArgument);
+            report(Catalog.OpcodeArgument);
             return Value.Unknown;
         }
 
@@ -62,7 +62,7 @@ internal static class OpcodeCall
         var forms = Instructions.Modes(cpu, mnemonic.MnemonicKind);
         if (forms.Count == 0)
         {
-            report(Catalogue.OpcodeForm.Message(written, CpuNames.Format(cpu), SyntaxFacts.IsLongBranch(mnemonic.MnemonicKind)
+            report(Catalog.OpcodeForm.Message(written, CpuNames.Format(cpu), SyntaxFacts.IsLongBranch(mnemonic.MnemonicKind)
                 ? $"`{name}` is written as one instruction or two, as the target's reach decides"
                 : $"it has no `{name}`"));
             return Value.Unknown;
@@ -73,7 +73,7 @@ internal static class OpcodeCall
         AddressingMode? chosen = word is null ? Bare(forms) : forms.Where(form => WordOf(form) == word).Cast<AddressingMode?>().FirstOrDefault();
         if (chosen is not { } mode)
         {
-            report(Catalogue.OpcodeForm.Message(written, CpuNames.Format(cpu),
+            report(Catalog.OpcodeForm.Message(written, CpuNames.Format(cpu),
                 word is null ? $"`{name}` has several forms, so name one of {listed}"
                 : words.Count == 0 ? $"`{name}` takes no mode"
                 : $"`{name}` has no `{word}` form, only {listed}"));

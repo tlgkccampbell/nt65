@@ -99,7 +99,7 @@ public sealed class SegmentTable
             }
             if (segment.Space is { } named && !table.spaces.ContainsKey(named))
             {
-                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Catalogue.SpaceUndeclared.Message(named)));
+                diagnostics.Add(new Diagnostic(segment.Declaration!.Value, Catalog.SpaceUndeclared.Message(named)));
                 segment = segment with { Space = null };
             }
             segments[segment.Name] = segment;
@@ -137,13 +137,13 @@ public sealed class SegmentTable
         var word = register.Attribute!;
         var isDirectPage = register == StateRegister.DirectPage;
         if ((isDirectPage ? already.DirectPage : already.Bank) is not null)
-            problem = Catalogue.SegmentAttributeTwice.Message(segment, word);
+            problem = Catalog.SegmentAttributeTwice.Message(segment, word);
         else if (isDirectPage && size != AddressSize.ZeroPage)
-            problem = Catalogue.SegmentDpNotZp.Message(segment);
+            problem = Catalog.SegmentDpNotZp.Message(segment);
         else if (value is null)
-            problem = Catalogue.SegmentAttributeNotConstant.Message(word);
+            problem = Catalog.SegmentAttributeNotConstant.Message(word);
         else if (value < 0 || value > register.Maximum)
-            problem = Catalogue.SegmentAttributeOutOfRange.Message($"`{word}` must be {register.ValueRange()}: {register.Range}");
+            problem = Catalog.SegmentAttributeOutOfRange.Message($"`{word}` must be {register.ValueRange()}: {register.Range}");
         if (problem is not { } reported)
             return value;
         diagnostics.Add(new Diagnostic(at, reported));
@@ -155,7 +155,7 @@ public sealed class SegmentTable
     /// mirror.
     /// </summary>
     public static DiagnosticMessage MirrorsNeedABank(string segment) =>
-        Catalogue.SegmentMirrorsNeedABank.Message(segment);
+        Catalog.SegmentMirrorsNeedABank.Message(segment);
 
     /// <summary>
     /// Evaluates the <c>dp = e</c>, <c>bank = e</c> and <c>mirrors = [...]</c> attributes in the
@@ -179,7 +179,7 @@ public sealed class SegmentTable
                 {
                     if (mirrors is not null)
                     {
-                        diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Message(name, "mirrors")));
+                        diagnostics.Add(new Diagnostic(at, Catalog.SegmentAttributeTwice.Message(name, "mirrors")));
                         continue;
                     }
                     mirrors = attribute;
@@ -213,9 +213,9 @@ public sealed class SegmentTable
     public DiagnosticMessage? Unusable(string name)
     {
         if (Find(name) is not { } segment)
-            return Catalogue.SegmentUndeclared.Message(name);
+            return Catalog.SegmentUndeclared.Message(name);
         if (IsLinked && segment.Placements.Count == 0)
-            return Catalogue.SegmentNotLinked.Message(name);
+            return Catalog.SegmentNotLinked.Message(name);
         return null;
     }
 
@@ -271,7 +271,7 @@ public sealed class SegmentTable
             if (start is not { } first || end is not { } last || first is < 0 or > 0xff || last is < 0 or > 0xff
                 || first > last)
             {
-                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span), Catalogue.SegmentMirrorInvalid));
+                diagnostics.Add(new Diagnostic(range.Tree.GetSpan(range.Span), Catalog.SegmentMirrorInvalid));
                 continue;
             }
             banks.Add((first, last));
@@ -290,13 +290,13 @@ public sealed class SegmentTable
         if (existing.Declaration is { } first)
         {
             diagnostics.Add(new Diagnostic(declared,
-                Catalogue.SegmentDeclaredTwice.Message(existing.Name), [new RelatedSpan(first, "declared here")]));
+                Catalog.SegmentDeclaredTwice.Message(existing.Name), [new RelatedSpan(first, "declared here")]));
             return false;
         }
         if (size == existing.Size)
             return true;
         diagnostics.Add(new Diagnostic(declared,
-            Catalogue.SegmentStandardSize.Message(existing.Name, FormatSize(existing.Size))));
+            Catalog.SegmentStandardSize.Message(existing.Name, FormatSize(existing.Size))));
         return false;
     }
 
@@ -353,18 +353,18 @@ public sealed class SegmentTable
             var at = attribute.Tree.GetSpan(attribute.Span);
             if (given)
             {
-                diagnostics.Add(new Diagnostic(at, Catalogue.SegmentAttributeTwice.Message(segment, "space")));
+                diagnostics.Add(new Diagnostic(at, Catalog.SegmentAttributeTwice.Message(segment, "space")));
                 continue;
             }
             given = true;
             if (attribute.Value is not NameExpressionSyntax { Names.Length: 1, SimpleName: { } name })
             {
-                diagnostics.Add(new Diagnostic(at, Catalogue.SpaceNotAName));
+                diagnostics.Add(new Diagnostic(at, Catalog.SpaceNotAName));
                 continue;
             }
             if (!spaces.ContainsKey(name.Text))
             {
-                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalogue.SpaceUndeclared.Message(name.Text)));
+                diagnostics.Add(new Diagnostic(attribute.Tree.GetSpan(name.Span), Catalog.SpaceUndeclared.Message(name.Text)));
                 continue;
             }
             found = name.Text;

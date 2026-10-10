@@ -333,9 +333,9 @@ public sealed class ProjectFileTests
 
         var reported = Norristown.Diagnostics.WithSeverities(
             [
-                Create(Catalogue.UnusedSymbol, Severity.Warning),
-                Create(Catalogue.MnemonicName, Severity.Warning),
-                Create(Catalogue.UnusedSymbol, Severity.Error),
+                Create(Catalog.UnusedSymbol, Severity.Warning),
+                Create(Catalog.MnemonicName, Severity.Warning),
+                Create(Catalog.UnusedSymbol, Severity.Error),
             ],
             project.Severities);
         Assert.Equal(

@@ -169,7 +169,7 @@ public sealed partial class CodeLayout
                 : data ? "this line has values"
                 : routine is not null ? $"`{routine.DisplayName}` has instructions"
                 : "this line has an instruction";
-            Report(statement, Catalogue.NeverWritten.Message(what, segment, why));
+            Report(statement, Catalog.NeverWritten.Message(what, segment, why));
         }
 
         /// <summary>
@@ -208,14 +208,14 @@ public sealed partial class CodeLayout
                 && (declaration is ProcDeclarationSyntax or MultiProcDeclarationSyntax
                     || (routine is null && declaration is DataDeclarationSyntax)))
             {
-                Report(declaration.Tree, symbol.NameSpan, Catalogue.OutsideEverySegment.Message($"`{symbol.DisplayName}`"));
+                Report(declaration.Tree, symbol.NameSpan, Catalog.OutsideEverySegment.Message($"`{symbol.DisplayName}`"));
             }
 
             // A label that a macro expansion puts outside any routine marks a position in no code.
             // Binding could not report it, because it sees only the macro body as declared.
             if (routine is null && inData == 0 && symbol.Kind == SymbolKind.Label && expansion?.NearestCall is not null)
             {
-                Report(declaration.Tree, symbol.NameSpan, Catalogue.LabelOutsideARoutine.Message(symbol.DisplayName, ""));
+                Report(declaration.Tree, symbol.NameSpan, Catalog.LabelOutsideARoutine.Message(symbol.DisplayName, ""));
             }
             layout.labels[(symbol, Expansion.Owning(expansion, symbol))] =
                 new BytePosition(Measured, filled.GetValueOrDefault(Measured), 0);
@@ -271,7 +271,7 @@ public sealed partial class CodeLayout
                 var longer = Instructions.LongFormOf(branch.Statement.MnemonicKind) is { } form ? SyntaxFacts.TextOf(form) : null;
                 var fix = longer is not null ? $": use `{longer}`" : "";
                 ReportOnLine(branch.Target, branch.On,
-                    Catalogue.BranchOutOfReach.Message(mnemonic, reach, fix),
+                    Catalog.BranchOutOfReach.Message(mnemonic, reach, fix),
 
                     // The fix changes the branch, so it is offered only where the branch appears in
                     // this file. In an expansion, the branch is the macro body's line, which is not

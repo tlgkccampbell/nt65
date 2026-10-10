@@ -37,9 +37,9 @@ internal static class Lsp
             .. (tree is null ? [] : configuration.Omitted(tree)).Select(span => new Protocol.Diagnostic(
                 ToRange(tree!, span),
                 Protocol.DiagnosticSeverity.Hint,
-                Catalogue.OmittedBranch.Id,
+                Catalog.OmittedBranch.Id,
                 SourceName,
-                Catalogue.OmittedBranch.Format,
+                Catalog.OmittedBranch.Format,
                 null,
                 [Protocol.DiagnosticTag.Unnecessary])),
             .. tree is null || lineLength <= 0 ? [] : LongLines(tree, lineLength),
@@ -63,9 +63,9 @@ internal static class Lsp
             yield return new Protocol.Diagnostic(
                 ToRange(tree, span),
                 Protocol.DiagnosticSeverity.Hint,
-                Catalogue.LongLine.Id,
+                Catalog.LongLine.Id,
                 SourceName,
-                Catalogue.LongLine.Message(lineLength).Text,
+                Catalog.LongLine.Message(lineLength).Text,
                 null,
                 null);
         }

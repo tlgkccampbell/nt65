@@ -31,7 +31,7 @@ public static class ProgramCpu
                 if (chosen is { } already && cpu != already)
                 {
                     diagnostics.Add(new Diagnostic(tree.GetSpan(span),
-                        Catalogue.CpuDisagrees.Message(CpuNames.Format(already), CpuNames.Format(cpu))));
+                        Catalog.CpuDisagrees.Message(CpuNames.Format(already), CpuNames.Format(cpu))));
                     continue;
                 }
                 chosen = cpu;

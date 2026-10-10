@@ -93,8 +93,8 @@ internal static class Lexer
             if (word.IsEmpty)
             {
                 return (SyntaxKind.NumberLiteral, One(hex
-                    ? Catalogue.DigitsMissing.Message("hexadecimal", "$", "")
-                    : Catalogue.DigitsMissing.Message("binary", "%", " (the remainder operator is `.mod`)")));
+                    ? Catalog.DigitsMissing.Message("hexadecimal", "$", "")
+                    : Catalog.DigitsMissing.Message("binary", "%", " (the remainder operator is `.mod`)")));
             }
             return (SyntaxKind.NumberLiteral, One(Digits(
                 word, c, hex ? "hexadecimal" : "binary", hex ? char.IsAsciiHexDigit : static digit => digit is '0' or '1')));
@@ -106,7 +106,7 @@ internal static class Lexer
                 if (!SyntaxFacts.IsIdentifierStart(next))
                 {
                     pos++;
-                    return (SyntaxKind.BadToken, One(Catalogue.NameAfterAt));
+                    return (SyntaxKind.BadToken, One(Catalog.NameAfterAt));
                 }
                 pos = SkipWord(text, pos + 1);
                 return (SyntaxKind.CheapLocal, null);
@@ -119,7 +119,7 @@ internal static class Lexer
                 if (!SyntaxFacts.IsIdentifierStart(next))
                 {
                     pos++;
-                    return (SyntaxKind.BadToken, One(Catalogue.StrayDot));
+                    return (SyntaxKind.BadToken, One(Catalog.StrayDot));
                 }
                 pos = SkipWord(text, pos + 1);
                 return (SyntaxKind.Directive, null);
@@ -176,7 +176,7 @@ internal static class Lexer
         // One whole character, so a surrogate pair is not split.
         Rune.DecodeFromUtf16(text[pos..], out var rune, out var consumed);
         pos += consumed;
-        return (SyntaxKind.BadToken, One(Catalogue.UnexpectedCharacter.Message(rune)));
+        return (SyntaxKind.BadToken, One(Catalog.UnexpectedCharacter.Message(rune)));
     }
 
     /// <summary>
@@ -208,11 +208,11 @@ internal static class Lexer
             if (digits[i] == '_')
             {
                 if (i == 0 || i == digits.Length - 1 || digits[i - 1] == '_')
-                    return Catalogue.NumberSeparator.Message(InSource(digits, prefix));
+                    return Catalog.NumberSeparator.Message(InSource(digits, prefix));
                 continue;
             }
             if (!isDigit(digits[i]))
-                return Catalogue.NumberInvalid.Message(radix, InSource(digits, prefix));
+                return Catalog.NumberInvalid.Message(radix, InSource(digits, prefix));
         }
         return null;
 
@@ -238,7 +238,7 @@ internal static class Lexer
         {
             if (pos >= text.Length)
             {
-                var unterminated = Catalogue.TextUnterminated.Message(isChar ? "character literal" : "string");
+                var unterminated = Catalog.TextUnterminated.Message(isChar ? "character literal" : "string");
                 if (errors is null)
                     return One(unterminated);
                 errors.Add(unterminated);
@@ -267,7 +267,7 @@ internal static class Lexer
                     pos += 4;
                     break;
                 case 'x':
-                    (errors ??= []).Add(Catalogue.EscapeHexDigits);
+                    (errors ??= []).Add(Catalog.EscapeHexDigits);
                     pos += 2;
                     break;
                 case '\0':
@@ -275,7 +275,7 @@ internal static class Lexer
                     break;
                 default:
                     Rune.DecodeFromUtf16(text[(pos + 1)..], out var rune, out var consumed);
-                    (errors ??= []).Add(Catalogue.EscapeUnknown.Message(rune));
+                    (errors ??= []).Add(Catalog.EscapeUnknown.Message(rune));
                     pos += 1 + consumed;
                     break;
             }
@@ -285,7 +285,7 @@ internal static class Lexer
         // reported only when every escape was read.
         if (isChar && characters != 1 && errors is null)
         {
-            return One(characters == 0 ? Catalogue.CharacterEmpty : Catalogue.CharacterTooLong);
+            return One(characters == 0 ? Catalog.CharacterEmpty : Catalog.CharacterTooLong);
         }
         return errors;
     }

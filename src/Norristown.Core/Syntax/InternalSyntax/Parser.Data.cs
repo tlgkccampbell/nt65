@@ -28,7 +28,7 @@ internal sealed partial class Parser
             if (Next == SyntaxKind.EndOfLine)
             {
                 if (count is null && !record)
-                    ReportOnce(Catalogue.DataBodyNeedsACount.Message(directive.Text));
+                    ReportOnce(Catalog.DataBodyNeedsACount.Message(directive.Text));
                 tail = new DataBodySyntax(Advance());
             }
             else
@@ -42,7 +42,7 @@ internal sealed partial class Parser
         {
             if (count is not null || record)
             {
-                ReportOnce(Catalogue.DataValuesNeedBraces.Message(count is not null
+                ReportOnce(Catalog.DataValuesNeedBraces.Message(count is not null
                     ? $"the values of an array go in braces: `{directive.Text}[n] {{ 1, 2 }}`"
                     : "a record's values go in braces: `.type T { member = value }`"));
             }
@@ -63,7 +63,7 @@ internal sealed partial class Parser
             return (null, null);
         if (AtName || Kind == SyntaxKind.ColonColon)
             return (ParseName(), null);
-        var message = Catalogue.ExpectedDataType.Message("the type: `.type T`");
+        var message = Catalog.ExpectedDataType.Message("the type: `.type T`");
         if (AtEnd || Kind is SyntaxKind.OpenBracket or SyntaxKind.OpenBrace or SyntaxKind.Comma)
         {
             Report(message);
@@ -84,7 +84,7 @@ internal sealed partial class Parser
     {
         var bracket = Advance();
         var count = Kind != SyntaxKind.CloseBracket && !AtEnd ? ParseExpression() : null;
-        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message(
+        return new ElementCountSyntax(bracket, count, Expect(SyntaxKind.CloseBracket, Catalog.ExpectedBracket.Message(
             "`]`")));
     }
 
@@ -97,8 +97,8 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         var name = ExpectName(Kind == SyntaxKind.OpenBrace
-            ? Catalogue.DataNeedsAName.Message()
-            : Catalogue.ExpectedName.Message("a name: `.data name: .byte 1, 2` or `.data name { }`"));
+            ? Catalog.DataNeedsAName.Message()
+            : Catalog.ExpectedName.Message("a name: `.data name: .byte 1, 2` or `.data name { }`"));
 
         // Data found elsewhere gives only its address, and takes its element from the data there.
         if (Kind == SyntaxKind.Equals)
@@ -111,7 +111,7 @@ internal sealed partial class Parser
         {
             skipped = SkipUntil(
                 () => Kind == SyntaxKind.Colon,
-                Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
+                Catalog.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
         }
 
         GreenToken? colon = null;
@@ -130,7 +130,7 @@ internal sealed partial class Parser
             {
                 var instead = Kind == SyntaxKind.Directive ? Replaced(Current.Text) : null;
                 ReportOnce(
-                    instead?.Message ?? Catalogue.ExpectedDataType.Message(
+                    instead?.Message ?? Catalog.ExpectedDataType.Message(
                         "what the data is: a number such as `.byte` or `.word`, an address such as `.addr`, "
                         + "`.type T`, or bytes such as `.incbin`"),
                     instead is { } replacement ? Spelling(replacement, wholeLine: false) : null);
@@ -143,12 +143,12 @@ internal sealed partial class Parser
         else if (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) == SyntaxKind.DataDirective)
         {
             // Only the `:` is missing, as in `.data name .byte[2] {`, so the element type is read.
-            colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Message("`:` before what the data is"));
+            colon = Expect(SyntaxKind.Colon, Catalog.ExpectedColon.Message("`:` before what the data is"));
             element = ParseDataDirective();
         }
         else
         {
-            ReportOnce(Catalogue.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
+            ReportOnce(Catalog.ExpectedColon.Message("`:` and what the data is, or `{` for mixed data"));
         }
         return new DataDeclarationSyntax(keyword, name, skipped, colon, element, null, null, brace);
     }
@@ -160,7 +160,7 @@ internal sealed partial class Parser
     {
         if (Kind == SyntaxKind.Directive && !SyntaxFacts.IsBuiltinFunction(Current.Text))
         {
-            return ErrorLine(Catalogue.DataBodyHoldsValues.Message(Current.Text));
+            return ErrorLine(Catalog.DataBodyHoldsValues.Message(Current.Text));
         }
         return Finish(new DataValuesSyntax(ParseSeparatedList(ParseDataValue)));
     }
@@ -193,7 +193,7 @@ internal sealed partial class Parser
         var items = Kind != SyntaxKind.CloseBrace && !AtEnd
             ? ParseSeparatedList(record ? ParseMemberValue : ParseDataValue)
             : null;
-        var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Message("`}`"));
+        var closeBrace = Expect(SyntaxKind.CloseBrace, Catalog.ExpectedBrace.Message("`}`"));
         return record
             ? new RecordValuesSyntax(openBrace, items, closeBrace)
             : new ValueListSyntax(openBrace, items, closeBrace);
@@ -207,11 +207,11 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report(Catalogue.ExpectedName.Message("a member name"));
+            Report(Catalog.ExpectedName.Message("a member name"));
             return null;
         }
         var name = Advance();
-        var equals = Require(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`"));
+        var equals = Require(SyntaxKind.Equals, Catalog.ExpectedEquals.Message("`=`"));
         return new MemberValueSyntax(name, equals, ParseDataValue());
     }
 
@@ -221,7 +221,7 @@ internal sealed partial class Parser
     private GreenNode ParseMemberValueLine() =>
         ParseMemberValue() is { } value
             ? Finish(value)
-            : ErrorLine(Catalogue.ExpectedMemberValue);
+            : ErrorLine(Catalog.ExpectedMemberValue);
 
     /// <summary>
     /// Parses one member of an <c>.enum</c>, which is a name, or a name and the value it is given.
@@ -229,7 +229,7 @@ internal sealed partial class Parser
     private GreenNode ParseEnumMember()
     {
         if (!AtName)
-            return ErrorLine(Catalogue.ExpectedName.Message("a member name, or `name = expr`"));
+            return ErrorLine(Catalog.ExpectedName.Message("a member name, or `name = expr`"));
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
             return Finish(new EnumMemberSyntax(name, null, null));
@@ -251,7 +251,7 @@ internal sealed partial class Parser
             dotDot = Advance();
             last = ParseExpression();
         }
-        var equals = Require(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`"));
+        var equals = Require(SyntaxKind.Equals, Catalog.ExpectedEquals.Message("`=`"));
         return Finish(new CharmapEntrySyntax(first, dotDot, last, equals, ParseExpression()));
     }
 }

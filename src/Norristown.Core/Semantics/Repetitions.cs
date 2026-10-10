@@ -48,7 +48,7 @@ public static class Repetitions
     /// too many.
     /// </summary>
     /// <param name="count">The number of iterations the repetition runs.</param>
-    public static DiagnosticMessage Beyond(long count) => Catalogue.RepeatTooMany.Message(count, MaximumIterations);
+    public static DiagnosticMessage Beyond(long count) => Catalog.RepeatTooMany.Message(count, MaximumIterations);
 
     /// <summary>Returns the name a repetition binds, or null when it names none.</summary>
     public static Symbol? BindingOf(SemanticModel model, StatementSyntax opener)
@@ -82,7 +82,7 @@ public static class Repetitions
     /// name on every iteration, and each forbidden statement is one thing for the whole file.
     /// </summary>
     public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
-        ? Catalogue.DeclarationInARepetition.Message(why.What, why.Because)
+        ? Catalog.DeclarationInARepetition.Message(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
     /// <summary>
@@ -95,12 +95,12 @@ public static class Repetitions
     {
         if (model.ValueOf(counted, outer).AsNumber() is not { } count)
         {
-            Report(model, diagnostics, counted, outer, Catalogue.RepeatCountNotConstant);
+            Report(model, diagnostics, counted, outer, Catalog.RepeatCountNotConstant);
             return [];
         }
         if (count < 0)
         {
-            Report(model, diagnostics, counted, outer, Catalogue.RepeatCountNegative.Message(count));
+            Report(model, diagnostics, counted, outer, Catalog.RepeatCountNegative.Message(count));
             return [];
         }
         if (count > MaximumIterations)
@@ -158,7 +158,7 @@ public static class Repetitions
             return [.. members.EnumMembers.Select(
                 (member, i) => Expansion.Iteration(outer, block, binding, member.Value, null, i, member, index))];
 
-        Report(model, diagnostics, walked, outer, Catalogue.EachNotOverAList);
+        Report(model, diagnostics, walked, outer, Catalog.EachNotOverAList);
         return [];
     }
 

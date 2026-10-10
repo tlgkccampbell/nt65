@@ -59,7 +59,7 @@ internal static class InferredExports
             var exit = inferred.NeverReturns ? [] : relied.Select(part => Item(inferred.Exit, part)).OfType<string>().ToList();
             var named = entry.Select(item => $"`{item}`").ToList();
             var listed = named.Count == 1 ? named[0] : $"{string.Join(", ", named[..^1])} and {named[^1]}";
-            (found ??= []).Add(new Diagnostic(routine.DeclarationSpan, Catalogue.ExportStateInferred.Message(routine.DisplayName, listed))
+            (found ??= []).Add(new Diagnostic(routine.DeclarationSpan, Catalog.ExportStateInferred.Message(routine.DisplayName, listed))
             {
                 Fix = new DiagnosticFix(
                     FixKind.Inferred,

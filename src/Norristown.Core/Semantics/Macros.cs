@@ -135,7 +135,7 @@ public static class Macros
             if (Back(macro) is { } at)
             {
                 var through = path.Skip(1).Select(step => $"`{step.Name}`").ToList();
-                report(macro, new Diagnostic(at, Catalogue.MacroRecursive.Message(
+                report(macro, new Diagnostic(at, Catalog.MacroRecursive.Message(
                     macro.Name,
                     through.Count == 0 ? "" : $" through {string.Join(", ", through)}")));
             }
@@ -206,7 +206,7 @@ public static class Macros
                 if (used.Tree != macro.Tree || isExported(used))
                     continue;
                 diagnostics.Add(new Diagnostic(macro.DeclarationSpan,
-                    Catalogue.MacroNamesUnexported.Message(macro.Name, used.DisplayName),
+                    Catalog.MacroNamesUnexported.Message(macro.Name, used.DisplayName),
                     [new RelatedSpan(at, "named here")]));
             }
         }
@@ -219,7 +219,7 @@ public static class Macros
     /// macro is called.
     /// </summary>
     public static DiagnosticMessage? Forbidden(StatementSyntax statement) => Refused(statement) is { } why
-        ? Catalogue.DeclarationInAMacroBody.Message(why.What, why.Because)
+        ? Catalog.DeclarationInAMacroBody.Message(why.What, why.Because)
         : (DiagnosticMessage?)null;
 
     /// <summary>

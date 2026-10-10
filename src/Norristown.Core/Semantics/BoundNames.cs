@@ -237,12 +237,12 @@ internal sealed class BoundNames
         if (!TryGetMember(binding, out var member))
         {
             if (items?.ContainsKey(binding) == true || values?.ContainsKey(binding) == true)
-                problem = (name, Catalogue.BindingNotOverAnEnum.Message(binding.Name));
+                problem = (name, Catalog.BindingNotOverAnEnum.Message(binding.Name));
             return null;
         }
         if (body.FindMember(member.Name) is { } namesake)
             return namesake;
-        problem = (name, Catalogue.FamilyMemberMissing.Message(container.Name, member.Name, binding.Name));
+        problem = (name, Catalog.FamilyMemberMissing.Message(container.Name, member.Name, binding.Name));
         return null;
     }
 }

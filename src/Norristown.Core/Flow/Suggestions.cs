@@ -193,7 +193,7 @@ public static class Suggestions
                 var text = SyntaxFacts.TextOf(call.MnemonicKind);
                 yield return new Diagnostic(
                     call.Tree.GetSpan(call.Span),
-                    Catalogue.TailCall.Message(
+                    Catalog.TailCall.Message(
                         $"{text} {target.DisplayName}",
                         SyntaxFacts.TextOf(returned.MnemonicKind),
                         $"{jump} {target.DisplayName}",
@@ -271,7 +271,7 @@ public static class Suggestions
             {
                 yield return new Diagnostic(
                     statement.Tree.GetSpan(statement.Span),
-                    Catalogue.WidthAlreadySet.Message(text, "changes nothing", why))
+                    Catalog.WidthAlreadySet.Message(text, "changes nothing", why))
                 {
                     Fix = new DiagnosticFix(FixKind.Redundant),
                     IsUnnecessary = true,
@@ -282,7 +282,7 @@ public static class Suggestions
             var narrowed = StateValue.Hex(left, 2);
             yield return new Diagnostic(
                 expression.Tree.GetSpan(expression.Span),
-                Catalogue.WidthAlreadySet.Message(text, $"needs only `#{narrowed}`", why))
+                Catalog.WidthAlreadySet.Message(text, $"needs only `#{narrowed}`", why))
             {
                 Fix = new DiagnosticFix(FixKind.Flags, narrowed),
             };
@@ -348,7 +348,7 @@ public static class Suggestions
                 && next.Tree == model.Tree)
             {
                 yield return new Diagnostic(next.Tree.GetSpan(next.Span),
-                    Catalogue.NextProved.Message(text, proved.Why) + unpromised)
+                    Catalog.NextProved.Message(text, proved.Why) + unpromised)
                 {
                     Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                     IsUnnecessary = true,
@@ -357,7 +357,7 @@ public static class Suggestions
             else if (!proved.Taken && block.Next is null && !Fixed(file, step, readAsData))
             {
                 yield return new Diagnostic(branch.Tree.GetSpan(branch.Span),
-                    Catalogue.BranchNeverTaken.Message(text, proved.Why) + unpromised)
+                    Catalog.BranchNeverTaken.Message(text, proved.Why) + unpromised)
                 {
                     Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                     IsUnnecessary = true,
@@ -420,7 +420,7 @@ public static class Suggestions
             var page = native || reach == 0 ? "" : "; a taken branch may cost one more cycle across a page";
             var operand = jump.Operand!.GetText().Trim();
             yield return new Diagnostic(jump.Tree.GetSpan(jump.Span),
-                Catalogue.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why, page) + unpromised)
+                Catalog.JumpAsBranch.Message(jump.GetText().Trim(), $"{branch} {operand}", why, page) + unpromised)
             {
                 Fix = new DiagnosticFix(FixKind.Branch, branch, Caveat: unpromised?.Caveat),
             };
@@ -467,7 +467,7 @@ public static class Suggestions
                 if (carry == sets)
                 {
                     yield return new Diagnostic(setup.Tree.GetSpan(setup.Span),
-                        Catalogue.CarryAlreadySet.Message(text, sets ? 1 : 0) + unpromised)
+                        Catalog.CarryAlreadySet.Message(text, sets ? 1 : 0) + unpromised)
                     {
                         Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                         IsUnnecessary = true,
@@ -487,7 +487,7 @@ public static class Suggestions
                 }
                 var folded = Decremented(expression, value);
                 yield return new Diagnostic(expression.Tree.GetSpan(expression.Span),
-                    Catalogue.CarryFolded.Message(
+                    Catalog.CarryFolded.Message(
                         text, arithmetic.GetText().Trim(), $"{SyntaxFacts.TextOf(uses)} #{folded}", carry ? 1 : 0)
                     + unpromised)
                 {
@@ -559,7 +559,7 @@ public static class Suggestions
             if (reason is not var (why, unpromised))
                 continue;
             yield return new Diagnostic(compare.Tree.GetSpan(compare.Span),
-                Catalogue.ZeroCompare.Message(compare.GetText().Trim(), RegisterEffects.Format(register), why)
+                Catalog.ZeroCompare.Message(compare.GetText().Trim(), RegisterEffects.Format(register), why)
                 + unpromised)
             {
                 Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
@@ -609,7 +609,7 @@ public static class Suggestions
                 if (reason is not var (why, unpromised))
                     continue;
                 yield return new Diagnostic(load.Tree.GetSpan(load.Span),
-                    Catalogue.LoadAlreadyHeld.Message(text, name, hex, why) + unpromised)
+                    Catalog.LoadAlreadyHeld.Message(text, name, hex, why) + unpromised)
                 {
                     Fix = new DiagnosticFix(FixKind.Redundant, Caveat: unpromised?.Caveat),
                     IsUnnecessary = true,
@@ -619,7 +619,7 @@ public static class Suggestions
             if (layout.Cpu == Cpu.Wdc65816 || Shorter(layout.Cpu, register, value, before.Held) is not { } shorter)
                 continue;
             yield return new Diagnostic(load.Tree.GetSpan(load.Span),
-                Catalogue.LoadFromRegister.Message(text, shorter.Instruction, shorter.Why))
+                Catalog.LoadFromRegister.Message(text, shorter.Instruction, shorter.Why))
             {
                 Fix = new DiagnosticFix(FixKind.Instruction, shorter.Instruction),
             };
@@ -873,7 +873,7 @@ public static class Suggestions
                 var opposite = SyntaxFacts.TextOf(FlagAnalysis.BranchWhen(tested.Flag, !tested.TakenWhen));
                 var replaced = $"{opposite} {jump.Operand!.GetText().Trim()}";
                 yield return new Diagnostic(branch.Tree.GetSpan(branch.Span),
-                    Catalogue.BranchOverJump.Message(branch.GetText().Trim(), jump.GetText().Trim(), replaced))
+                    Catalog.BranchOverJump.Message(branch.GetText().Trim(), jump.GetText().Trim(), replaced))
                 {
                     Fix = new DiagnosticFix(FixKind.BranchOver, replaced, jump.Tree.GetSpan(jump.Span)),
                 };

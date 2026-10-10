@@ -60,7 +60,7 @@ internal sealed partial class Parser
         // `a` and `i` are the accumulator and index widths; `a` arrives as a register token.
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register))
         {
-            Report(Catalogue.ExpectedStateItem.Message("a processor-state item, such as `a8`, `i16` or `dp = 0`"));
+            Report(Catalog.ExpectedStateItem.Message("a processor-state item, such as `a8`, `i16` or `dp = 0`"));
             return null;
         }
 
@@ -78,16 +78,16 @@ internal sealed partial class Parser
             {
                 var openBracket = Advance();
                 var ranges = Kind != SyntaxKind.CloseBracket ? ParseSeparatedList(ParseRange) : null;
-                var closeBracket = Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`"));
+                var closeBracket = Expect(SyntaxKind.CloseBracket, Catalog.ExpectedBracket.Message("`]`"));
                 if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
-                    Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
+                    Report(nameIndex, Catalog.StateItemUnknown.Message(name.Text));
                 return Own(new StateBanksItemSyntax(name, equals, openBracket, ranges, closeBracket));
             }
             var given = ParseExpression();
             if (WidthFlag(name.Text) is { } spelled)
-                Report(nameIndex, Catalogue.StateItemIsAWidth.Message(name.Text, spelled));
+                Report(nameIndex, Catalog.StateItemIsAWidth.Message(name.Text, spelled));
             else if (!SyntaxFacts.IsStateItem(name.Text, SyntaxKind.Equals))
-                Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
+                Report(nameIndex, Catalog.StateItemUnknown.Message(name.Text));
 
             // The misspelled-name diagnostic is about the item, so the item takes it.
             return Own(new StateValueItemSyntax(name, equals, given));
@@ -96,7 +96,7 @@ internal sealed partial class Parser
         GreenToken? suffix = Kind is SyntaxKind.Star or SyntaxKind.Question ? Advance() : null;
         if (!SyntaxFacts.IsStateItem(name.Text, suffix?.Kind ?? SyntaxKind.None))
         {
-            Report(nameIndex, Catalogue.StateItemUnknown.Message(name.Text));
+            Report(nameIndex, Catalog.StateItemUnknown.Message(name.Text));
             return Own(new StateFlagItemSyntax(name, suffix));
         }
 
@@ -133,7 +133,7 @@ internal sealed partial class Parser
         }
         if (!AtKeptRegister(index))
         {
-            Report(Catalogue.ExpectedKeptRegisters.Message(word switch
+            Report(Catalog.ExpectedKeptRegisters.Message(word switch
             {
                 "reads" => "the registers it reads: `reads a`, `reads a, c`, or `reads none`",
                 "saves" => "the register the store saves: `saves x`",

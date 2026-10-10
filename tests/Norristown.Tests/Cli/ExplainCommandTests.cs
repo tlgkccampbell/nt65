@@ -17,7 +17,7 @@ public sealed class ExplainCommandTests
         Assert.Equal(ExitCode.Success, code);
         Assert.Empty(problems);
         Assert.StartsWith("unused-symbol, a warning by default", output, StringComparison.Ordinal);
-        Assert.Contains(Catalogue.Find("unused-symbol")!.Explanation.Split(' ')[0], output, StringComparison.Ordinal);
+        Assert.Contains(Catalog.Find("unused-symbol")!.Explanation.Split(' ')[0], output, StringComparison.Ordinal);
 
         // Numbered placeholders such as `{0}` mean nothing to a reader, so they are shown as `...`.
         Assert.DoesNotContain("{0}", output, StringComparison.Ordinal);
@@ -28,7 +28,7 @@ public sealed class ExplainCommandTests
     [Fact]
     public void EveryNameIsExplained()
     {
-        foreach (var descriptor in Catalogue.All)
+        foreach (var descriptor in Catalog.All)
         {
             var (code, output, _) = Run("explain", descriptor.Id);
             Assert.Equal(ExitCode.Success, code);
@@ -43,7 +43,7 @@ public sealed class ExplainCommandTests
 
         Assert.Equal(ExitCode.Success, code);
         Assert.Empty(problems);
-        foreach (var descriptor in Catalogue.All)
+        foreach (var descriptor in Catalog.All)
             Assert.Contains(descriptor.Id, output, StringComparison.Ordinal);
     }
 

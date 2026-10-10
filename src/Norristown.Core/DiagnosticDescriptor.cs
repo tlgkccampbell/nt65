@@ -3,7 +3,7 @@ using System.Globalization;
 namespace Norristown;
 
 /// <summary>
-/// Represents one entry in the catalogue. An entry holds the name a diagnostic is reported under,
+/// Represents one entry in the catalog. An entry holds the name a diagnostic is reported under,
 /// its default severity when the project does not override it, its message format, and a longer
 /// explanation that does not fit in the message.
 /// <para>

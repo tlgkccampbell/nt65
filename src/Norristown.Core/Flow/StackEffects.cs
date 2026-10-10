@@ -282,13 +282,13 @@ public sealed class StackEffects
                 return height is { } h ? StackEffect.Leaving(h) : StackEffect.Unknown;
             if (walk.Model.ValueOf(count, step.On).AsNumber() is not { } promised)
             {
-                report?.Add(Expansion.Problem(walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountNotConstant.Message()));
+                report?.Add(Expansion.Problem(walk.Model.Tree, count, step.On, Severity.Error, Catalog.ReturnCountNotConstant.Message()));
                 return StackEffect.Unknown;
             }
             if (height is { } counted && counted != promised)
             {
                 report?.Add(Expansion.Problem(
-                    walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountMismatch.Message(promised, counted),
+                    walk.Model.Tree, count, step.On, Severity.Error, Catalog.ReturnCountMismatch.Message(promised, counted),
                     new DiagnosticFix(FixKind.Spelling, counted.ToString(CultureInfo.InvariantCulture))));
             }
             return StackEffect.Leaving((int)promised);
@@ -444,8 +444,8 @@ public sealed class StackEffects
             if (height is not { AtLeast: true, KeepsTheReturn: true, Most: { } most } || most <= height.Floor)
                 return;
             message = height is { Handed: > 0, Highest: { } highest } && highest > height.Floor
-                ? Catalogue.ReturnPastHandedBytes.Message(returned, "up to " + Bytes(highest - height.Floor), $"pulls {height.Handed}")
-                : Catalogue.ReturnPastPushes.Message(returned, "up to " + Bytes(most - height.Floor));
+                ? Catalog.ReturnPastHandedBytes.Message(returned, "up to " + Bytes(highest - height.Floor), $"pulls {height.Handed}")
+                : Catalog.ReturnPastPushes.Message(returned, "up to " + Bytes(most - height.Floor));
         }
         else if (least > height.Floor && height is { KeepsTheReturn: true, Lowest: { } lowest })
         {
@@ -454,11 +454,11 @@ public sealed class StackEffects
             if (least > lowest)
             {
                 var pushed = Bytes(least - lowest);
-                message = Catalogue.ReturnPastPushes.Message(returned, height.AtLeast ? "at least " + pushed : pushed);
+                message = Catalog.ReturnPastPushes.Message(returned, height.AtLeast ? "at least " + pushed : pushed);
             }
             else
             {
-                message = Catalogue.ReturnPastHandedBytes.Message(returned, Bytes(lowest - height.Floor), $"pulls {height.Handed}");
+                message = Catalog.ReturnPastHandedBytes.Message(returned, Bytes(lowest - height.Floor), $"pulls {height.Handed}");
             }
         }
         else if (least > height.Floor || height.AtLeast || height.Lowest is not { } low || least - low >= height.Return)
@@ -476,7 +476,7 @@ public sealed class StackEffects
                 _ => $"keep each push and its pull on one side of `{entry.DisplayName}`, declare the "
                     + "bytes the routine is entered with above its return address with `pulls n`",
             };
-            message = Catalogue.ReturnBeneathEntry.Message(returned, Bytes(height.Floor - least), at, beyond, fix);
+            message = Catalog.ReturnBeneathEntry.Message(returned, Bytes(height.Floor - least), at, beyond, fix);
         }
         report.Add(Expansion.Problem(file, step.Statement, step.On, Severity.Error, message));
     }
@@ -505,7 +505,7 @@ public sealed class StackEffects
                 continue;
             var pushed = have <= 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here";
             report.Add(Expansion.Problem(
-                file, statement, last.On, Severity.Error, Catalogue.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
+                file, statement, last.On, Severity.Error, Catalog.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
         }
     }
 

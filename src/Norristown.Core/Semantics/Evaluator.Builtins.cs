@@ -151,12 +151,12 @@ internal sealed partial class Evaluator
         }
         Report(function, kind switch
         {
-            BuiltinKind.Select => Catalogue.SelectArguments,
-            BuiltinKind.Switch => Catalogue.SwitchArguments,
-            BuiltinKind.Target => Catalogue.TargetArgument.Message(CpuNames.Listed),
-            BuiltinKind.Has => Catalogue.HasArgument,
-            BuiltinKind.Opcode => Catalogue.OpcodeArgument,
-            _ => Catalogue.BuiltinArguments.Message(builtin.Name, builtin.Takes!),
+            BuiltinKind.Select => Catalog.SelectArguments,
+            BuiltinKind.Switch => Catalog.SwitchArguments,
+            BuiltinKind.Target => Catalog.TargetArgument.Message(CpuNames.Listed),
+            BuiltinKind.Has => Catalog.HasArgument,
+            BuiltinKind.Opcode => Catalog.OpcodeArgument,
+            _ => Catalog.BuiltinArguments.Message(builtin.Name, builtin.Takes!),
         });
         return false;
     }
@@ -190,7 +190,7 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         if (!HasBytesOfItsOwn(laid))
         {
-            Report(arguments[0], Catalogue.NothingToMeasure.Message(laid.Name, laid.KindPhrase, name));
+            Report(arguments[0], Catalog.NothingToMeasure.Message(laid.Name, laid.KindPhrase, name));
             return Value.Unknown;
         }
         layoutReads++;
@@ -225,7 +225,7 @@ internal sealed partial class Evaluator
             ? banked?.Kind is SymbolKind.Constant or SymbolKind.ImportedConstant or SymbolKind.ExternProc or SymbolKind.AddressAlias
             : named is null && Evaluate(arguments[0]).AsNumber() is not null;
         var operand = arguments[0] is NameExpressionSyntax or LiteralExpressionSyntax ? text : $"({text})";
-        Report(arguments[0], Catalogue.BankHasNoSegment.Message(what,
+        Report(arguments[0], Catalog.BankHasNoSegment.Message(what,
             constant ? $": for the bank byte of a constant, write `^{operand}`" : ""));
         return Value.Unknown;
     }
@@ -244,7 +244,7 @@ internal sealed partial class Evaluator
         {
             if (symbol.Kind is not (SymbolKind.Label or SymbolKind.Proc))
             {
-                Report(at, Catalogue.CyclesNeedsAPosition.Message(symbol.DisplayName, symbol.KindPhrase));
+                Report(at, Catalog.CyclesNeedsAPosition.Message(symbol.DisplayName, symbol.KindPhrase));
                 return Value.Unknown;
             }
         }
@@ -253,7 +253,7 @@ internal sealed partial class Evaluator
             return Value.Unknown;
         if (counted.Problem is { } problem)
         {
-            Report(function, Catalogue.CyclesSpanHasNoBound.Message(name, problem));
+            Report(function, Catalog.CyclesSpanHasNoBound.Message(name, problem));
             return Value.Unknown;
         }
         return counted.Value is { } number ? Value.Of(number) : Value.Unknown;
@@ -284,7 +284,7 @@ internal sealed partial class Evaluator
         var bytesOnly = measured.Kind == SymbolKind.Proc || measured is { Kind: SymbolKind.Data, Data: null };
         if (kind == BuiltinKind.Countof && bytesOnly)
         {
-            Report(arguments[0], Catalogue.CountofHasNoElements.Message(
+            Report(arguments[0], Catalog.CountofHasNoElements.Message(
                 measured.Name, (measured.Kind == SymbolKind.Proc ? "a routine" : "mixed data"), measured.Name));
             return Value.Unknown;
         }
@@ -299,8 +299,8 @@ internal sealed partial class Evaluator
         if (room is null && measured is { Kind: SymbolKind.Data, Data: null })
         {
             Report(arguments[0], Expands(measured)
-                ? Catalogue.SizeofDependsOnExpansion.Message(measured.Name, measured.Name)
-                : Catalogue.SizeofDependsOnAlignment.Message(measured.Name, measured.Name));
+                ? Catalog.SizeofDependsOnExpansion.Message(measured.Name, measured.Name)
+                : Catalog.SizeofDependsOnAlignment.Message(measured.Name, measured.Name));
         }
         return room is { } number ? Value.Of(number) : Value.Unknown;
     }
@@ -320,7 +320,7 @@ internal sealed partial class Evaluator
         if (names.Parameter(arguments[0]) is not { Parameter.Kind: ParameterKind.Operand })
         {
             var exprOf = SyntaxFacts.Builtin(BuiltinKind.Exprof);
-            Report(function, Catalogue.BuiltinArguments.Message(exprOf.Name, exprOf.Takes!));
+            Report(function, Catalog.BuiltinArguments.Message(exprOf.Name, exprOf.Takes!));
         }
         return Value.Unknown;
     }
@@ -377,7 +377,7 @@ internal sealed partial class Evaluator
                 || values[1].Kind is ValueKind.String or ValueKind.Word
                 || values[2].Kind is ValueKind.String or ValueKind.Word)
             {
-                Report(function, Catalogue.BuiltinArguments.Message(name, SyntaxFacts.Builtin(kind).Takes!));
+                Report(function, Catalog.BuiltinArguments.Message(name, SyntaxFacts.Builtin(kind).Takes!));
                 return Value.Unknown;
             }
             if (values is not [{ Kind: ValueKind.String, Text: { } whole }, { Kind: ValueKind.Number } from,
@@ -387,7 +387,7 @@ internal sealed partial class Evaluator
             }
             if (from.Number < 0 || taken.Number < 0 || from.Number > whole.Length || taken.Number > whole.Length - from.Number)
             {
-                Report(function, Catalogue.StrsubOutOfRange.Message(
+                Report(function, Catalog.StrsubOutOfRange.Message(
                     $"{taken.Number} {(taken.Number == 1 ? "byte" : "bytes")} from {from.Number}",
                     $"{whole.Length} {(whole.Length == 1 ? "byte" : "bytes")} long"));
                 return Value.Unknown;
@@ -408,11 +408,11 @@ internal sealed partial class Evaluator
                     joined.Append((char)one.Number);
                     break;
                 case { Kind: ValueKind.Number } wide:
-                    Report(arguments[i], Catalogue.StrcatNotAByte.Message(wide));
+                    Report(arguments[i], Catalog.StrcatNotAByte.Message(wide));
                     known = false;
                     break;
                 case { Kind: ValueKind.Word }:
-                    Report(arguments[i], Catalogue.BuiltinArguments.Message(name, "texts and numbers"));
+                    Report(arguments[i], Catalog.BuiltinArguments.Message(name, "texts and numbers"));
                     known = false;
                     break;
                 default:
@@ -440,22 +440,22 @@ internal sealed partial class Evaluator
             case BuiltinKind.Sqrt when values is [var n]:
                 worked = IntegerMath.Sqrt(n.Number);
                 if (worked is null)
-                    Report(function, Catalogue.SqrtOfANegative.Message(n.Number));
+                    Report(function, Catalog.SqrtOfANegative.Message(n.Number));
                 break;
             case BuiltinKind.Muldiv when values is [var a, var b, var c]:
                 if (c.Number == 0)
                 {
-                    Report(function, Catalogue.DivisionByZero);
+                    Report(function, Catalog.DivisionByZero);
                     return Value.Unknown;
                 }
                 worked = IntegerMath.MulDiv(a.Number, b.Number, c.Number);
                 if (worked is null)
-                    Report(function, Catalogue.ArithmeticOverflow.Message($"`{name}`"));
+                    Report(function, Catalog.ArithmeticOverflow.Message($"`{name}`"));
                 break;
             case BuiltinKind.Sin or BuiltinKind.Cos when values is [var angle, var turn, var scale]:
                 if (!IntegerMath.InRange(turn.Number, scale.Number))
                 {
-                    Report(function, Catalogue.TurnOrScaleOutOfRange.Message(name, IntegerMath.Limit));
+                    Report(function, Catalog.TurnOrScaleOutOfRange.Message(name, IntegerMath.Limit));
                     return Value.Unknown;
                 }
                 worked = kind == BuiltinKind.Sin
@@ -569,11 +569,11 @@ internal sealed partial class Evaluator
             }
             else if (condition.IsString)
             {
-                Report(arguments[0], Catalogue.SelectConditionIsText);
+                Report(arguments[0], Catalog.SelectConditionIsText);
             }
             else
             {
-                Report(arguments[0], Catalogue.SelectConditionNotConstant);
+                Report(arguments[0], Catalog.SelectConditionNotConstant);
             }
             return Value.Unknown;
         }
@@ -591,12 +591,12 @@ internal sealed partial class Evaluator
     {
         if (at is NameExpressionSyntax { IsIndexed: true })
         {
-            Report(at, Catalogue.MeasuresADeclaration.Message(function, at.GetText().Trim()));
+            Report(at, Catalog.MeasuresADeclaration.Message(function, at.GetText().Trim()));
             return true;
         }
         if (HasNoElementType(symbol))
         {
-            Report(at, Catalogue.DataHasNoElementType.Message(symbol.DisplayName));
+            Report(at, Catalog.DataHasNoElementType.Message(symbol.DisplayName));
             return true;
         }
         var what = symbol.Kind switch
@@ -612,7 +612,7 @@ internal sealed partial class Evaluator
         };
         if (what is null)
             return false;
-        Report(at, Catalogue.NotMeasurable.Message(symbol.DisplayName, what, function));
+        Report(at, Catalog.NotMeasurable.Message(symbol.DisplayName, what, function));
         return true;
     }
 
@@ -691,7 +691,7 @@ internal sealed partial class Evaluator
             result = Body(call, symbol, given);
             if (outermost && result.Kind == ValueKind.Unknown && unlinked is [var (first, elsewhere), ..])
             {
-                Report(call, Catalogue.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere
+                Report(call, Catalog.FuncNotLinkable.Message(symbol.Name, first.GetText().Trim(), elsewhere
                     ? "that address is declared in another file, which this file's output cannot name"
                     : "ld65 works out only operators, `.lobyte`, `.hibyte` and `.bankbyte` on an address, so that part of the body needs a constant"));
             }

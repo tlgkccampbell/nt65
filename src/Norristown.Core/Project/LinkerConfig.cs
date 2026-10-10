@@ -432,7 +432,7 @@ public sealed class LinkerConfig
 
         /// <summary>Reports that the configuration does not parse, saying what is wrong at <paramref name="span"/>.</summary>
         private void Report(Span span, string problem) =>
-            Diagnostics.Add(new Diagnostic(span, Catalogue.LinkedConfigInvalid.Message(problem)));
+            Diagnostics.Add(new Diagnostic(span, Catalog.LinkedConfigInvalid.Message(problem)));
     }
 
     /// <summary>

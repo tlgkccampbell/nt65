@@ -60,16 +60,16 @@ public sealed class ExtensionTests : IDisposable
     }
 
     /// <summary>
-    /// The names the schema offers under <c>diagnostics</c> are exactly the catalogue's, and the
+    /// The names the schema offers under <c>diagnostics</c> are exactly the catalog's, and the
     /// values it offers for each are the levels the reader accepts. An editor completes them, so
-    /// a name added to the catalogue and not to the schema would be offered nowhere.
+    /// a name added to the catalog and not to the schema would be offered nowhere.
     /// </summary>
     [Fact]
     public void TheSchemaOffersEveryDiagnosticByName()
     {
         var diagnostics = Definition("diagnostics");
         Assert.Equal(
-            Catalogue.All.Select(descriptor => descriptor.Id),
+            Catalog.All.Select(descriptor => descriptor.Id),
             Enumeration(diagnostics.GetProperty("propertyNames")));
         Assert.Equal(ProjectFile.Levels, Enumeration(diagnostics.GetProperty("additionalProperties")));
     }

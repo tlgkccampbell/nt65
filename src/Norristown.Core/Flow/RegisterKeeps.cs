@@ -220,7 +220,7 @@ public static class RegisterKeeps
             void Report(Step step, Registers registers, string tail, string? added) =>
                 report.Add(new Diagnostic(
                     step.Statement.Tree.GetSpan(step.Statement.Span),
-                    Catalogue.ReadsUndeclared.Message(routine.DisplayName, written, RegisterEffects.Format(registers), tail))
+                    Catalog.ReadsUndeclared.Message(routine.DisplayName, written, RegisterEffects.Format(registers), tail))
                 {
                     Fix = added is not null ? new DiagnosticFix(FixKind.Reads, added, routine.DeclarationSpan) : null,
                 });

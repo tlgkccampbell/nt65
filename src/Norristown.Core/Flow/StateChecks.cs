@@ -141,7 +141,7 @@ internal sealed class StateChecks
         }
         else if (width == Width.Unchanged)
         {
-            Report(step, Catalogue.WidthUnknown.Message(
+            Report(step, Catalog.WidthUnknown.Message(
                 text,
                 Format(register),
                 $"{Assumes(step, routine, part, item + "*")}, which assumes nothing about it"),
@@ -151,7 +151,7 @@ internal sealed class StateChecks
         {
             Report(
                 step,
-                Catalogue.WidthUnknown.Message(
+                Catalog.WidthUnknown.Message(
                     text,
                     Format(register),
                     "it is not known here" + (why is null ? ": a `.state` declares what it is" : Cause.Because(why))),
@@ -159,7 +159,7 @@ internal sealed class StateChecks
         }
         else if (width == Width.Sixteen && state.E == ProcessorMode.Emulation)
         {
-            Report(step, Catalogue.ImmediateInEmulation.Message(text));
+            Report(step, Catalog.ImmediateInEmulation.Message(text));
         }
     }
 
@@ -182,7 +182,7 @@ internal sealed class StateChecks
         var own = routine.Tree == model.Tree;
         diagnostics.Add(new Diagnostic(
             routine.DeclarationSpan,
-            Catalogue.CallersDisagree.Message(
+            Catalog.CallersDisagree.Message(
                 routine.DisplayName, $"`{states[0]}`", $"`{states[^1]}`", mnemonic, Format(register)),
             related)
         {
@@ -225,7 +225,7 @@ internal sealed class StateChecks
                     + $"which expects the direct page at {StateValue.Hex(page, 4)}";
                 if (DirectPageKnown(step, what, state, whyD, routine) && page != state.D.Value)
                 {
-                    Report(step, Catalogue.DirectPageMismatch.Message(
+                    Report(step, Catalog.DirectPageMismatch.Message(
                         symbol.DisplayName, segment.Name, StateValue.Hex(page, 4), StateValue.Hex(state.D.Value, 4)));
                 }
             }
@@ -248,14 +248,14 @@ internal sealed class StateChecks
         {
             if (SegmentOf(symbol) is { Bank: not null } segment && !banks.TrueForAll(segment.IsSeenFrom))
             {
-                Report(step, Catalogue.BankMismatch.Message(
+                Report(step, Catalog.BankMismatch.Message(
                     symbol.DisplayName, segment.Name, segment.FormatBanks(), state.B.Describe(2)));
             }
         }
         if (model.ValueOf(expression, step.On).AsNumber() is { } address
             && ranges.FirstOrDefault(range => range.Covers(address)) is { } covering && !banks.TrueForAll(covering.Permits))
         {
-            Report(step, Catalogue.RangeBankMismatch.Message(
+            Report(step, Catalog.RangeBankMismatch.Message(
                 StateValue.Hex(address, 4), covering.FormatBanks(), state.B.Describe(2)));
         }
     }
@@ -273,7 +273,7 @@ internal sealed class StateChecks
         Width(StateRegister.Index, StateParts.Index, callee.Entry.Index, state.Index);
         if (IsKnown(callee.Entry.E) && callee.Entry.E != state.E)
         {
-            Report(step, Catalogue.CallStateMismatch.Message(
+            Report(step, Catalog.CallStateMismatch.Message(
                 what,
                 Needs(StateParts.Mode, ProcessorState.Format(callee.Entry.E)),
                 IsKnown(state.E) ? $"the processor is in {Mode(state.E)} here" : ModeUnknown(step, state, whyMode)));
@@ -291,7 +291,7 @@ internal sealed class StateChecks
         {
             if (!needed.IsBounded || here.Meets(needed))
                 return;
-            Report(step, Catalogue.CallStateMismatch.Message(
+            Report(step, Catalog.CallStateMismatch.Message(
                 what,
                 Needs(part, needed.Format(register)),
                 here.IsBounded
@@ -304,7 +304,7 @@ internal sealed class StateChecks
             if (!IsKnown(needed) || needed == here)
                 return;
             var item = ProcessorState.Format(register, needed);
-            Report(step, Catalogue.CallStateMismatch.Message(
+            Report(step, Catalog.CallStateMismatch.Message(
                 what,
                 Needs(part, item),
                 IsKnown(here)
@@ -347,7 +347,7 @@ internal sealed class StateChecks
         {
             if (declared.IsEntered && here != declared)
             {
-                Report(step, Catalogue.AssertedItemNotRestored.Message(
+                Report(step, Catalog.AssertedItemNotRestored.Message(
                     lead,
                     name,
                     declared.Kind == StateValueKind.Unchanged ? $"{register.Item}*" : declared.Format(register),
@@ -357,7 +357,7 @@ internal sealed class StateChecks
             }
             else if (declared.IsBounded && !here.Meets(declared))
             {
-                Report(step, Catalogue.ReturnStateMismatch.Message(
+                Report(step, Catalog.ReturnStateMismatch.Message(
                     lead,
                     name,
                     $"with `{declared.Format(register)}`",
@@ -374,12 +374,12 @@ internal sealed class StateChecks
         {
             if (exit.E == ProcessorMode.Unchanged && state.E != ProcessorMode.Unchanged)
             {
-                Report(step, Catalogue.AssertedItemNotRestored.Message(
+                Report(step, Catalog.AssertedItemNotRestored.Message(
                     lead, name, "e*", "the mode", "what it was on entry", where));
             }
             else if (IsKnown(exit.E) && exit.E != state.E)
             {
-                Report(step, Catalogue.ReturnStateMismatch.Message(
+                Report(step, Catalog.ReturnStateMismatch.Message(
                     lead,
                     name,
                     $"in {Mode(exit.E)} mode",
@@ -395,7 +395,7 @@ internal sealed class StateChecks
         {
             if (declared == Width.Unchanged && here != Width.Unchanged)
             {
-                Report(step, Catalogue.AssertedItemNotRestored.Message(
+                Report(step, Catalog.AssertedItemNotRestored.Message(
                     lead,
                     name,
                     $"{register.Item}*",
@@ -406,7 +406,7 @@ internal sealed class StateChecks
             else if (IsKnown(declared) && declared != here)
             {
                 var item = ProcessorState.Format(register, declared);
-                Report(step, Catalogue.ReturnStateMismatch.Message(
+                Report(step, Catalog.ReturnStateMismatch.Message(
                     lead,
                     name,
                     $"with `{item}`",
@@ -438,12 +438,12 @@ internal sealed class StateChecks
         var written = step.Statement is InstructionStatementSyntax;
         if (mnemonic == MnemonicKind.Rts && signature.IsFar)
         {
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"),
+            Report(step, Catalog.ReturnDistanceMismatch.Message(routine.DisplayName, "far", "rtl"),
                 written ? Own(step, FixKind.Return, "rtl") : null);
         }
         else if (mnemonic == MnemonicKind.Rtl && !signature.IsFar)
         {
-            Report(step, Catalogue.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"),
+            Report(step, Catalog.ReturnDistanceMismatch.Message(routine.DisplayName, "near", "rts"),
                 written ? Own(step, FixKind.Return, "rts") : null);
         }
         CheckExit(step, $"`{SyntaxFacts.TextOf(mnemonic)}`:", "here", signature.Exit, state, routine.DisplayName, routine,
@@ -458,8 +458,8 @@ internal sealed class StateChecks
     /// </summary>
     public void CheckCallTarget(Step step, MnemonicKind mnemonic, Symbol? target) =>
         Report(step, target is null
-            ? Catalogue.CallTargetUnknown.Message(SyntaxFacts.TextOf(mnemonic))
-            : Catalogue.CallTargetNotARoutine.Message(
+            ? Catalog.CallTargetUnknown.Message(SyntaxFacts.TextOf(mnemonic))
+            : Catalog.CallTargetNotARoutine.Message(
                 target.DisplayName,
                 target.Kind == SymbolKind.ImportedAddress
                     ? $"import `{target.DisplayName}` with `proc(...)`, which says what state it takes"
@@ -474,10 +474,10 @@ internal sealed class StateChecks
         Step step, MnemonicKind mnemonic, Symbol target, Signature callee, ProcessorState state, Cause? whyMode = null)
     {
         if (mnemonic == MnemonicKind.Jsr && callee.IsFar)
-            Report(step, Catalogue.CallDistanceMismatch.Message(
+            Report(step, Catalog.CallDistanceMismatch.Message(
                 target.DisplayName, "far", "jsl"), Mnemonic(step, "jsl"));
         else if (mnemonic == MnemonicKind.Jsl && !callee.IsFar)
-            Report(step, Catalogue.CallDistanceMismatch.Message(
+            Report(step, Catalog.CallDistanceMismatch.Message(
                 target.DisplayName, "near", "jsr"), Mnemonic(step, "jsr"));
         CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target, whyMode);
     }
@@ -492,9 +492,9 @@ internal sealed class StateChecks
     {
         var target = call.Routine;
         if (callee.IsFar && !call.IsFar)
-            Report(step, Catalogue.RelativeCallNeedsPhk.Message(target.DisplayName), BankPush(step, call.Push, "phk"));
+            Report(step, Catalog.RelativeCallNeedsPhk.Message(target.DisplayName), BankPush(step, call.Push, "phk"));
         else if (!callee.IsFar && call.IsFar && call.Bank is { } bank)
-            Report(step, Catalogue.RelativeCallExtraPhk.Message(target.DisplayName), BankPush(step, bank, null));
+            Report(step, Catalog.RelativeCallExtraPhk.Message(target.DisplayName), BankPush(step, bank, null));
         CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", callee, state, target, whyMode);
     }
 
@@ -522,20 +522,20 @@ internal sealed class StateChecks
         if (mnemonic == MnemonicKind.Jml && !callee.IsFar && !callee.IsInterrupt)
         {
             if (!EntersAnotherBank(step, target))
-                Report(step, Catalogue.JumpDistanceMismatch.Message(
+                Report(step, Catalog.JumpDistanceMismatch.Message(
                     target.DisplayName, "near", "jmp", target.DisplayName), Mnemonic(step, "jmp"));
             else if (returns)
             {
-                Report(step, Catalogue.JumpAcrossBanks.Message(target.DisplayName, routine.DisplayName));
+                Report(step, Catalog.JumpAcrossBanks.Message(target.DisplayName, routine.DisplayName));
             }
         }
         else if (Instructions.Facts(mnemonic).Control == Control.Branches && callee.IsFar)
         {
-            Report(step, Catalogue.BranchToFarRoutine.Message(target.DisplayName), Own(step, FixKind.FarBranch, OppositeOf(mnemonic)));
+            Report(step, Catalog.BranchToFarRoutine.Message(target.DisplayName), Own(step, FixKind.FarBranch, OppositeOf(mnemonic)));
         }
         else if (mnemonic is not (MnemonicKind.Jml or MnemonicKind.None) && callee.IsFar)
         {
-            Report(step, Catalogue.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName),
+            Report(step, Catalog.JumpDistanceMismatch.Message(target.DisplayName, "far", "jml", target.DisplayName),
                 Mnemonic(step, "jml"));
         }
         CheckEntry(step, what, callee, state, target, whyMode);
@@ -544,12 +544,12 @@ internal sealed class StateChecks
 
         if (callee.IsInterrupt)
         {
-            Report(step, Catalogue.TailCallToHandler.Message(what, target.DisplayName));
+            Report(step, Catalog.TailCallToHandler.Message(what, target.DisplayName));
             return;
         }
         if (callee.IsFar != own.IsFar)
         {
-            Report(step, Catalogue.TailCallDistanceMismatch.Message(
+            Report(step, Catalog.TailCallDistanceMismatch.Message(
                 what, target.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
         }
         CheckExit(step, $"{what} is a tail call:", $"when `{target.DisplayName}` returns",
@@ -574,12 +574,12 @@ internal sealed class StateChecks
         var what = $"`{via} {label.DisplayName}`";
         if (callee.IsInterrupt)
         {
-            Report(step, Catalogue.TailCallToHandler.Message(what, owner.DisplayName));
+            Report(step, Catalog.TailCallToHandler.Message(what, owner.DisplayName));
             return;
         }
         if (callee.IsFar != own.IsFar)
         {
-            Report(step, Catalogue.TailCallDistanceMismatch.Message(
+            Report(step, Catalog.TailCallDistanceMismatch.Message(
                 what, owner.DisplayName, callee.Distance, routine.DisplayName, own.Distance));
         }
         CheckExit(step, $"{what} leaves `{routine.DisplayName}`:", $"when `{owner.DisplayName}` returns",
@@ -597,7 +597,7 @@ internal sealed class StateChecks
         {
             return;
         }
-        Report(step, Catalogue.MirrorBankMismatch.Message(
+        Report(step, Catalog.MirrorBankMismatch.Message(
             mirror.Routine.DisplayName, segment.Name, segment.FormatBanks(), StateValue.Hex(mirror.Bank, 2)));
     }
 
@@ -621,7 +621,7 @@ internal sealed class StateChecks
             };
             if (keyword is { } directive)
             {
-                Report(step, Catalogue.StateOutsideARoutine.Message(directive.Text.ToLowerInvariant()));
+                Report(step, Catalog.StateOutsideARoutine.Message(directive.Text.ToLowerInvariant()));
             }
         }
     }
@@ -639,7 +639,7 @@ internal sealed class StateChecks
                 continue;
             if (StepOperands.Of(model, step) is { } operand && CodeLayout.ThroughDirectPage(operand))
             {
-                Report(step, Catalogue.DirectPageUnknown.Message(
+                Report(step, Catalog.DirectPageUnknown.Message(
                     "`d:` is reached through the direct page",
                     $"no path from `{region.Routine.DisplayName}`'s entry reaches it. A `.state` after its label declares what the state is there"));
                 continue;
@@ -649,7 +649,7 @@ internal sealed class StateChecks
             {
                 continue;
             }
-            Report(step, Catalogue.WidthUnknown.Message(
+            Report(step, Catalog.WidthUnknown.Message(
                 SyntaxFacts.TextOf(statement.MnemonicKind),
                 Format(register),
                 $"no path from `{region.Routine.DisplayName}`'s entry reaches it. A `.state` after its label declares what the state is there"));
@@ -694,7 +694,7 @@ internal sealed class StateChecks
         var what = $"`d:{StateValue.Hex(address, 4)}` is reached through the direct page";
         if (DirectPageKnown(step, what, state, whyD, routine) && (address < state.D.Value || address > state.D.Value + 0xff))
         {
-            Report(step, Catalogue.DirectPageOutOfReach.Message(
+            Report(step, Catalog.DirectPageOutOfReach.Message(
                 what,
                 StateValue.Hex(state.D.Value, 4),
                 StateValue.Hex(state.D.Value, 4),
@@ -712,12 +712,12 @@ internal sealed class StateChecks
     {
         if (state.D.Kind == StateValueKind.Unchanged)
         {
-            Report(step, Catalogue.DirectPageUnknown.Message(
+            Report(step, Catalog.DirectPageUnknown.Message(
                 what, $"{Assumes(step, routine, StateParts.DirectPage, "dp*")}, which assumes nothing about D"));
         }
         else if (!state.D.IsKnown)
         {
-            Report(step, Catalogue.DirectPageUnknown.Message(what, Unknown(whyD)));
+            Report(step, Catalog.DirectPageUnknown.Message(what, Unknown(whyD)));
         }
         else
         {

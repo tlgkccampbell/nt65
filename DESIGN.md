@@ -763,7 +763,7 @@ writes a file.
   writes a setting as its value, never by name, so a `-D` given to ca65 cannot collide with
   it.
 - `diagnostics`: how much each diagnostic matters to this program, by name. The names are
-  the catalogue's (§14), the same ones the command writes in brackets after a message, and the
+  the catalog's (§14), the same ones the command writes in brackets after a message, and the
   answers are `"off"`, `"warning"` and `"error"`. A diagnostic nt65 reports as an error is not
   a project's to turn down, and says so; a name nt65 has no entry for is an error, with the
   name it is nearly.
@@ -840,7 +840,7 @@ rooted where the command runs.
 | `--help`, `--version` | |
 
 A diagnostic is one line, `file:line:column: severity: message [name]`, on standard error.
-The name is the catalogue's (§14), and goes last, where compilers put it: it is what a project
+The name is the catalog's (§14), and goes last, where compilers put it: it is what a project
 file switches and what CI matches on, and nobody reads it first. Where standard error is a
 terminal and `NO_COLOR` is unset, `error:` and `warning:` are colored and nothing else on the
 line is, so the position stays selectable. `--json` puts them on standard output instead, one
@@ -888,7 +888,7 @@ person rather than written out as something that will not build.
 diagnostic is about, and the line a project file would write to switch it. Named nothing, it
 lists every name there is; named something nt65 has no entry for, it says the name that one is
 nearly. Given `--markdown` instead of a name, it writes every entry as one page, grouped under
-the headings the catalogue is written in. The page is generated rather than kept by hand, so
+the headings the catalog is written in. The page is generated rather than kept by hand, so
 no entry can be missing from it or say two things.
 
 **Watching.** `nt65 build --watch` builds, then builds again whenever the program changes,
@@ -4590,7 +4590,7 @@ alone and without an assembler:
 - diagnose wrong-CPU instructions, unavailable addressing modes, references to what another
   module does not export, unused symbols, and constant assertions;
 - report every one of them under a name of its own. Every diagnostic nt65 has is in one
-  catalogue, with the name it is reported under, how much it matters where a project says
+  catalog, with the name it is reported under, how much it matters where a project says
   nothing, the sentence it says and a sentence about it the message has no room for. A name is
   kebab-case and says what is wrong rather than which pass found it — `unused-symbol`,
   `width-unknown`, `branch-out-of-reach` — and it is what the editor shows as the diagnostic's
@@ -4899,7 +4899,7 @@ Recorded so the reasoning survives. None is open.
 
 - **A diagnostic is named, not numbered.** A user meets the name in the Problems panel, in a
   project file and in CI output, and `"unused-symbol": "off"` can be read by someone who has
-  never seen the catalogue, where `NT0203` cannot. A name also has to be chosen well, which is
+  never seen the catalog, where `NT0203` cannot. A name also has to be chosen well, which is
   the point: it says what is wrong rather than which pass found it, so it survives the pass
   moving. The one number that stays a number is `NT1001`, which the source generator reports
   to whoever is building nt65 itself; that is a different audience.
@@ -5773,7 +5773,7 @@ as 1.0.0. It makes promises to five kinds of user, and each holds for every 1.x 
   a project file one release reads, every later one reads. That covers the names under
   `diagnostics`: a diagnostic's name is stable once released, so a project file that switches
   one keeps switching it. A release that stops reporting something keeps the name in the
-  catalogue, reported by nothing, so that a project file naming it still reads.
+  catalog, reported by nothing, so that a project file naming it still reads.
 - **To scripts and Makefiles: the command line** of §5.3. The options and what they do, where
   output goes and what it is named, the dependency file, the exit status (0 when the program
   built, 1 when it is wrong, 2 when the command is) and the form of each diagnostic,

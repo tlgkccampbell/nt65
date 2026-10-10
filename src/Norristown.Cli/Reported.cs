@@ -31,7 +31,7 @@ internal static class Reported
     /// <summary>
     /// Formats the diagnostic as one line. <paramref name="color"/> marks its severity when the
     /// terminal can show color. Everything else on the line is left plain, so the position stays
-    /// selectable and the message does not compete with it. The catalogue name goes last, in
+    /// selectable and the message does not compete with it. The catalog name goes last, in
     /// brackets, where compilers put it. It is the name a project file uses to change the
     /// diagnostic's severity and the name CI matches on, and nobody needs to read it first.
     /// </summary>

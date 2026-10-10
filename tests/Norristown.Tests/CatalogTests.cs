@@ -3,19 +3,19 @@ using System.Text.RegularExpressions;
 namespace Norristown.Tests;
 
 /// <summary>
-/// Checks the catalogue's own invariants. The names are a compatibility promise, so they must
+/// Checks the catalog's own invariants. The names are a compatibility promise, so they must
 /// all follow one naming style. The messages are composite format strings, so a brace in one that
 /// is not a placeholder would otherwise throw only when the diagnostic is reported, not here.
 /// </summary>
-public sealed partial class CatalogueTests
+public sealed partial class CatalogTests
 {
     [Fact]
     public void EveryNameIsKebabCaseAndDeclaredOnce()
     {
-        Assert.NotEmpty(Catalogue.All);
-        foreach (var descriptor in Catalogue.All)
+        Assert.NotEmpty(Catalog.All);
+        foreach (var descriptor in Catalog.All)
             Assert.Matches(Name(), descriptor.Id);
-        Assert.Equal(Catalogue.All.Count, Catalogue.All.Select(d => d.Id).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(Catalog.All.Count, Catalog.All.Select(d => d.Id).Distinct(StringComparer.Ordinal).Count());
     }
 
     /// <summary>
@@ -25,9 +25,9 @@ public sealed partial class CatalogueTests
     [Fact]
     public void EveryNameIsFound()
     {
-        foreach (var descriptor in Catalogue.All)
-            Assert.Same(descriptor, Catalogue.Find(descriptor.Id));
-        Assert.Null(Catalogue.Find("no-such-diagnostic"));
+        foreach (var descriptor in Catalog.All)
+            Assert.Same(descriptor, Catalog.Find(descriptor.Id));
+        Assert.Null(Catalog.Find("no-such-diagnostic"));
     }
 
     /// <summary>
@@ -38,7 +38,7 @@ public sealed partial class CatalogueTests
     [Fact]
     public void EveryMessageFormatHasContiguousPlaceholders()
     {
-        foreach (var descriptor in Catalogue.All)
+        foreach (var descriptor in Catalog.All)
         {
             var holes = Holes(descriptor.Format);
             object?[] arguments = [.. Enumerable.Range(0, holes).Select(object? (i) => $"<{i}>")];
@@ -52,7 +52,7 @@ public sealed partial class CatalogueTests
     [Fact]
     public void EveryEntryIsExplained()
     {
-        foreach (var descriptor in Catalogue.All)
+        foreach (var descriptor in Catalog.All)
         {
             Assert.True(descriptor.Explanation.Length > 40, descriptor.Id);
             Assert.EndsWith(".", descriptor.Explanation, StringComparison.Ordinal);

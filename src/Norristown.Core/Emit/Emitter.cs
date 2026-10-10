@@ -1378,7 +1378,7 @@ public sealed class Emitter
         if (diagnostics.Any(d => d.Severity == Severity.Error && d.Span.File == model.Tree.Path))
             return;
         diagnostics.Add(Expansion.Problem(
-            model.Tree, first.Parent.Tree, first.Span, context.Expansion, null, Catalogue.CannotBeTranslated.Message(first.Text)));
+            model.Tree, first.Parent.Tree, first.Span, context.Expansion, null, Catalog.CannotBeTranslated.Message(first.Text)));
     }
 
     /// <summary>

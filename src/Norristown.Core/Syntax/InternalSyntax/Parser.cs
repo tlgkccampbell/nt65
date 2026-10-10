@@ -135,7 +135,7 @@ internal sealed partial class Parser
         if (skippedTokens is not null)
             FindBreaks(skippedTokens, inside: false, call: false, ref offset, breaks);
         foreach (var (start, width) in breaks)
-            statement.Report(new GreenDiagnostic(start - statementStart, width, Catalogue.ContinuationOutsideExpression));
+            statement.Report(new GreenDiagnostic(start - statementStart, width, Catalog.ContinuationOutsideExpression));
     }
 
     /// <summary>
@@ -247,7 +247,7 @@ internal sealed partial class Parser
     {
         if (nesting <= MaximumNesting)
             return null;
-        ReportOnce(Catalogue.NestingTooDeep.Message(MaximumNesting));
+        ReportOnce(Catalog.NestingTooDeep.Message(MaximumNesting));
         return new ErrorExpressionSyntax(null);
     }
 
@@ -385,7 +385,7 @@ internal sealed partial class Parser
         // mistake.
         if (Lines.UnnamedLabel(tokens) is >= 0 and var colon)
         {
-            Report(colon, Catalogue.UnnamedLabel);
+            Report(colon, Catalog.UnnamedLabel);
             return Own(new ErrorLineSyntax(TakeRest()));
         }
 
@@ -418,7 +418,7 @@ internal sealed partial class Parser
                 return Finish(new UseItemsSyntax(ParseSeparatedList(ParseUseItem)));
             case BlockKind.NextTargets:
                 return Finish(new NextTargetsSyntax(ParseSeparatedList(
-                    () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at")))));
+                    () => ParseTarget(Catalog.ExpectedLabel.Message("a label flow continues at")))));
             default:
                 break;
         }
@@ -436,7 +436,7 @@ internal sealed partial class Parser
             // splice. So it is read as a splice everywhere, and the binder decides where it
             // belongs.
             LineKind.BareIdentifier => Finish(new BlockSpliceSyntax(Advance())),
-            _ => ErrorLine(Catalogue.ExpectedStatement.Message("a label, a constant, an instruction or a directive")),
+            _ => ErrorLine(Catalog.ExpectedStatement.Message("a label, a constant, an instruction or a directive")),
         };
     }
 
@@ -467,8 +467,8 @@ internal sealed partial class Parser
         if (reported == 0)
         {
             Report(!opensBlock && index > 0 && tokens[index - 1].Kind == SyntaxKind.OpenBrace
-                ? Catalogue.BlockBraceEndsTheLine.Message(Describe(Current))
-                : Catalogue.UnexpectedToken.Message(Describe(Current)));
+                ? Catalog.BlockBraceEndsTheLine.Message(Describe(Current))
+                : Catalog.UnexpectedToken.Message(Describe(Current)));
         }
         skippedTokens = Own(new SkippedTokensSyntax(TakeRest()));
     }
@@ -594,7 +594,7 @@ internal sealed partial class Parser
     /// Returns the <c>{</c> that opens a block. This is the one place the parser reports that a
     /// brace is expected.
     /// </summary>
-    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message("`{`"));
+    private GreenToken ExpectOpenBrace() => Expect(SyntaxKind.OpenBrace, Catalog.ExpectedBrace.Message("`{`"));
 
     /// <summary>
     /// Returns the <c>{</c> after a list directive's own items, which opens an item block, or null
@@ -609,7 +609,7 @@ internal sealed partial class Parser
         if (Kind != SyntaxKind.OpenBrace)
             return null;
         if (listed)
-            ReportOnce(Catalogue.ItemsOnLineAndInBlock.Message(keyword.Text));
+            ReportOnce(Catalog.ItemsOnLineAndInBlock.Message(keyword.Text));
         return Advance();
     }
 

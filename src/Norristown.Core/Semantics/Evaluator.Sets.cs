@@ -61,7 +61,7 @@ internal sealed partial class Evaluator
             }
             else
             {
-                Report(arguments[0], Catalogue.SwitchValueNotConstant);
+                Report(arguments[0], Catalog.SwitchValueNotConstant);
             }
             return Value.Unknown;
         }
@@ -90,7 +90,7 @@ internal sealed partial class Evaluator
                     return arguments[2 + (2 * arm)];
                 case null:
                     if (report)
-                        Report(set, Catalogue.SwitchSetNotConstant);
+                        Report(set, Catalog.SwitchSetNotConstant);
                     return null;
             }
         }
@@ -112,7 +112,7 @@ internal sealed partial class Evaluator
         var shown = value.IsWord ? value.Text! : value.ToString();
         if (calls.Count == 0)
         {
-            Report(tested, Catalogue.SwitchNoArm.Message("this `.switch`", Written(tested.GetText().Trim(), shown)));
+            Report(tested, Catalog.SwitchNoArm.Message("this `.switch`", Written(tested.GetText().Trim(), shown)));
             return;
         }
 
@@ -129,7 +129,7 @@ internal sealed partial class Evaluator
             written = argument.GetText().Trim();
         }
         Report(outermost.Tree.GetSpan(outermost.Span),
-            Catalogue.SwitchNoArm.Message($"the `.switch` in `{function.Name}`", Written(written, shown)),
+            Catalog.SwitchNoArm.Message($"the `.switch` in `{function.Name}`", Written(written, shown)),
             [new RelatedSpan(tested.Tree.GetSpan(tested.Span), "in the function body")]);
 
         static string Written(string written, string shown) =>
@@ -172,7 +172,7 @@ internal sealed partial class Evaluator
                     continue;
                 }
                 if (item.IsString)
-                    Report(first, Catalogue.SetItemIsText);
+                    Report(first, Catalog.SetItemIsText);
                 known = false;
                 continue;
             }
@@ -203,7 +203,7 @@ internal sealed partial class Evaluator
             case NameExpressionSyntax name when SymbolOf(name) is { Kind: SymbolKind.List } list:
                 return list.Items.Select(item => (item, (SyntaxNode?)null));
             default:
-                Report(set, Catalogue.SetExpected.Message(asker));
+                Report(set, Catalog.SetExpected.Message(asker));
                 return null;
         }
     }

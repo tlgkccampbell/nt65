@@ -151,7 +151,7 @@ internal sealed class FamilyDeclarer(
         var found = walked is null ? null : paths.NamedByPath(walked, family.Each.Around);
         if (found is not { Kind: SymbolKind.Enum, Body: { } members })
         {
-            report(walked?.Span ?? family.At, Catalogue.FamilyNotOverAnEnum.Message(
+            report(walked?.Span ?? family.At, Catalog.FamilyNotOverAnEnum.Message(
                 walkedText, found is null ? "is not declared" : $"is {Named(found)}"), []);
             return;
         }
@@ -192,7 +192,7 @@ internal sealed class FamilyDeclarer(
         instance.Bound = (family.Each.Binding, new Expansion.Bound(member.Value, null, Member: member));
         if (around.Declare(instance) is { } existing)
         {
-            report(family.At, Catalogue.FamilyMemberCollides.Message(member.Name, family.Each.Walked?.GetText().Trim()),
+            report(family.At, Catalog.FamilyMemberCollides.Message(member.Name, family.Each.Walked?.GetText().Trim()),
                 [new RelatedSpan(existing.DeclarationSpan, "declared here")]);
         }
         return instance;

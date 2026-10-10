@@ -290,7 +290,7 @@ internal sealed partial class Binder
             var reference = usedAt.GetValueOrDefault(last.Span.Start);
             if (reference?.Symbol is { } foreign && foreign.Tree != tree)
             {
-                Report(name.Span, Catalogue.ReexportNeeded.Message(foreign.Name, foreign.Module, foreign.PathName));
+                Report(name.Span, Catalog.ReexportNeeded.Message(foreign.Name, foreign.Module, foreign.PathName));
             }
         }
 
@@ -352,7 +352,7 @@ internal sealed partial class Binder
     public void Export()
     {
         if (moduleName is null)
-            Report(new TextSpan(0, 0), Catalogue.ModuleMissing);
+            Report(new TextSpan(0, 0), Catalog.ModuleMissing);
         foreach (var (symbol, at) in exportedDeclarations)
             Export(symbol, at, linkerName: null, size: null);
         foreach (var (item, around) in exportItems)
@@ -370,7 +370,7 @@ internal sealed partial class Binder
             // link against.
             if (linkerName is not null && Ca65Instructions.HasAnywhere(linkerName) && item.LinkerName is { } spelled)
             {
-                Report(spelled.Span, Catalogue.LinkerNameIsAnInstruction.Message(linkerName));
+                Report(spelled.Span, Catalog.LinkerNameIsAnInstruction.Message(linkerName));
             }
             Export(symbol, item.Span, linkerName, size);
         }
@@ -677,14 +677,14 @@ internal sealed partial class Binder
         if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding, ..])
             return null;
         DiagnosticMessage? why = kind == BlockKind.Repeat
-            ? Catalogue.FamilyMisplaced.Message("a family must be in an `.each` over a named enum, because each routine it "
+            ? Catalog.FamilyMisplaced.Message("a family must be in an `.each` over a named enum, because each routine it "
                 + "declares is named after one of the enum's members; a `.repeat` only counts, so it gives no names")
             : around.Enclosing(ScopeKind.Repetition) is not null
-                ? Catalogue.FamilyMisplaced.Message("a family cannot be inside another `.repeat` or `.each`: it declares its "
+                ? Catalog.FamilyMisplaced.Message("a family cannot be inside another `.repeat` or `.each`: it declares its "
                     + "routines into the scope around its `.each`, and inside a repetition that scope is a new one on every pass")
                 : Placement is ScopeKind.File
                     ? (DiagnosticMessage?)null
-                    : Catalogue.FamilyMisplaced.Message(
+                    : Catalog.FamilyMisplaced.Message(
                         "a family declares one routine or data declaration per member into the scope around its `.each`, and this one is "
                         + $"inside {Article(Placement)}: " + (Placement is ScopeKind.Macro or ScopeKind.BlockArgument
                             ? "names declared there cannot reach the caller's scope"
@@ -725,7 +725,7 @@ internal sealed partial class Binder
         var around = scope;
         var placement = Placement;
         var why = placement is ScopeKind.Proc or ScopeKind.Data or ScopeKind.Type
-            ? Catalogue.MultiprocMisplaced.Message(Article(placement))
+            ? Catalog.MultiprocMisplaced.Message(Article(placement))
             : (DiagnosticMessage?)null;
         if (why is { } misplaced)
             Report(multiProc.Keyword.Span, misplaced);
@@ -768,7 +768,7 @@ internal sealed partial class Binder
     {
         var what = kind == ScopeKind.Scope ? "scope" : "`.data` block";
         Report(NameToken(opener)?.Span ?? opener.Span,
-            Catalogue.FamilyDeclaresTooMuch.Message(each.Binding.Name, what, each.Binding.Name, each.Binding.Name));
+            Catalog.FamilyDeclaresTooMuch.Message(each.Binding.Name, what, each.Binding.Name, each.Binding.Name));
 
         // The block still opens a scope of its own, so its contents have somewhere to be
         // declared and the one error does not lead to others.
@@ -843,7 +843,7 @@ internal sealed partial class Binder
             {
                 if (item is { Width: Width.Sixteen, Part: StatePart.A or StatePart.Index })
                 {
-                    Report(item.Node.Span, Catalogue.SignatureItemNeeds65816.Message(item.Text, CpuNames.Format(cpu)));
+                    Report(item.Node.Span, Catalog.SignatureItemNeeds65816.Message(item.Text, CpuNames.Format(cpu)));
                 }
             }
             foreach (var child in node.ChildNodes)
@@ -1003,7 +1003,7 @@ internal sealed partial class Binder
             };
             if (!placement.IsBarredBy(nesting))
                 continue;
-            Report(opener.Keyword.Span, Catalogue.MacroMisplaced.Message(
+            Report(opener.Keyword.Span, Catalog.MacroMisplaced.Message(
                 around.Kind == ScopeKind.Proc ? "a routine" : "another macro"));
             return;
         }
@@ -1033,11 +1033,11 @@ internal sealed partial class Binder
             }
             if (block is not null)
             {
-                Report(at, Catalogue.ParameterAfterBlock.Message(parameter.Name, block.Name));
+                Report(at, Catalog.ParameterAfterBlock.Message(parameter.Name, block.Name));
             }
             if (list is not null)
             {
-                Report(at, Catalogue.ParameterAfterList.Message(parameter.Name, list.Name));
+                Report(at, Catalog.ParameterAfterList.Message(parameter.Name, list.Name));
             }
             if (parameter.Kind == ParameterKind.List)
                 list ??= parameter;
@@ -1057,7 +1057,7 @@ internal sealed partial class Binder
         {
             return;
         }
-        Report(opener.Name.Span, Catalogue.BlockContinuesNothing);
+        Report(opener.Name.Span, Catalog.BlockContinuesNothing);
     }
 
     /// <summary>
@@ -1144,12 +1144,12 @@ internal sealed partial class Binder
         foreach (var member in block.Members.Skip(1))
         {
             if (member is BlockSyntax nested)
-                Report(nested.Opener.Tokens[0].Span, Catalogue.ItemBlockHoldsABlock.Message(directive));
+                Report(nested.Opener.Tokens[0].Span, Catalog.ItemBlockHoldsABlock.Message(directive));
             else if (member is LineSyntax { Statement: not (BlankLineSyntax or BlockCloseLineSyntax) })
                 listed = true;
         }
         if (!listed)
-            Report(block.Opener.Tokens.Last(token => token.Kind == SyntaxKind.OpenBrace).Span, Catalogue.ItemBlockEmpty.Message(directive));
+            Report(block.Opener.Tokens.Last(token => token.Kind == SyntaxKind.OpenBrace).Span, Catalog.ItemBlockEmpty.Message(directive));
     }
 
     /// <summary>
@@ -1239,7 +1239,7 @@ internal sealed partial class Binder
         if (segments.Find(name.Text) is not { Placements: [var placed, ..], IsDefined: false } segment)
             return;
         var function = call.BuiltinKind == BuiltinKind.Loadof ? ".loadof" : ".runof";
-        Report(name.Span, Catalogue.SegmentNotDefined.Message(
+        Report(name.Span, Catalog.SegmentNotDefined.Message(
             function, segment.Name, placed.File, SegmentFunctions.LinkerName(call.BuiltinKind, segment)));
     }
 
@@ -1272,9 +1272,9 @@ internal sealed partial class Binder
             pastFirstItem = true;
         CheckAnnotation(line, statement);
         if (statement is EncodedDirectiveSyntax encoded && Encodings.Target(line) is null)
-            Report(encoded.Keyword.Span, Catalogue.EncodedAboutNothing);
+            Report(encoded.Keyword.Span, Catalog.EncodedAboutNothing);
         if (statement is FallthroughDirectiveSyntax fallthrough && !Fallthrough.EndsABody(line))
-            Report(fallthrough.Keyword.Span, Catalogue.FallthroughMisplaced);
+            Report(fallthrough.Keyword.Span, Catalog.FallthroughMisplaced);
         if (statement is AllowDirectiveSyntax allow)
             BindAllow(line, allow);
         var label = bareLabel;
@@ -1302,10 +1302,10 @@ internal sealed partial class Binder
     {
         if (allow.Name.IsMissing || Literals.Text(allow.Name.Text) is not { } name)
             return;
-        if (Catalogue.Find(name) is not { } descriptor)
+        if (Catalog.Find(name) is not { } descriptor)
         {
-            var nearest = Spelling.Nearest(name, Catalogue.All.Select(d => d.Id));
-            Report(allow.Name.Span, Catalogue.DiagnosticNameUnknown.Message(
+            var nearest = Spelling.Nearest(name, Catalog.All.Select(d => d.Id));
+            Report(allow.Name.Span, Catalog.DiagnosticNameUnknown.Message(
                 name, nearest is null ? "" : $"; did you mean `{nearest}`?"));
             if (nearest is not null)
                 Fixed(new DiagnosticFix(FixKind.Spelling, $"\"{nearest}\""));
@@ -1313,14 +1313,14 @@ internal sealed partial class Binder
         }
 
         // A diagnostic an annotation answers is checked for before the severity, so that the
-        // refusal names the annotation even for an error. The severity is the catalogue's rather
+        // refusal names the annotation even for an error. The severity is the catalog's rather
         // than the project's, because an `.allow` still hides a warning a project raises to an error.
-        if (Catalogue.AnsweredByAnnotations.Contains(descriptor))
-            Report(allow.Name.Span, Catalogue.AllowAnswered.Message(name));
+        if (Catalog.AnsweredByAnnotations.Contains(descriptor))
+            Report(allow.Name.Span, Catalog.AllowAnswered.Message(name));
         else if (descriptor.Severity == Severity.Error)
-            Report(allow.Name.Span, Catalogue.AllowError.Message(name));
+            Report(allow.Name.Span, Catalog.AllowError.Message(name));
         else if (Allowance.CoveredBy(line) is not { } covered)
-            Report(allow.Keyword.Span, Catalogue.AllowAboutNothing.Message());
+            Report(allow.Keyword.Span, Catalog.AllowAboutNothing.Message());
         else
             allowances.Add(new Allowance(allow, name, covered, InMacroBody));
     }
@@ -1412,7 +1412,7 @@ internal sealed partial class Binder
         // so `.mmio` has only the form of data found elsewhere.
         if (statement.Keyword.DirectiveKind == DirectiveKind.Mmio && statement.Address is null)
         {
-            Report(NameToken(statement)?.Span ?? statement.Span, Catalogue.MmioNeedsAnAddress.Message(
+            Report(NameToken(statement)?.Span ?? statement.Span, Catalog.MmioNeedsAnAddress.Message(
                 statement.Name.IsMissing ? "name" : statement.Name.Text));
         }
 
@@ -1463,8 +1463,8 @@ internal sealed partial class Binder
         codeRun = null;
         var many = run.Lines > 1 ? $"these {run.Lines} instructions belong" : "an instruction belongs";
         Report(run.At, run.Placement == ScopeKind.Data
-            ? Catalogue.InstructionInData.Message(many)
-            : Catalogue.InstructionOutsideARoutine.Message(many));
+            ? Catalog.InstructionInData.Message(many)
+            : Catalog.InstructionOutsideARoutine.Message(many));
     }
 
     /// <summary>
@@ -1485,12 +1485,12 @@ internal sealed partial class Binder
         {
             if (name.Kind != SyntaxKind.CheapLocal)
             {
-                Report(name.Span, Catalogue.LabelInData.Message(name.Text, name.Text, name.Text));
+                Report(name.Span, Catalog.LabelInData.Message(name.Text, name.Text, name.Text));
                 Fixed(new DiagnosticFix(FixKind.DataMember));
             }
             return;
         }
-        Report(name.Span, Catalogue.LabelOutsideARoutine.Message(
+        Report(name.Span, Catalog.LabelOutsideARoutine.Message(
             name.Text, $"; to name data, write `.data {name.Text.TrimStart('@')}: ...`"));
         if (name.Kind == SyntaxKind.Identifier)
             Fixed(new DiagnosticFix(FixKind.DataDeclaration));
@@ -1508,7 +1508,7 @@ internal sealed partial class Binder
         if (statement.Directive.DirectiveKind is not (DirectiveKind.Res or DirectiveKind.Align))
         {
             var directive = statement.Directive.Text;
-            Report(statement.Directive.Span, Catalogue.PaddingOutsideARoutine.Message(
+            Report(statement.Directive.Span, Catalog.PaddingOutsideARoutine.Message(
                 directive, $": `.data name: {directive} ...`"));
         }
     }
@@ -1576,7 +1576,7 @@ internal sealed partial class Binder
         var token = statement.Name;
         if (!InMacroBody)
         {
-            Report(token.Span, Catalogue.ExpectedStatement.Message("a label, a constant, an instruction or a directive"));
+            Report(token.Span, Catalog.ExpectedStatement.Message("a label, a constant, an instruction or a directive"));
             return;
         }
         uses.Add(new Use(token, scope, Path: false, First: true, Last: true, Splice: true));
@@ -1605,7 +1605,7 @@ internal sealed partial class Binder
             references.Add(new SymbolReference(symbol, callee.Span, false, place.IsAlias, InMacro: inside is not null));
             if (symbol.Kind != SymbolKind.Macro)
             {
-                Report(callee.Span, Catalogue.NotAMacro.Message(callee.Text, symbol.KindPhrase));
+                Report(callee.Span, Catalog.NotAMacro.Message(callee.Text, symbol.KindPhrase));
                 continue;
             }
             if (inside is not null)
@@ -1759,7 +1759,7 @@ internal sealed partial class Binder
         var cheap = name.Kind == SyntaxKind.CheapLocal;
         if (!cheap && kind != SymbolKind.MacroParameter && InABlockArgument)
         {
-            Report(name.Span, Catalogue.DeclarationInABlockArgument.Message(name.Text));
+            Report(name.Span, Catalog.DeclarationInABlockArgument.Message(name.Text));
             return null;
         }
         var owner = cheap ? CheapLocalOwner(name) : scope;
@@ -1781,8 +1781,8 @@ internal sealed partial class Binder
             // caller's name in the caller, so that case gets its own, plainer message.
             Report(name.Span,
                 existing.Parameter is { Kind: ParameterKind.Ident }
-                    ? Catalogue.IdentParameterDeclared.Message(symbol.DisplayName)
-                    : Catalogue.NameAlreadyDeclared.Message(symbol.DisplayName),
+                    ? Catalog.IdentParameterDeclared.Message(symbol.DisplayName)
+                    : Catalog.NameAlreadyDeclared.Message(symbol.DisplayName),
                 new RelatedSpan(existing.DeclarationSpan, "declared here"));
         }
         symbols.Add(symbol);
@@ -1813,7 +1813,7 @@ internal sealed partial class Binder
             if (owner.Kind != ScopeKind.File)
                 return owner;
         }
-        Report(name.Span, Catalogue.CheapLocalOutsideAScope.Message(name.Text));
+        Report(name.Span, Catalog.CheapLocalOutsideAScope.Message(name.Text));
         return fileScope;
     }
 
@@ -1828,7 +1828,7 @@ internal sealed partial class Binder
     {
         if (name.Kind != SyntaxKind.Register)
             return true;
-        Report(name.Span, Catalogue.RegisterName.Message(name.Text));
+        Report(name.Span, Catalog.RegisterName.Message(name.Text));
         return false;
     }
 
@@ -1847,7 +1847,7 @@ internal sealed partial class Binder
             : CpuNames.All.Cast<Cpu?>().FirstOrDefault(other => Instructions.Has(other!.Value, name.MnemonicKind));
         if (named is not { } having)
             return;
-        Warn(name.Span, Catalogue.MnemonicName.Message(name.Text, CpuNames.Format(having)));
+        Warn(name.Span, Catalog.MnemonicName.Message(name.Text, CpuNames.Format(having)));
 
         // The only remedy is to rename it, which only the programmer can decide, so the editor
         // puts the caret on the name.
@@ -1866,9 +1866,9 @@ internal sealed partial class Binder
             return;
         var span = new TextSpan(parts[0].Span.Start, parts[^1].Span.End - parts[0].Span.Start);
         if (moduleName is not null)
-            Report(span, Catalogue.ModuleDeclaredTwice);
+            Report(span, Catalog.ModuleDeclaredTwice);
         else if (pastFirstItem || scope != fileScope)
-            Report(statement.Keyword.Span, Catalogue.ModuleNotFirst);
+            Report(statement.Keyword.Span, Catalog.ModuleNotFirst);
         if (moduleName is not null)
             return;
         foreach (var part in parts)
@@ -1888,7 +1888,7 @@ internal sealed partial class Binder
     {
         if (SyntaxFacts.PlacementOf(DirectiveKind.Use).IsBarredBy(SyntaxFacts.NestingOf(statement)))
         {
-            Report(statement.Keyword.Span, Catalogue.UseMisplaced);
+            Report(statement.Keyword.Span, Catalog.UseMisplaced);
             return;
         }
         useDirectives.Add(statement);
@@ -1995,7 +1995,7 @@ internal sealed partial class Binder
             var items = node.Items;
             var set = node.Name;
             if (SyntaxFacts.IsStateWord(set.Text))
-                binder.Report(set.Span, Catalogue.SignatureSetNameIsAnItem.Message(set.Text));
+                binder.Report(set.Span, Catalog.SignatureSetNameIsAnItem.Message(set.Text));
             else if (binder.Declare(set, SymbolKind.SignatureSet) is { } declared)
                 declared.Definition = items;
             binder.CollectUses(items);
@@ -2108,7 +2108,7 @@ internal sealed partial class Binder
         /// </summary>
         /// <param name="node">The region line.</param>
         public override void VisitSegmentRegion(SegmentRegionSyntax node) =>
-            binder.Report(node.Keyword.Span, Catalogue.SegmentRegionMisplaced);
+            binder.Report(node.Keyword.Span, Catalog.SegmentRegionMisplaced);
 
         /// <inheritdoc/>
         public override void VisitAssertDirective(AssertDirectiveSyntax node) => binder.CollectUses(node);

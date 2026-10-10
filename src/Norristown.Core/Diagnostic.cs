@@ -1,11 +1,11 @@
 namespace Norristown;
 
 /// <summary>
-/// Represents one diagnostic as plain data, made up of a span, a catalogue name, a severity, a
+/// Represents one diagnostic as plain data, made up of a span, a catalog name, a severity, a
 /// message and optional related spans.
 /// </summary>
 /// <param name="Span">The span where the diagnostic is reported.</param>
-/// <param name="Id">The catalogue name it is reported under.</param>
+/// <param name="Id">The catalog name it is reported under.</param>
 /// <param name="Severity">How much it matters.</param>
 /// <param name="Message">The message shown to the programmer.</param>
 /// <param name="Related">Other spans that help explain it.</param>
@@ -14,21 +14,21 @@ public sealed record Diagnostic(
 {
     /// <summary>
     /// Initializes a diagnostic that reports <paramref name="message"/> at the severity the
-    /// catalogue gives it.
+    /// catalog gives it.
     /// </summary>
     public Diagnostic(Span span, DiagnosticMessage message)
         : this(span, message.Descriptor.Id, message.Descriptor.Severity, message.Text, []) { }
 
     /// <summary>
     /// Initializes a diagnostic that reports <paramref name="message"/> at the severity the
-    /// catalogue gives it, with <paramref name="related"/> spans that explain it.
+    /// catalog gives it, with <paramref name="related"/> spans that explain it.
     /// </summary>
     public Diagnostic(Span span, DiagnosticMessage message, IReadOnlyList<RelatedSpan> related)
         : this(span, message.Descriptor.Id, message.Descriptor.Severity, message.Text, related) { }
 
     /// <summary>
     /// Initializes a diagnostic that reports <paramref name="message"/> at a
-    /// <paramref name="severity"/> chosen by the reporting site rather than the catalogue.
+    /// <paramref name="severity"/> chosen by the reporting site rather than the catalog.
     /// </summary>
     public Diagnostic(Span span, Severity severity, DiagnosticMessage message)
         : this(span, message.Descriptor.Id, severity, message.Text, []) { }

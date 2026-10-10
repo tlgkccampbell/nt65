@@ -554,7 +554,7 @@ internal sealed class RegisterWalk
             if (item.Part == StatePart.Reads && report is not null)
             {
                 report.Add(new Diagnostic(step.Statement.Tree.GetSpan(item.Node.Span),
-                    Catalogue.StateItemNotAPoint.Message(item.Text)));
+                    Catalog.StateItemNotAPoint.Message(item.Text)));
             }
             if (item.Part != StatePart.Keeps)
                 continue;
@@ -564,7 +564,7 @@ internal sealed class RegisterWalk
                 {
                     report.Add(new Diagnostic(
                         step.Statement.Tree.GetSpan(item.Node.Span),
-                        Catalogue.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register)))
+                        Catalog.KeepsRedundant.Message(item.Text, RegisterEffects.Format(register)))
                     {
                         Fix = step.On is null ? new DiagnosticFix(FixKind.Item, RegisterEffects.Format(register).ToLowerInvariant()) : null,
                     });
@@ -620,7 +620,7 @@ internal sealed class RegisterWalk
             if (Saving(store, item, before, out var why) is null)
             {
                 report.Add(new Diagnostic(state.Statement.Tree.GetSpan(item.Node.Span),
-                    Catalogue.SavesNotAStore.Message(item.Text, RegisterEffects.Format(item.Registers), why)));
+                    Catalog.SavesNotAStore.Message(item.Text, RegisterEffects.Format(item.Registers), why)));
             }
         }
     }

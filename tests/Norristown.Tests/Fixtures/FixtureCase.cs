@@ -9,7 +9,7 @@ namespace Norristown.Tests.Fixtures;
 /// <list type="bullet">
 /// <item><c>**/*.nt65</c> is the program. Expected diagnostics are written inline as trailing
 /// comments, such as <c>;! error[unused-symbol]: message</c>, on the line the diagnostic is
-/// reported on. A diagnostic is matched on its line, its severity and its catalogue name. The
+/// reported on. A diagnostic is matched on its line, its severity and its catalog name. The
 /// message is a second expectation, so that rewording a message is one line to change, and
 /// <c>NT65_UPDATE=1</c> writes it.</item>
 /// <item><c>nt65.json</c> is optional. Its own expected diagnostics are written in <c>//</c>
@@ -253,7 +253,7 @@ internal sealed partial record FixtureCase(
     /// <param name="File">The file the diagnostic is reported in.</param>
     /// <param name="Line">The 1-based line the diagnostic is reported on.</param>
     /// <param name="Severity">The severity, in lower case as the annotation writes it.</param>
-    /// <param name="Id">The catalogue name.</param>
+    /// <param name="Id">The catalog name.</param>
     /// <param name="Message">The diagnostic's message.</param>
     internal readonly record struct Expectation(string File, int Line, string Severity, string Id, string Message)
     {

@@ -13,6 +13,6 @@ namespace Norristown.Syntax.InternalSyntax;
 /// </summary>
 /// <param name="Offset">Where the diagnostic starts, relative to the node's own start.</param>
 /// <param name="Width">How many characters the diagnostic covers, or 0 for a caret between two characters.</param>
-/// <param name="Message">The message for the programmer, and the catalogue name it is reported under.</param>
+/// <param name="Message">The message for the programmer, and the catalog name it is reported under.</param>
 /// <param name="Fix">The change the message names as its fix, or null.</param>
 internal sealed record GreenDiagnostic(int Offset, int Width, DiagnosticMessage Message, DiagnosticFix? Fix = null);

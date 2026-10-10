@@ -3,8 +3,8 @@ using Norristown.Cli;
 namespace Norristown.Tests.Cli;
 
 /// <summary>
-/// Tests the page that <c>nt65 explain --markdown</c> writes from the catalogue, and the areas
-/// the catalogue groups its entries under.
+/// Tests the page that <c>nt65 explain --markdown</c> writes from the catalog, and the areas
+/// the catalog groups its entries under.
 /// </summary>
 public sealed class DiagnosticsPageTests
 {
@@ -16,23 +16,23 @@ public sealed class DiagnosticsPageTests
 
         Assert.Equal(ExitCode.Success, code);
         Assert.Empty(error);
-        foreach (var area in Catalogue.Areas)
+        foreach (var area in Catalog.Areas)
             Assert.Contains($"## {area.Name}\n", written, StringComparison.Ordinal);
-        foreach (var entry in Catalogue.All)
+        foreach (var entry in Catalog.All)
             Assert.Contains($"`{entry.Id}`", written, StringComparison.Ordinal);
     }
 
     /// <summary>
     /// Every entry is under exactly one heading, and every heading has entries. Otherwise an
-    /// entry added below the last heading of the catalogue would be filed under it in silence.
+    /// entry added below the last heading of the catalog would be filed under it in silence.
     /// </summary>
     [Fact]
     public void EveryEntryIsUnderOneOfTheAreas()
     {
-        Assert.Equal(Catalogue.Areas.Count, Catalogue.Areas.Distinct().Count());
-        foreach (var area in Catalogue.Areas)
-            Assert.Contains(Catalogue.All, entry => entry.Area == area);
-        foreach (var entry in Catalogue.All)
-            Assert.True(Catalogue.Areas.Contains(entry.Area), $"`{entry.Id}` is under no heading the page prints");
+        Assert.Equal(Catalog.Areas.Count, Catalog.Areas.Distinct().Count());
+        foreach (var area in Catalog.Areas)
+            Assert.Contains(Catalog.All, entry => entry.Area == area);
+        foreach (var entry in Catalog.All)
+            Assert.True(Catalog.Areas.Contains(entry.Area), $"`{entry.Id}` is under no heading the page prints");
     }
 }

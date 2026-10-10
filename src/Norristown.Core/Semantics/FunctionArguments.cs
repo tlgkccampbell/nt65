@@ -48,13 +48,13 @@ public static class FunctionArguments
                 var at = IndexOf(parameters, name.Text);
                 if (at < 0)
                 {
-                    Fail(name.Span, Catalogue.ParameterUnknown.Message(function.Name, name.Text));
+                    Fail(name.Span, Catalog.ParameterUnknown.Message(function.Name, name.Text));
                     continue;
                 }
                 named?.Invoke(namedArgument, parameters[at]);
                 if (given[at] is not null)
                 {
-                    Fail(name.Span, Catalogue.ArgumentGivenTwice.Message(parameters[at].Name));
+                    Fail(name.Span, Catalog.ArgumentGivenTwice.Message(parameters[at].Name));
                     continue;
                 }
                 given[at] = namedArgument.Value as ExpressionSyntax;
@@ -62,7 +62,7 @@ public static class FunctionArguments
             }
             if (byName)
             {
-                Fail(argument.Span, Catalogue.ArgumentAfterANamedOne);
+                Fail(argument.Span, Catalog.ArgumentAfterANamedOne);
                 misplaced = true;
                 continue;
             }
@@ -84,7 +84,7 @@ public static class FunctionArguments
         // A positional argument after a named one is most likely the one that is missing, and it
         // has been reported already, as a macro call reports it.
         if (missing.Count > 0 && !misplaced)
-            Fail(call.Callee?.Span ?? call.Span, Catalogue.ArgumentMissing.Message(function.Name, string.Join(", ", missing)));
+            Fail(call.Callee?.Span ?? call.Span, Catalog.ArgumentMissing.Message(function.Name, string.Join(", ", missing)));
         return matched ? [.. given.OfType<ExpressionSyntax>()] : null;
 
         void Fail(TextSpan span, DiagnosticMessage message)
@@ -123,6 +123,6 @@ public static class FunctionArguments
     {
         var all = function.ParameterSymbols.Count;
         var least = function.ParameterSymbols.Count(parameter => parameter.Default is null);
-        return Catalogue.ArgumentCount.Message(function.Name, Arguments(least, all), given);
+        return Catalog.ArgumentCount.Message(function.Name, Arguments(least, all), given);
     }
 }

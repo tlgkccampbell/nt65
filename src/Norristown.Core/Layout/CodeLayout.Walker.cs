@@ -271,7 +271,7 @@ public sealed partial class CodeLayout
                 if (Constructs.SegmentOf(opener) == segment
                     && (routine is not null || streams.Count > 1) && opener is SegmentStatementSyntax detour)
                 {
-                    Report(detour.Keyword, Catalogue.SegmentBlockRedundant.Message(segment));
+                    Report(detour.Keyword, Catalog.SegmentBlockRedundant.Message(segment));
                     if (expansion is null && detour.Tree == model.Tree)
                         diagnostics[^1] = diagnostics[^1] with { Fix = new DiagnosticFix(FixKind.SegmentBlock) };
                 }
@@ -325,7 +325,7 @@ public sealed partial class CodeLayout
             expanded += statements;
             if (expanded <= MaximumStatements)
                 return false;
-            Report(call, Catalogue.ExpansionLimit.Message(MaximumStatements));
+            Report(call, Catalog.ExpansionLimit.Message(MaximumStatements));
             return true;
         }
 
@@ -424,7 +424,7 @@ public sealed partial class CodeLayout
             {
                 if (Encodings.Of(statement) is { } encoded)
                 {
-                    Report(encoded, Catalogue.EncodedMismatch.Message(
+                    Report(encoded, Catalog.EncodedMismatch.Message(
                         encoded.Value?.GetText().Trim() ?? "", mnemonic.Text, "a long branch is one instruction or two"));
                 }
                 LongBranch(statement, mnemonic);
@@ -437,7 +437,7 @@ public sealed partial class CodeLayout
             if (routine is null)
             {
                 if (expansion?.NearestCall is not null)
-                    Report(mnemonic, Catalogue.InstructionOutsideARoutine.Message("an instruction belongs"));
+                    Report(mnemonic, Catalog.InstructionOutsideARoutine.Message("an instruction belongs"));
                 return;
             }
 
@@ -474,9 +474,9 @@ public sealed partial class CodeLayout
             if (candidates.Length == 0)
             {
                 if (operand is null)
-                    Report(mnemonic, Catalogue.OperandMissing.Message(mnemonic.Text));
+                    Report(mnemonic, Catalog.OperandMissing.Message(mnemonic.Text));
                 else
-                    Report(operand, Catalogue.OperandNotTaken.Message(mnemonic.Text, CpuNames.Format(cpu)));
+                    Report(operand, Catalog.OperandNotTaken.Message(mnemonic.Text, CpuNames.Format(cpu)));
                 Unlayable();
                 return;
             }
@@ -555,7 +555,7 @@ public sealed partial class CodeLayout
                 1 => "; it needs the " + formatted[0],
                 _ => "; it needs the " + string.Join(", ", formatted.SkipLast(1)) + " or " + formatted[^1],
             };
-            Report(mnemonic, Catalogue.InstructionNotOnCpu.Message(mnemonic.Text, CpuNames.Format(cpu), needs));
+            Report(mnemonic, Catalog.InstructionNotOnCpu.Message(mnemonic.Text, CpuNames.Format(cpu), needs));
         }
 
         /// <summary>
@@ -599,7 +599,7 @@ public sealed partial class CodeLayout
             var text = value.GetText().Trim();
             if (model.ValueOf(value, expansion).AsNumber() is not (>= 0 and <= 255 and var opcode))
             {
-                Report(value, Catalogue.EncodedNotAByte);
+                Report(value, Catalog.EncodedNotAByte);
                 return null;
             }
             var written = statement.Mnemonic.Text;
@@ -616,7 +616,7 @@ public sealed partial class CodeLayout
             };
             if (problem is null)
                 return (int)opcode;
-            Report(encoded, Catalogue.EncodedMismatch.Message(text, written, problem));
+            Report(encoded, Catalog.EncodedMismatch.Message(text, written, problem));
             return null;
         }
 
@@ -634,19 +634,19 @@ public sealed partial class CodeLayout
                 || !Plausible(operand).Contains(AddressingMode.Relative))
             {
                 if (operand is null)
-                    Report(mnemonic, Catalogue.BranchOperandNotTaken.Message(mnemonic.Text));
+                    Report(mnemonic, Catalog.BranchOperandNotTaken.Message(mnemonic.Text));
                 else
-                    Report(operand, Catalogue.BranchOperandNotTaken.Message(mnemonic.Text));
+                    Report(operand, Catalog.BranchOperandNotTaken.Message(mnemonic.Text));
                 return;
             }
             if (Operands.PrefixSize(operand) is not null)
             {
-                Report(operand, Catalogue.TransferPrefix.Message(mnemonic.Text));
+                Report(operand, Catalog.TransferPrefix.Message(mnemonic.Text));
                 return;
             }
             if (model.AddressSizeOf(target, segment, expansion) == AddressSize.Far)
             {
-                Report(target, Catalogue.TargetTooFar.Message(mnemonic.Text));
+                Report(target, Catalog.TargetTooFar.Message(mnemonic.Text));
                 return;
             }
             CheckReach(mnemonic, target);
@@ -678,7 +678,7 @@ public sealed partial class CodeLayout
                 return;
             }
             if (value == 0)
-                Report(directive, Catalogue.AssertionFailed.Message(assertion.Message ?? "this assertion does not hold"));
+                Report(directive, Catalog.AssertionFailed.Message(assertion.Message ?? "this assertion does not hold"));
         }
 
         /// <summary>
@@ -716,7 +716,7 @@ public sealed partial class CodeLayout
         {
             var warns = directive.Keyword.DirectiveKind == DirectiveKind.Warning;
             var message = AssertionOf(directive).Message ?? "this configuration is not supported";
-            Report(directive, warns ? Catalogue.ConfigWarned.Message(message) : Catalogue.ConfigRefused.Message(message));
+            Report(directive, warns ? Catalog.ConfigWarned.Message(message) : Catalog.ConfigRefused.Message(message));
         }
 
         /// <summary>
@@ -734,7 +734,7 @@ public sealed partial class CodeLayout
                     ErrorDirectiveSyntax { Keyword.DirectiveKind: DirectiveKind.Warning } => "a `.warning`",
                     _ => "an `.error`",
                 };
-                Report(message, Catalogue.MessageNotText.Message(named));
+                Report(message, Catalog.MessageNotText.Message(named));
             }
             return Constructs.AssertionOf(directive, message => model.ValueOf(message, expansion).Text);
         }
@@ -753,9 +753,9 @@ public sealed partial class CodeLayout
                 // the source there do. Binding could not see them, because it sees only the macro body
                 // as declared.
                 if (expansion?.NearestCall is not null && loose.Directive.DirectiveKind is not (DirectiveKind.Res or DirectiveKind.Align))
-                    Report(directive, Catalogue.PaddingOutsideARoutine.Message(loose.Directive.Text, ""));
+                    Report(directive, Catalog.PaddingOutsideARoutine.Message(loose.Directive.Text, ""));
                 else if (segment is null && length != 0)
-                    Report(directive, Catalogue.OutsideEverySegment.Message("this"));
+                    Report(directive, Catalog.OutsideEverySegment.Message("this"));
             }
             Laid(directive, new LineLayout(length, null, null));
             Place(directive, length);

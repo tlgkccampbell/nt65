@@ -13,7 +13,7 @@ namespace Norristown;
 /// and <c>nt65 explain</c> prints it.
 /// </para>
 /// </summary>
-public static class Catalogue
+public static class Catalog
 {
     /// <summary>Gets every area, in the order the areas are declared here and printed.</summary>
     public static IReadOnlyList<DiagnosticArea> Areas { get; } =
@@ -4468,7 +4468,7 @@ public static class Catalogue
     // entries, because reflecting on a type while its own static initializer is still running can
     // deadlock two threads that ask for it at the same time.
     private static readonly Lazy<IReadOnlyList<DiagnosticDescriptor>> all = new(() =>
-        [.. typeof(Catalogue).GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+        [.. typeof(Catalog).GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Where(property => property.PropertyType == typeof(DiagnosticDescriptor))
             .Select(property => (DiagnosticDescriptor)property.GetValue(null)!)
             .OrderBy(descriptor => descriptor.Id, StringComparer.Ordinal)]);
@@ -4500,7 +4500,7 @@ public static class Catalogue
     /// <summary>
     /// Returns a value indicating whether <c>.allow</c> may hide the diagnostic named
     /// <paramref name="id"/>. It may hide a warning that no annotation answers. The severity is
-    /// the catalogue's, before the project's settings apply, so a warning a project raises to an
+    /// the catalog's, before the project's settings apply, so a warning a project raises to an
     /// error may still be allowed.
     /// </summary>
     public static bool IsAllowable(string id) =>

@@ -20,7 +20,7 @@ internal sealed partial class Parser
             return Finish(new LabeledLineSyntax(label, ParseInstruction()));
         if (Kind != SyntaxKind.Directive)
         {
-            Report(Catalogue.ExpectedStatement.Message(
+            Report(Catalog.ExpectedStatement.Message(
                 "an instruction, a data directive or a macro call after a label"));
             return Finish(new LabeledLineSyntax(label, null));
         }
@@ -30,10 +30,10 @@ internal sealed partial class Parser
             case SyntaxKind.DataDirective:
                 return Finish(new LabeledLineSyntax(label, ParseDataDirective()));
             case SyntaxKind.None:
-                Report(Catalogue.DirectiveUnknown.Message(Current.Text));
+                Report(Catalog.DirectiveUnknown.Message(Current.Text));
                 return Finish(new LabeledLineSyntax(label, null));
             default:
-                Report(Catalogue.DirectiveAfterLabel.Message(Current.Text));
+                Report(Catalog.DirectiveAfterLabel.Message(Current.Text));
                 return Finish(new LabeledLineSyntax(label, null));
         }
     }
@@ -53,7 +53,7 @@ internal sealed partial class Parser
     private ConstantDeclarationSyntax ParseUnmarkedConstant()
     {
         var keyword = Missing(
-            SyntaxKind.Directive, Catalogue.ConstMissing.Message(Current.Text), new DiagnosticFix(FixKind.Const, ".const"));
+            SyntaxKind.Directive, Catalog.ConstMissing.Message(Current.Text), new DiagnosticFix(FixKind.Const, ".const"));
         var name = Advance();
         var equals = Advance();
         return new ConstantDeclarationSyntax(keyword, name, equals, ParseExpression());
@@ -72,11 +72,11 @@ internal sealed partial class Parser
         if (AtName)
             name = Advance();
         else if (named)
-            Report(Catalogue.ExpectedName.Message("a name"));
+            Report(Catalog.ExpectedName.Message("a name"));
 
         // A missing name and a missing brace are separate problems, so a line missing both gets
         // a diagnostic for each.
-        var brace = Require(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message("`{`"));
+        var brace = Require(SyntaxKind.OpenBrace, Catalog.ExpectedBrace.Message("`{`"));
         return kind switch
         {
             SyntaxKind.EnumDeclaration => new EnumDeclarationSyntax(keyword, name, brace),
@@ -92,16 +92,16 @@ internal sealed partial class Parser
     private GreenNode ParseFunc()
     {
         var keyword = Advance();
-        var name = ExpectName(Catalogue.ExpectedName.Message("a function name"));
+        var name = ExpectName(Catalog.ExpectedName.Message("a function name"));
         ParameterListSyntax? parameters = null;
         if (Kind == SyntaxKind.OpenParen)
             parameters = ParseParameterList();
         else
-            Report(Catalogue.ExpectedParenthesis.Message("`(` and the parameter names"));
+            Report(Catalog.ExpectedParenthesis.Message("`(` and the parameter names"));
 
         // The `=` and the body are separate pieces, so a line that has neither gets a diagnostic
         // for each.
-        var equals = Require(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=` and the body"));
+        var equals = Require(SyntaxKind.Equals, Catalog.ExpectedEquals.Message("`=` and the body"));
         return new FuncDeclarationSyntax(keyword, name, parameters, equals, ParseExpression());
     }
 
@@ -112,8 +112,8 @@ internal sealed partial class Parser
     private GreenNode ParseSignatureDeclaration()
     {
         var keyword = Advance();
-        var name = ExpectName(Catalogue.ExpectedName.Message("a name for the signature set"));
-        var equals = Expect(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
+        var name = ExpectName(Catalog.ExpectedName.Message("a name for the signature set"));
+        var equals = Expect(SyntaxKind.Equals, Catalog.ExpectedEquals.Message(
             "`=` and the items: `.signature std = a8, i16`"));
 
         // The items come after the `=`, so a line without one has no items to read.
@@ -131,7 +131,7 @@ internal sealed partial class Parser
         if (!AtName && Kind != SyntaxKind.CheapLocal)
         {
             return Incomplete(
-                Missing(SyntaxKind.Identifier, Catalogue.ExpectedName.Message(
+                Missing(SyntaxKind.Identifier, Catalog.ExpectedName.Message(
                     "the constant's name: `.const NAME = value`")),
                 GreenToken.Missing(SyntaxKind.Equals));
         }
@@ -139,7 +139,7 @@ internal sealed partial class Parser
         if (Kind is not (SyntaxKind.Equals or SyntaxKind.QuestionEquals))
         {
             return Incomplete(
-                name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
+                name, Missing(SyntaxKind.Equals, Catalog.ExpectedEquals.Message(
                     "`=` and the constant's value: `.const NAME = value`")));
         }
         return new ConstantDeclarationSyntax(keyword, name, Advance(), ParseExpression());
@@ -154,7 +154,7 @@ internal sealed partial class Parser
     {
         var openParen = Advance();
         var parameters = Kind != SyntaxKind.CloseParen && !AtEnd ? ParseSeparatedList(ParseParameter) : null;
-        var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
+        var closeParen = Require(SyntaxKind.CloseParen, Catalog.ExpectedParenthesis.Message("`)`"));
         return new ParameterListSyntax(openParen, parameters, closeParen);
     }
 
@@ -168,14 +168,14 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report(Catalogue.ExpectedName.Message("a parameter name"));
+            Report(Catalog.ExpectedName.Message("a parameter name"));
             return null;
         }
         var name = Advance();
         SkippedTokensSyntax? kind = null;
         if (Kind == SyntaxKind.Colon)
         {
-            Report(Catalogue.FunctionParameterKind);
+            Report(Catalog.FunctionParameterKind);
             kind = SkipKind();
         }
         if (Kind != SyntaxKind.Equals)
@@ -210,7 +210,7 @@ internal sealed partial class Parser
         var keyword = Advance();
         if (Kind is SyntaxKind.CpuName or SyntaxKind.NumberLiteral or SyntaxKind.Identifier && SyntaxFacts.IsCpuName(Current.Text))
             return new CpuDirectiveSyntax(keyword, Advance());
-        return new CpuDirectiveSyntax(keyword, Missing(SyntaxKind.CpuName, Catalogue.ExpectedCpu.Message(
+        return new CpuDirectiveSyntax(keyword, Missing(SyntaxKind.CpuName, Catalog.ExpectedCpu.Message(
             SyntaxFacts.ListedCpuNames)));
     }
 
@@ -231,14 +231,14 @@ internal sealed partial class Parser
         }
         else if (Kind == SyntaxKind.StringLiteral)
         {
-            Report(Catalogue.SegmentNameQuoted.Message(Current.Text.Trim('"')));
+            Report(Catalog.SegmentNameQuoted.Message(Current.Text.Trim('"')));
             name = Advance();
         }
         else
         {
             // A line that does not name its segment is parsed no further, so the missing name is
             // the only thing reported about it.
-            name = Missing(SyntaxKind.Identifier, Catalogue.ExpectedName.Message("a segment name"));
+            name = Missing(SyntaxKind.Identifier, Catalog.ExpectedName.Message("a segment name"));
             return form switch
             {
                 SyntaxKind.SegmentBlock => new SegmentBlockSyntax(keyword, name, GreenToken.Missing(SyntaxKind.OpenBrace)),
@@ -258,14 +258,14 @@ internal sealed partial class Parser
         if (Kind != SyntaxKind.Colon)
         {
             return new SegmentDeclarationSyntax(
-                keyword, name, Missing(SyntaxKind.Colon, Catalogue.ExpectedColon.Message("`:` and an address size")),
+                keyword, name, Missing(SyntaxKind.Colon, Catalog.ExpectedColon.Message("`:` and an address size")),
                 GreenToken.Missing(SyntaxKind.Identifier), null, null);
         }
         var colon = Advance();
         if (Kind != SyntaxKind.Identifier || !SyntaxFacts.IsAddressSize(Current.Text))
         {
             return new SegmentDeclarationSyntax(
-                keyword, name, colon, Missing(SyntaxKind.Identifier, Catalogue.ExpectedAddressSize.Message(
+                keyword, name, colon, Missing(SyntaxKind.Identifier, Catalog.ExpectedAddressSize.Message(
                     "`zp`, `abs` or `far`")), null, null);
         }
         var size = Advance();
@@ -291,13 +291,13 @@ internal sealed partial class Parser
         if (!AtWord("dp") && !AtWord("bank") && !AtWord("mirrors") && !AtWord("space"))
         {
             return Valueless(
-                Missing(SyntaxKind.Identifier, Catalogue.ExpectedSegmentAttribute.Message("`dp`, `bank`, `mirrors` or `space`")),
+                Missing(SyntaxKind.Identifier, Catalog.ExpectedSegmentAttribute.Message("`dp`, `bank`, `mirrors` or `space`")),
                 GreenToken.Missing(SyntaxKind.Equals));
         }
         var mirrors = AtWord("mirrors");
         var name = Advance();
         if (Kind != SyntaxKind.Equals)
-            return Valueless(name, Missing(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message("`=`")));
+            return Valueless(name, Missing(SyntaxKind.Equals, Catalog.ExpectedEquals.Message("`=`")));
         var equals = Advance();
         if (!mirrors)
         {
@@ -307,7 +307,7 @@ internal sealed partial class Parser
 
         if (Kind != SyntaxKind.OpenBracket)
         {
-            Report(Catalogue.ExpectedBracket.Message("`[` and the banks: `mirrors = [$00..$3f, $80..$bf]`"));
+            Report(Catalog.ExpectedBracket.Message("`[` and the banks: `mirrors = [$00..$3f, $80..$bf]`"));
             return Valueless(name, equals);
         }
         var openBracket = Advance();
@@ -316,7 +316,7 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.CloseBracket)
             closeBracket = Advance();
         else
-            Report(Catalogue.ExpectedBracket.Message("`]`"));
+            Report(Catalog.ExpectedBracket.Message("`]`"));
         return new SegmentAttributeSyntax(name, equals, null, openBracket, ranges, closeBracket);
 
         // An attribute that stops short of its value still has slots for the name and the `=`.
@@ -340,7 +340,7 @@ internal sealed partial class Parser
     private GreenNode ParseProc()
     {
         var keyword = Advance();
-        var name = ExpectName(Catalogue.ExpectedName.Message("a routine name"));
+        var name = ExpectName(Catalog.ExpectedName.Message("a routine name"));
 
         // An address and a signature both come after the name, so a routine with no name is
         // parsed no further. A `{` after it still opens the routine's block.
@@ -358,7 +358,7 @@ internal sealed partial class Parser
 
         var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
         return new ProcDeclarationSyntax(keyword, name, signature,
-            Expect(SyntaxKind.OpenBrace, Catalogue.ExpectedBrace.Message(
+            Expect(SyntaxKind.OpenBrace, Catalog.ExpectedBrace.Message(
                 "`{`, or `= address` for a routine with no body")));
     }
 
@@ -372,14 +372,14 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         var walked = ParseExpression();
-        var comma = Expect(SyntaxKind.Comma, Catalogue.ExpectedComma.Message(
+        var comma = Expect(SyntaxKind.Comma, Catalog.ExpectedComma.Message(
             "`,` and the name to bind: `.multiproc Channel, ch {`"));
 
         // The name comes after the `,`, so when the comma is missing the name cannot be present
         // either, and only the missing comma is reported.
         var name = comma.IsMissing
             ? GreenToken.Missing(SyntaxKind.Identifier)
-            : ExpectName(Catalogue.ExpectedName.Message("the name to bind, which each routine is named from"));
+            : ExpectName(Catalog.ExpectedName.Message("the name to bind, which each routine is named from"));
         var signature = Kind == SyntaxKind.Colon ? ParseSignature() : null;
         return new MultiProcDeclarationSyntax(keyword, walked, comma, name, signature, ExpectOpenBrace());
     }
@@ -413,11 +413,11 @@ internal sealed partial class Parser
         if (Kind == SyntaxKind.Directive)
         {
             Report(Current.DirectiveKind == DirectiveKind.Each
-                ? Catalogue.ExportDeclaresNothing.Message(
+                ? Catalog.ExportDeclaresNothing.Message(
                     $"`{Current.Text}` itself declares nothing",
                     $": put `.export` on the declaration in its body that is named after the binding, as "
                         + $"`.export .proc {EachBinding() ?? "name"}`, or write `.export .multiproc`")
-                : Catalogue.ExportDeclaresNothing.Message($"`{Current.Text}` declares nothing", ""));
+                : Catalog.ExportDeclaresNothing.Message($"`{Current.Text}` declares nothing", ""));
             return new ExportDirectiveSyntax(export, null, null);
         }
         if (AtName && Next is SyntaxKind.Equals or SyntaxKind.QuestionEquals)
@@ -454,7 +454,7 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report(Catalogue.ExpectedName.Message("a name to export"));
+            Report(Catalog.ExpectedName.Message("a name to export"));
             return null;
         }
         var name = ParseName();
@@ -466,7 +466,7 @@ internal sealed partial class Parser
             if (Kind == SyntaxKind.Identifier && SyntaxFacts.IsAddressSize(Current.Text))
                 addressSize = Advance();
             else
-                Report(Catalogue.ExpectedAddressSize.Message("`zp`, `abs` or `far`"));
+                Report(Catalog.ExpectedAddressSize.Message("`zp`, `abs` or `far`"));
         }
 
         GreenToken? asKeyword = null;
@@ -477,7 +477,7 @@ internal sealed partial class Parser
             if (Kind == SyntaxKind.StringLiteral)
                 linkerName = Advance();
             else
-                Report(Catalogue.ExpectedText.Message("the linker name, in quotes: `as \"_name\"`"));
+                Report(Catalog.ExpectedText.Message("the linker name, in quotes: `as \"_name\"`"));
         }
         return new ExportItemSyntax(name, colon, addressSize, asKeyword, linkerName);
     }
@@ -494,17 +494,17 @@ internal sealed partial class Parser
         // left for the line to hold as skipped tokens.
         if (Kind == SyntaxKind.StringLiteral)
         {
-            Report(Catalogue.ModuleNameQuoted);
+            Report(Catalog.ModuleNameQuoted);
             return new ModuleDirectiveSyntax(keyword, MissingName(null), null, null);
         }
-        var name = ParsePath(Catalogue.ExpectedName.Message("the module's name: `.module name`"));
+        var name = ParsePath(Catalog.ExpectedName.Message("the module's name: `.module name`"));
         if (Kind != SyntaxKind.Colon)
             return new ModuleDirectiveSyntax(keyword, name, null, null);
         var colon = Advance();
         if (AtWord("placed") || AtWord("placeable"))
             return new ModuleDirectiveSyntax(keyword, name, colon, Advance());
         return new ModuleDirectiveSyntax(keyword, name, colon, Missing(SyntaxKind.Identifier,
-            Catalogue.ExpectedPlacement.Message("`placed` or `placeable`: `.module name: placed`")));
+            Catalog.ExpectedPlacement.Message("`placed` or `placeable`: `.module name: placed`")));
     }
 
     /// <summary>
@@ -516,10 +516,10 @@ internal sealed partial class Parser
         var keyword = Advance();
         if (Kind == SyntaxKind.StringLiteral)
         {
-            Report(Catalogue.ModuleNameQuoted);
+            Report(Catalog.ModuleNameQuoted);
             return new PlaceDirectiveSyntax(keyword, MissingName(null));
         }
-        return new PlaceDirectiveSyntax(keyword, ParsePath(Catalogue.ExpectedName.Message("the module to place: `.place name`")));
+        return new PlaceDirectiveSyntax(keyword, ParsePath(Catalog.ExpectedName.Message("the module to place: `.place name`")));
     }
 
     /// <summary>
@@ -535,7 +535,7 @@ internal sealed partial class Parser
         // With no path, nothing that follows can refer to part of one, so the rest of the line
         // is left for the line to hold as skipped tokens rather than parsed by the directive.
         var named = AtName;
-        var path = ParsePath(Catalogue.ExpectedName.Message("what to use: `.use module::name`"));
+        var path = ParsePath(Catalog.ExpectedName.Message("what to use: `.use module::name`"));
         if (!named)
             return Use();
 
@@ -554,7 +554,7 @@ internal sealed partial class Parser
 
             // The `{` is present, so the closing `}` gets a slot whether or not the source contains
             // it. If the source does not, a missing token fills the slot.
-            var closeBrace = Expect(SyntaxKind.CloseBrace, Catalogue.ExpectedBrace.Message("`}`"));
+            var closeBrace = Expect(SyntaxKind.CloseBrace, Catalog.ExpectedBrace.Message("`}`"));
             return Use(colonColon, openBrace: openBrace, items: items, closeBrace: closeBrace);
         }
         var (asKeyword, alias) = ParseUseAlias();
@@ -576,7 +576,7 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            ReportOnce(Catalogue.ExpectedName.Message("a name"));
+            ReportOnce(Catalog.ExpectedName.Message("a name"));
             return null;
         }
         var name = Advance();
@@ -592,7 +592,7 @@ internal sealed partial class Parser
         var keyword = Advance();
         if (AtName)
             return (keyword, Advance());
-        ReportOnce(Catalogue.ExpectedName.Message("the name to bring it in as: `as name`"));
+        ReportOnce(Catalog.ExpectedName.Message("the name to bring it in as: `as name`"));
         return (keyword, null);
     }
 
@@ -638,7 +638,7 @@ internal sealed partial class Parser
     {
         if (!AtName)
         {
-            Report(Catalogue.ExpectedName.Message("a name to import"));
+            Report(Catalog.ExpectedName.Message("a name to import"));
             return null;
         }
         var name = Advance();
@@ -668,7 +668,7 @@ internal sealed partial class Parser
                 if (SyntaxFacts.LineDirectiveKind(Current.DirectiveKind) == SyntaxKind.DataDirective)
                     element = ParseImportElement();
                 else if (addressSize is null)
-                    Report(Catalogue.ExpectedAddressSize.Message("`zp`, `abs`, `far`, `proc(...)` or what the data is"));
+                    Report(Catalog.ExpectedAddressSize.Message("`zp`, `abs`, `far`, `proc(...)` or what the data is"));
             }
         }
         // `in SEGMENT` says which segment an imported address is in; references to the name are
@@ -678,7 +678,7 @@ internal sealed partial class Parser
         if (colon is not null && AtWord("in"))
         {
             inKeyword = Advance();
-            segment = ExpectName(Catalogue.ExpectedName.Message("the segment the name is in"));
+            segment = ExpectName(Catalog.ExpectedName.Message("the segment the name is in"));
         }
         return new ImportItemSyntax(name, equals, value, colon, addressSize, signature, element, inKeyword, segment);
     }
@@ -694,14 +694,14 @@ internal sealed partial class Parser
         var directive = Advance();
         var element = SyntaxFacts.IsElementType(directive.DirectiveKind);
         if (!element)
-            Report(at, Catalogue.ImportNeedsAnElementType.Message(directive.Text));
+            Report(at, Catalog.ImportNeedsAnElementType.Message(directive.Text));
         var (type, skipped) = ParseRecordType(directive);
         var count = Kind == SyntaxKind.OpenBracket ? ParseElementCount() : null;
 
         // One cause gets one diagnostic. A directive that is not an element type has been
         // reported already, and anything after it is part of the same mistake.
         if (element && !AtEnd && Kind != SyntaxKind.Comma)
-            Report(Catalogue.ImportHoldsNoValues.Message(directive.Text));
+            Report(Catalog.ImportHoldsNoValues.Message(directive.Text));
         return new DataDirectiveSyntax(directive, type, skipped, count, null);
     }
 
@@ -711,7 +711,7 @@ internal sealed partial class Parser
         if (Kind != SyntaxKind.OpenParen)
         {
             return new ImportSignatureSyntax(
-                keyword, Missing(SyntaxKind.OpenParen, Catalogue.ExpectedParenthesis.Message("`(`")),
+                keyword, Missing(SyntaxKind.OpenParen, Catalog.ExpectedParenthesis.Message("`(`")),
                 entry: null, arrowToken: null, exit: null, GreenToken.Missing(SyntaxKind.CloseParen));
         }
         var openParen = Advance();
@@ -729,7 +729,7 @@ internal sealed partial class Parser
                 exit = ParseStateList();
         }
 
-        var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
+        var closeParen = Require(SyntaxKind.CloseParen, Catalog.ExpectedParenthesis.Message("`)`"));
         return new ImportSignatureSyntax(keyword, openParen, entry, arrow, exit, closeParen);
     }
 }

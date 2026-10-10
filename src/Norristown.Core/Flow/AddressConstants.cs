@@ -62,7 +62,7 @@ public static class AddressConstants
                 continue;
             yield return new Diagnostic(
                 tree.GetSpan(declaration.Name.Span),
-                Catalogue.ConstantUsedAsAddress.Message(
+                Catalog.ConstantUsedAsAddress.Message(
                     symbol.DisplayName, "declare it as data, or with `.mmio` if it is a hardware register"))
             {
                 Fix = new DiagnosticFix(FixKind.AddressData),
@@ -96,7 +96,7 @@ public static class AddressConstants
                 continue;
             }
             var enumeration = member.Scope.Owner?.DisplayName ?? "the enum";
-            yield return Expansion.Problem(model.Tree, name, on, Severity.Warning, Catalogue.ConstantUsedAsAddress.Message(
+            yield return Expansion.Problem(model.Tree, name, on, Severity.Warning, Catalog.ConstantUsedAsAddress.Message(
                 binding.Name,
                 $"each turn over `{enumeration}` binds it to a member's value, so name the data with a path that ends in "
                     + $"`{binding.Name}`, or write `#{binding.Name}` for the value"));

@@ -73,7 +73,7 @@ public static class UnusedSymbols
             // else, such as a declaration in a repetition's body, is reported as never used alone.
             var exportable = symbol is { IsCheapLocal: false, IsReachableByPath: true } && model.FileScope.Module is not null;
             yield return new Diagnostic(symbol.DeclarationSpan,
-                Catalogue.UnusedSymbol.Message(symbol.DisplayName, exportable ? " or exported" : ""))
+                Catalog.UnusedSymbol.Message(symbol.DisplayName, exportable ? " or exported" : ""))
             {
                 Fix = new DiagnosticFix(FixKind.Unused, symbol.DisplayName),
                 IsUnnecessary = true,
@@ -112,7 +112,7 @@ public static class UnusedSymbols
             if (used.Contains(name))
                 continue;
             yield return new Diagnostic(tree.GetSpan(brought.At),
-                Catalogue.UnusedUseItem.Message(name))
+                Catalog.UnusedUseItem.Message(name))
             {
                 Fix = new DiagnosticFix(FixKind.UseItem, name),
                 IsUnnecessary = true,

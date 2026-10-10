@@ -130,7 +130,7 @@ public sealed partial class CodeLayout
             if (required is { } size && Instructions.Width(chosen) < size)
             {
                 Report(operand,
-                    Catalogue.AddressSizeUnreachable.Message(mnemonic.Text, Format(size), CpuNames.Format(cpu)));
+                    Catalog.AddressSizeUnreachable.Message(mnemonic.Text, Format(size), CpuNames.Format(cpu)));
             }
             CheckOperand(mnemonic, operand, chosen, substituted, bits, sizeUnknown);
             return chosen;
@@ -152,7 +152,7 @@ public sealed partial class CodeLayout
             {
                 if (!ThroughDirectPage(operand) && Instructions.Width(only) is { } width && width != prefixSize && !transfers)
                 {
-                    Report(operand, Catalogue.AddressingModeMissing.Message(
+                    Report(operand, Catalog.AddressingModeMissing.Message(
                         mnemonic.Text, Format(prefixSize), CpuNames.Format(cpu)));
                 }
                 return;
@@ -167,7 +167,7 @@ public sealed partial class CodeLayout
             if (!targets && Instructions.Width(only) is { } reach && Expression(operand) is { } pointer
                 && model.AddressSizeOf(pointer, segment, expansion) is { } wide && wide > reach)
             {
-                Report(operand, Catalogue.AddressingModeTooNarrow.Message(
+                Report(operand, Catalog.AddressingModeTooNarrow.Message(
                     mnemonic.Text, Format(reach), pointer.GetText().Trim(), Format(wide)));
             }
         }
@@ -186,7 +186,7 @@ public sealed partial class CodeLayout
             // Text can only be emitted as data. An operand is a number or an address.
             if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).IsString)
             {
-                Report(expression, Catalogue.OperandIsText.Message(expression.GetText().Trim()));
+                Report(expression, Catalog.OperandIsText.Message(expression.GetText().Trim()));
                 return;
             }
 
@@ -197,7 +197,7 @@ public sealed partial class CodeLayout
             {
                 if (Operands.PrefixSize(operand) is not null)
                 {
-                    Report(operand, Catalogue.TransferPrefix.Message(mnemonic.Text));
+                    Report(operand, Catalog.TransferPrefix.Message(mnemonic.Text));
                     return;
                 }
 
@@ -230,7 +230,7 @@ public sealed partial class CodeLayout
                 return;
             if (value < low || value > high)
             {
-                Report(expression, Catalogue.ImmediateTooWide.Message(
+                Report(expression, Catalog.ImmediateTooWide.Message(
                     Value.Of(value), bits == 16 ? "this two-byte immediate" : "a one-byte immediate"));
             }
         }
@@ -255,7 +255,7 @@ public sealed partial class CodeLayout
             var hex = StateValue.Hex(value, value > 0xffff ? 6 : value > 0xff ? 4 : 2);
             diagnostics.Add(new Diagnostic(
                 expression.Tree.GetSpan(expression.Span),
-                Catalogue.ImmediateMissing.Message(mnemonic.Text, written, hex))
+                Catalog.ImmediateMissing.Message(mnemonic.Text, written, hex))
             {
                 Fix = new DiagnosticFix(FixKind.Immediate, hex),
             });
@@ -271,7 +271,7 @@ public sealed partial class CodeLayout
             if (mode != AddressingMode.Long)
             {
                 if (size == AddressSize.Far)
-                    Report(expression, Catalogue.TargetTooFar.Message(mnemonic.Text));
+                    Report(expression, Catalog.TargetTooFar.Message(mnemonic.Text));
                 return;
             }
 
@@ -280,7 +280,7 @@ public sealed partial class CodeLayout
             if (size is null or AddressSize.Far || model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not null)
                 return;
             var near = SyntaxFacts.TextOf(mnemonic.MnemonicKind == MnemonicKind.Jsl ? MnemonicKind.Jsr : MnemonicKind.Jmp);
-            Report(expression, Catalogue.TargetTooNear.Message(mnemonic.Text, Format(size.Value), near));
+            Report(expression, Catalog.TargetTooNear.Message(mnemonic.Text, Format(size.Value), near));
         }
 
         /// <summary>
@@ -294,17 +294,17 @@ public sealed partial class CodeLayout
                 return null;
             if (cpu != Cpu.Wdc65816)
             {
-                Report(operand, Catalogue.DirectPageNeeds65816.Message(CpuNames.Format(cpu)));
+                Report(operand, Catalog.DirectPageNeeds65816.Message(CpuNames.Format(cpu)));
                 return null;
             }
             if (model.ValueOf(expression, expansion, SpanOf, CyclesOf).AsNumber() is not { } address)
             {
-                Report(operand, Catalogue.DirectPagePrefixOnSymbol);
+                Report(operand, Catalog.DirectPagePrefixOnSymbol);
                 return null;
             }
             if (Instructions.Width(mode) != AddressSize.ZeroPage)
             {
-                Report(operand, Catalogue.DirectPageFormMissing.Message(mnemonic.Text));
+                Report(operand, Catalog.DirectPageFormMissing.Message(mnemonic.Text));
                 return null;
             }
             return state?.D is { IsKnown: true } page && address >= page.Value && address <= page.Value + 0xff
@@ -325,7 +325,7 @@ public sealed partial class CodeLayout
             {
                 return;
             }
-            Report(operand, Catalogue.IndirectJumpWraps.Message(
+            Report(operand, Catalog.IndirectJumpWraps.Message(
                 StateValue.Hex(address, 4), StateValue.Hex(address & ~0xffL, 4), StateValue.Hex(address + 1, 4)));
         }
 
@@ -347,7 +347,7 @@ public sealed partial class CodeLayout
             {
                 if (symbol.Segment is not { } name || model.Segments.Find(name) is not { DirectPage: not (null or 0) } segment)
                     continue;
-                Report(expression, Catalogue.DirectPageOnly.Message(
+                Report(expression, Catalog.DirectPageOnly.Message(
                     symbol.DisplayName,
                     segment.Name,
                     (mode == AddressingMode.Long || mode == AddressingMode.LongX ? "a long" : "an absolute")));
@@ -382,7 +382,7 @@ public sealed partial class CodeLayout
                 "sr" or "sry" => "a stack-relative",
                 _ => "an indirect",
             };
-            ReportPaired(given.At, Catalogue.OperandHasNoNextByte.Message(what, given.Parameter.Name, kind));
+            ReportPaired(given.At, Catalog.OperandHasNoNextByte.Message(what, given.Parameter.Name, kind));
         }
 
         /// <summary>

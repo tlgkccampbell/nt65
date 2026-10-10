@@ -42,8 +42,8 @@ internal static class RunningOnChecks
                 if (unit is null || placements.UnitOf(routine.Tree)?.Root.Path != unit.Root.Path)
                 {
                     found.Add(new Diagnostic(span, routine.Tree.Path == model.Tree.Path
-                        ? Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)
-                        : Catalogue.FallthroughNotPlaced.Message(routine.DisplayName, routine.Module ?? routine.Tree.Path)));
+                        ? Catalog.FallthroughNotAdjacent.Message(routine.DisplayName)
+                        : Catalog.FallthroughNotPlaced.Message(routine.DisplayName, routine.Module ?? routine.Tree.Path)));
                     continue;
                 }
                 if (!laid.TryGetValue(unit.Root.Path, out var layout))
@@ -59,7 +59,7 @@ internal static class RunningOnChecks
                     : null;
                 if (here is null || here != there)
                 {
-                    found.Add(new Diagnostic(span, Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)));
+                    found.Add(new Diagnostic(span, Catalog.FallthroughNotAdjacent.Message(routine.DisplayName)));
                 }
             }
             diagnostics.AddRange(Family.Collapsed(model.Families, found));

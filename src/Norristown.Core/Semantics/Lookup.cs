@@ -51,7 +51,7 @@ internal static class Lookup
             }
             if (chosen is { } other)
             {
-                report?.Invoke(Catalogue.ExportAmbiguous.Message(name, other.From, module.Name), null);
+                report?.Invoke(Catalog.ExportAmbiguous.Message(name, other.From, module.Name), null);
                 return Resolution.Reported;
             }
             chosen = new Resolution(exported, From: module.Name);
@@ -68,7 +68,7 @@ internal static class Lookup
     {
         if (program.IsModulePath(name))
             return new Resolution(null, name);
-        report?.Invoke(Catalogue.ModuleUnknown.Message(name), null);
+        report?.Invoke(Catalog.ModuleUnknown.Message(name), null);
         return null;
     }
 
@@ -89,14 +89,14 @@ internal static class Lookup
             return new Resolution(null, path);
         if (program.ModuleNamed(prefix) is not { } module)
         {
-            report?.Invoke(Catalogue.ModuleUnknown.Message(path), null);
+            report?.Invoke(Catalog.ModuleUnknown.Message(path), null);
             return null;
         }
         if (program.Member(module, name, touched) is not { } member)
         {
             var near = Spelling.Nearest(name, Members(module));
             report?.Invoke(
-                Catalogue.NotDeclaredIn.Message(name, $"module `{prefix}`", Suggesting(near)),
+                Catalog.NotDeclaredIn.Message(name, $"module `{prefix}`", Suggesting(near)),
                 near is null ? null : new DiagnosticFix(FixKind.NearestName, near));
             return null;
         }

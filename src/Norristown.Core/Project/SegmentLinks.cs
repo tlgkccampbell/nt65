@@ -37,7 +37,7 @@ public static class SegmentLinks
         {
             if (link.Config is not { } config)
             {
-                diagnostics.Add(new Diagnostic(link.Declaration, Catalogue.LinkedConfigUnreadable.Message(link.ConfigPath)));
+                diagnostics.Add(new Diagnostic(link.Declaration, Catalog.LinkedConfigUnreadable.Message(link.ConfigPath)));
                 continue;
             }
             diagnostics.AddRange(config.Diagnostics);
@@ -50,7 +50,7 @@ public static class SegmentLinks
         {
             if (!placed.TryGetValue(entry.Name, out var segment))
             {
-                diagnostics.Add(new Diagnostic(entry.Declaration, Catalogue.SegmentNotLinked.Message(entry.Name)));
+                diagnostics.Add(new Diagnostic(entry.Declaration, Catalog.SegmentNotLinked.Message(entry.Name)));
                 continue;
             }
             placed[entry.Name] = Added(segment, entry, diagnostics);
@@ -66,7 +66,7 @@ public static class SegmentLinks
     {
         if (entry.Size is not { } size)
         {
-            diagnostics.Add(new Diagnostic(entry.Declaration, Catalogue.ProjectSegmentSizeMissing.Message(entry.Name)));
+            diagnostics.Add(new Diagnostic(entry.Declaration, Catalog.ProjectSegmentSizeMissing.Message(entry.Name)));
             return null;
         }
         var segment = new Segment(entry.Name, size, entry.Declaration) { Space = entry.Space, Mirrors = entry.Mirrors ?? [] };
@@ -88,19 +88,19 @@ public static class SegmentLinks
         Link link, LinkerConfig config, IReadOnlyList<AddressSpace> spaces, List<Diagnostic> diagnostics)
     {
         if (link.Space is { } linkSpace && !spaces.Any(space => space.Name == linkSpace))
-            diagnostics.Add(new Diagnostic(link.Declaration, Catalogue.SpaceUndeclared.Message(linkSpace)));
+            diagnostics.Add(new Diagnostic(link.Declaration, Catalog.SpaceUndeclared.Message(linkSpace)));
 
         var areas = new Dictionary<string, Link.Area>(StringComparer.Ordinal);
         foreach (var area in link.Memory)
         {
             if (config.Area(area.Name) is null)
             {
-                diagnostics.Add(new Diagnostic(area.Declaration, Catalogue.LinkMemoryUnknown.Message(config.Path, area.Name)));
+                diagnostics.Add(new Diagnostic(area.Declaration, Catalog.LinkMemoryUnknown.Message(config.Path, area.Name)));
                 continue;
             }
             if (area.Space is { } named && !spaces.Any(space => space.Name == named))
             {
-                diagnostics.Add(new Diagnostic(area.Declaration, Catalogue.SpaceUndeclared.Message(named)));
+                diagnostics.Add(new Diagnostic(area.Declaration, Catalog.SpaceUndeclared.Message(named)));
                 areas[area.Name] = area with { Space = null };
                 continue;
             }
@@ -222,7 +222,7 @@ public static class SegmentLinks
         if (Disagreement(segment, first) is { } difference)
         {
             diagnostics.Add(new Diagnostic(segment.Placements[0],
-                Catalogue.LinkedSegmentsDisagree.Message(segment.Name, difference, there.File),
+                Catalog.LinkedSegmentsDisagree.Message(segment.Name, difference, there.File),
                 [new RelatedSpan(there, "placed here")]));
             return;
         }
@@ -267,7 +267,7 @@ public static class SegmentLinks
     {
         var config = segment.Placements[0].File;
         void FromConfig(string key, string source) =>
-            diagnostics.Add(new Diagnostic(entry.Declaration, Catalogue.ProjectSegmentFromLink.Message(entry.Name, key, source)));
+            diagnostics.Add(new Diagnostic(entry.Declaration, Catalog.ProjectSegmentFromLink.Message(entry.Name, key, source)));
 
         segment = segment with { Addition = entry.Declaration };
         if (entry.Size is { } size)

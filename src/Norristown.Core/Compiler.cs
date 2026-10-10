@@ -99,7 +99,7 @@ public static class Compiler
         var emitted = allowances.Apply(diagnostics.Skip(analysis.Diagnostics.Count), used).ToList();
         var unused = used.Select(allowance => allowance.Directive.Tree.GetSpan(allowance.Directive.Span)).ToHashSet();
         diagnostics = [.. analysis.Diagnostics
-            .Where(d => d.Id != Catalogue.AllowUnused.Id || !unused.Contains(d.Span))
+            .Where(d => d.Id != Catalog.AllowUnused.Id || !unused.Contains(d.Span))
             .Concat(emitted)];
 
         // A program with errors produces no output: what would be written for it is not a
@@ -918,12 +918,12 @@ public static class Compiler
         foreach (var segment in segments.Segments)
         {
             if (segment is { Size: AddressSize.Far, Declaration: { } declared })
-                yield return new Diagnostic(declared, Catalogue.FarNeeds65816.Message($"segment `{segment.Name}`"));
+                yield return new Diagnostic(declared, Catalog.FarNeeds65816.Message($"segment `{segment.Name}`"));
         }
         foreach (var symbol in program.Files.SelectMany(file => file.Symbols))
         {
             if (symbol is { Kind: SymbolKind.ImportedAddress, AddressSize: AddressSize.Far })
-                yield return new Diagnostic(symbol.DeclarationSpan, Catalogue.FarNeeds65816.Message($"`{symbol.Name}`"));
+                yield return new Diagnostic(symbol.DeclarationSpan, Catalog.FarNeeds65816.Message($"`{symbol.Name}`"));
         }
     }
 }

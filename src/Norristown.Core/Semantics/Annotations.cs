@@ -71,7 +71,7 @@ public static class Annotations
     /// statement ends. An annotation with no statement above it has nothing to apply to.
     /// </summary>
     public static DiagnosticMessage? Misplaced(LineSyntax line, StatementSyntax directive) =>
-        Annotated(line) is not null ? null : (DiagnosticMessage?)Catalogue.AnnotationAboutNothing.Message(Format(directive));
+        Annotated(line) is not null ? null : (DiagnosticMessage?)Catalog.AnnotationAboutNothing.Message(Format(directive));
 
     /// <summary>Returns the directive's name as it appears in the source, for a message that names it.</summary>
     public static string Format(StatementSyntax directive) =>

@@ -33,7 +33,7 @@ public sealed partial class CodeLayout
             if (here is { HoldsCode: false } && segment is not null && routine is not null
                 && codeInData.Add((routine, segment)))
             {
-                Report(mnemonic, Catalogue.CodeInADataSpace.Message(segment, here.Name));
+                Report(mnemonic, Catalog.CodeInADataSpace.Message(segment, here.Name));
             }
 
             // An immediate is a value, a block move's banks are values, and `pea` and `per` push
@@ -102,11 +102,11 @@ public sealed partial class CodeLayout
                     var from = AddressSpace.Format(segments.SpaceOf(segment)?.Name);
                     var to = AddressSpace.Format(segments.SpaceOf(there)?.Name);
                     return transfer
-                        ? Catalogue.TransferToAnotherSpace.Message(name, to, text)
-                        : Catalogue.OperandInAnotherSpace.Message(name, there, to, from);
+                        ? Catalog.TransferToAnotherSpace.Message(name, to, text)
+                        : Catalog.OperandInAnotherSpace.Message(name, there, to, from);
                 case SegmentReach.NeverMapped:
                     var (fromArea, toArea) = segments.Find(segment!)!.Excluding(segments.Find(there)!)!.Value;
-                    return Catalogue.SegmentNotVisible.Message(
+                    return Catalog.SegmentNotVisible.Message(
                         transfer ? $"`{text}` targets {name}" : name, there, segment!, toArea.Config, toArea.Area, fromArea.Area);
                 case SegmentReach.OtherBank when transfer && near && cpu == Cpu.Wdc65816:
                     // A conditional branch has no long form to reach with, so what reaches the
@@ -117,7 +117,7 @@ public sealed partial class CodeLayout
                         MnemonicKind.Jmp or MnemonicKind.Bra or MnemonicKind.Brl => "use `jml`",
                         _ => "branch the other way around a `jml` to it",
                     };
-                    return Catalogue.JumpLeavesBank.Message(
+                    return Catalog.JumpLeavesBank.Message(
                         text,
                         name,
                         StateValue.Hex(segments.Find(there)!.Bank!.Value, 2),
@@ -156,7 +156,7 @@ public sealed partial class CodeLayout
             {
                 return null;
             }
-            return Catalogue.TargetInAnotherBank.Message(text, $"`{target.GetText().Trim()}`", StateValue.Hex(bank, 2));
+            return Catalog.TargetInAnotherBank.Message(text, $"`{target.GetText().Trim()}`", StateValue.Hex(bank, 2));
         }
 
         /// <summary>
@@ -195,7 +195,7 @@ public sealed partial class CodeLayout
             var fix = mode == AddressingMode.AbsoluteIndirect
                 ? $"place it in bank $00 or in memory mirrored there, or place it in this code's bank and use `jmp ({written},x)` with X at 0, which reads the pointer from the program bank"
                 : "place it in bank $00 or in memory mirrored there";
-            return Catalogue.PointerOutsideBankZero.Message(text, $"`{written}`", banks, fix);
+            return Catalog.PointerOutsideBankZero.Message(text, $"`{written}`", banks, fix);
         }
 
         /// <summary>

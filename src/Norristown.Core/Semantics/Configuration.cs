@@ -123,7 +123,7 @@ public sealed class Configuration
             case BuiltinKind.Target:
                 if (Alone(given[0]) is not { } cpuName || CpuNames.Parse(cpuName.Text) is not { } named)
                 {
-                    report(function.Span, Catalogue.TargetArgument.Message(CpuNames.Listed));
+                    report(function.Span, Catalog.TargetArgument.Message(CpuNames.Listed));
                     return Value.Unknown;
                 }
                 return Value.Of(named == cpu);
@@ -134,7 +134,7 @@ public sealed class Configuration
             case BuiltinKind.Has:
                 if (given[0] is not NameExpressionSyntax { SimpleName: { Kind: SyntaxKind.Mnemonic } mnemonic })
                 {
-                    report(function.Span, Catalogue.HasArgument);
+                    report(function.Span, Catalog.HasArgument);
                     return Value.Unknown;
                 }
                 return Value.Of(Processor.Instructions.Available(cpu, mnemonic.MnemonicKind));
@@ -341,7 +341,7 @@ public sealed class Configuration
                 foreach (var node in block.DescendantNodes())
                 {
                     if (node is CpuDirectiveSyntax && SyntaxFacts.PlacementOf(DirectiveKind.Cpu).IsBarredBy(DirectiveNesting.Condition))
-                        Report(node.Span, Catalogue.CpuUnderACondition);
+                        Report(node.Span, Catalog.CpuUnderACondition);
                 }
             }
 
@@ -350,7 +350,7 @@ public sealed class Configuration
 
         /// <summary>Reports an <c>.elseif</c> or <c>.else</c> that continues no chain.</summary>
         private void Orphaned(BlockSyntax block) =>
-            Report(block.Opener.Statement.Span, Catalogue.ElseWithoutIf.Message(Directive(block.Opener.Statement)));
+            Report(block.Opener.Statement.Span, Catalog.ElseWithoutIf.Message(Directive(block.Opener.Statement)));
 
         /// <summary>Determines whether the condition of an <c>.if</c> or <c>.elseif</c> holds.</summary>
         private bool Holds(StatementSyntax opener)
@@ -363,7 +363,7 @@ public sealed class Configuration
             var value = evaluator.Evaluate(condition);
             if (value.IsString)
             {
-                Report(condition.Span, Catalogue.ConditionIsText);
+                Report(condition.Span, Catalog.ConditionIsText);
                 return false;
             }
             return value.AsNumber() is { } number && number != 0;
@@ -537,13 +537,13 @@ public sealed class Configuration
             var subject = $"`{name ?? node.GetText().Trim()}`";
             DiagnosticMessage message = why.Cause switch
             {
-                UndecidedCause.Measurement => Catalogue.ConditionUsesAMeasurement.Message(subject),
-                UndecidedCause.Conditional => Catalogue.ConditionUsesAConditionalDeclaration.Message(
+                UndecidedCause.Measurement => Catalog.ConditionUsesAMeasurement.Message(subject),
+                UndecidedCause.Conditional => Catalog.ConditionUsesAConditionalDeclaration.Message(
                     subject, $"under another `.if`; declare `{why.Root}` once, with `.select`"),
-                UndecidedCause.InBlock => Catalogue.ConditionUsesAConditionalDeclaration.Message(
+                UndecidedCause.InBlock => Catalog.ConditionUsesAConditionalDeclaration.Message(
                     subject, $"inside a block; declare `{why.Root}` at file level"),
-                UndecidedCause.Unknown when why.Notes.IsEmpty => Catalogue.NotDeclared.Message(name ?? subject, ""),
-                _ => Catalogue.ConditionNamesTheProgram.Message(subject),
+                UndecidedCause.Unknown when why.Notes.IsEmpty => Catalog.NotDeclared.Message(name ?? subject, ""),
+                _ => Catalog.ConditionNamesTheProgram.Message(subject),
             };
             return new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message, why.Notes);
         }
@@ -579,7 +579,7 @@ public sealed class Configuration
             foreach (var setting in SettingsIn(tree))
             {
                 if (!IsWellPlaced(setting))
-                    misplaced.Add(new Diagnostic(tree.GetSpan(setting.EqualsToken.Span), Catalogue.SettingMisplaced));
+                    misplaced.Add(new Diagnostic(tree.GetSpan(setting.EqualsToken.Span), Catalog.SettingMisplaced));
             }
             var scope = new Scope(ScopeKind.File, null, null, null) { Module = ModuleSyntax.ModuleOf(tree) };
             var entries = new Dictionary<Symbol, Entry>();
@@ -628,13 +628,13 @@ public sealed class Configuration
                     {
                         var paths = named.Select(setting => $"`{setting.Scope.Module}::{setting.Name}`").Order(StringComparer.Ordinal);
                         diagnostics.Add(new Diagnostic(value.Declaration,
-                            Catalogue.SettingAmbiguous.Message(value.Name, string.Join(" or ", paths))));
+                            Catalog.SettingAmbiguous.Message(value.Name, string.Join(" or ", paths))));
                         continue;
                     }
                     symbol = named.SingleOrDefault();
                 }
                 if (symbol is null)
-                    diagnostics.Add(new Diagnostic(value.Declaration, Catalogue.SettingUnknown.Message(value.Name)));
+                    diagnostics.Add(new Diagnostic(value.Declaration, Catalog.SettingUnknown.Message(value.Name)));
                 else
                     given[symbol] = value.Value;
             }
@@ -657,7 +657,7 @@ public sealed class Configuration
                 // here. A constant on one is reported by the binder.
                 if (entry is Entry.Setting)
                 {
-                    problems.Add(new Diagnostic(symbol.DeclarationSpan, Catalogue.DefinedInTermsOfItself.Message(symbol.Name)));
+                    problems.Add(new Diagnostic(symbol.DeclarationSpan, Catalog.DefinedInTermsOfItself.Message(symbol.Name)));
                     decided[symbol] = Decision.Of(Value.Unknown);
                 }
                 return Decision.Of(Value.Unknown);
@@ -689,9 +689,9 @@ public sealed class Configuration
             var value = Probe(declaration.Value, symbol.DeclarationSpan, symbol.DisplayName, null, problems);
             var at = declaration.Tree.GetSpan(declaration.Value.Span);
             if (value.Why is { } why)
-                problems.Add(new Diagnostic(at, Severity.Error, Catalogue.SettingDefaultUndecided.Message(symbol.Name), why.Notes));
+                problems.Add(new Diagnostic(at, Severity.Error, Catalog.SettingDefaultUndecided.Message(symbol.Name), why.Notes));
             else if (value.Value.IsString)
-                problems.Add(new Diagnostic(at, Catalogue.SettingIsText));
+                problems.Add(new Diagnostic(at, Catalog.SettingIsText));
             return given.TryGetValue(symbol, out var set) ? Decision.Of(Value.Of(set))
                 : value.Value.AsNumber() is { } number ? Decision.Of(Value.Of(number))
                 : Decision.Of(Value.Unknown);
@@ -1082,7 +1082,7 @@ public sealed class Configuration
             if (!symbol.IsExported && symbol.Tree != name.Tree)
             {
                 report?.Add(new Diagnostic(name.Tree.GetSpan(name.Span),
-                    Catalogue.NotExported.Message(name.GetText().Trim(), symbol.Module)));
+                    Catalog.NotExported.Message(name.GetText().Trim(), symbol.Module)));
                 return (null, true);
             }
             return (symbol, false);

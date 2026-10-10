@@ -264,7 +264,7 @@ internal sealed partial class Evaluator
     internal static bool FitsCa65(long value) => value is >= -0x80000000L and <= 0xffffffffL;
 
     /// <summary>Returns the diagnostic message for a value too wide for ca65 to hold.</summary>
-    internal static DiagnosticMessage TooWide(long number) => Catalogue.NumberTooWide.Message(Value.Of(number));
+    internal static DiagnosticMessage TooWide(long number) => Catalog.NumberTooWide.Message(Value.Of(number));
 
     /// <summary>
     /// Returns an evaluator that answers a query, reporting nothing and changing no symbol.
@@ -313,7 +313,7 @@ internal sealed partial class Evaluator
         {
             if (node is NameExpressionSyntax name && !InsideCall(name, operand)
                 && SymbolOf(name) is { Kind: SymbolKind.Scope } scope && name.LastPart?.Name.Text == scope.Name)
-                Report(name, Catalogue.ScopeHasNoAddress.Message(scope.Name));
+                Report(name, Catalog.ScopeHasNoAddress.Message(scope.Name));
         }
         Evaluate(operand);
     }
@@ -412,7 +412,7 @@ internal sealed partial class Evaluator
     {
         if (!literal.Token.Text.Any(c => c > 127) || InCharmapOrData(literal) || !(outsideAscii ??= []).Add(literal))
             return;
-        Report(literal, Catalogue.TextNotAscii);
+        Report(literal, Catalog.TextNotAscii);
     }
 
     /// <summary>
@@ -476,7 +476,7 @@ internal sealed partial class Evaluator
 
             // A set stands only where `.in` and `.switch` read it as one, and never has a value.
             case SetExpressionSyntax set:
-                Report(set, Catalogue.SetOutOfPlace);
+                Report(set, Catalog.SetOutOfPlace);
                 return Value.Unknown;
 
             case BinaryExpressionSyntax binary:
@@ -570,7 +570,7 @@ internal sealed partial class Evaluator
             // first report says all there is to say. A walk that met the cut read a symbol that
             // was never finished, so it is not kept either.
             if (!tooDeep)
-                Report(symbol.DeclarationSpan, Catalogue.DefinedTooDeep.Message(symbol.DisplayName, MaximumDepth), []);
+                Report(symbol.DeclarationSpan, Catalog.DefinedTooDeep.Message(symbol.DisplayName, MaximumDepth), []);
             tooDeep = true;
             unfinishedReads++;
             return;
@@ -733,7 +733,7 @@ internal sealed partial class Evaluator
             // every member after it a value that cannot be computed.
             if (symbol.IsEnumMember)
             {
-                Report(expression, Catalogue.EnumMemberIsNotAnAddress.Message(symbol.Name));
+                Report(expression, Catalog.EnumMemberIsNotAnAddress.Message(symbol.Name));
                 symbol.Value = Value.Unknown;
                 return;
             }
@@ -742,7 +742,7 @@ internal sealed partial class Evaluator
             // The name is an alias from here on either way, so that what uses it is not reported
             // again.
             if (expression.Parent is ConstantDeclarationSyntax { Keyword.IsMissing: false } && IsAddressValued(expression))
-                Report(symbol.DeclarationSpan, Catalogue.ConstantNamesAnAddress.Message(symbol.Name), []);
+                Report(symbol.DeclarationSpan, Catalog.ConstantNamesAnAddress.Message(symbol.Name), []);
             symbol.Kind = SymbolKind.AddressAlias;
         }
         if (symbol.Kind != SymbolKind.ImportedAddress)
@@ -903,7 +903,7 @@ internal sealed partial class Evaluator
         var what = left <= 0
             ? $"starts past the end of `{name}`"
             : $"reads {Bytes(taken)}, but only {Bytes(left)} of `{name}` {(left == 1 ? "is" : "are")} left at its address";
-        Add(new Diagnostic(symbol.DeclarationSpan, Catalogue.DataElsewhereOverruns.Message(symbol.Name, what)));
+        Add(new Diagnostic(symbol.DeclarationSpan, Catalog.DataElsewhereOverruns.Message(symbol.Name, what)));
 
         static string Bytes(long count) => $"{count} byte{(count == 1 ? "" : "s")}";
     }
@@ -935,7 +935,7 @@ internal sealed partial class Evaluator
                 member.IsCyclic = true;
         }
         var symbol = ring[0];
-        Report(symbol.DeclarationSpan, Catalogue.DefinedInTermsOfItself.Message(symbol.DisplayName),
+        Report(symbol.DeclarationSpan, Catalog.DefinedInTermsOfItself.Message(symbol.DisplayName),
             [.. ring.Skip(1).Select(other =>
                 new RelatedSpan(other.DeclarationSpan, $"through `{other.DisplayName}`"))]);
     }
@@ -956,7 +956,7 @@ internal sealed partial class Evaluator
             // Binding did not report unresolved names in the values `.select` chooses between;
             // they are reported here, once evaluation has chosen the value they are in.
             if (context.Choosing > 0 && name.SimpleName is { Kind: SyntaxKind.Identifier or SyntaxKind.CheapLocal } alone)
-                Report(alone, Catalogue.NotDeclared.Message(alone.Text, ""));
+                Report(alone, Catalog.NotDeclared.Message(alone.Text, ""));
             return Value.Unknown;
         }
         // A binding that walks an enum stands for the member itself, whose value is requested
@@ -999,13 +999,13 @@ internal sealed partial class Evaluator
                 return null;
             if (HasNoElementType(symbol))
             {
-                Report(index, Catalogue.DataHasNoElementType.Message(symbol.DisplayName));
+                Report(index, Catalog.DataHasNoElementType.Message(symbol.DisplayName));
                 return null;
             }
             if (!(symbol.IsTypedStorage || symbol.Kind == SymbolKind.Member)
                 || symbol is { Kind: SymbolKind.Data, Data: null })
             {
-                Report(index, Catalogue.NotIndexable.Message(
+                Report(index, Catalog.NotIndexable.Message(
                     symbol.DisplayName,
                     symbol is { Kind: SymbolKind.Data, Data: null }
                         ? "mixed data, which has no elements"
@@ -1030,13 +1030,13 @@ internal sealed partial class Evaluator
                 // is reported.
                 if (Names(indexExpression))
                 {
-                    Report(indexExpression, Catalogue.ElementIndexNotConstant.Message(symbol.DisplayName));
+                    Report(indexExpression, Catalog.ElementIndexNotConstant.Message(symbol.DisplayName));
                 }
                 return null;
             }
             if (at < 0 || at >= count)
             {
-                Report(indexExpression, Catalogue.ElementIndexOutOfRange.Message(at < 0
+                Report(indexExpression, Catalog.ElementIndexOutOfRange.Message(at < 0
                     ? $"element index {at} is negative; indexes start at 0"
                     : $"index {at} is past the end of `{symbol.DisplayName}`, whose last index is {count - 1}"));
                 return null;
@@ -1107,7 +1107,7 @@ internal sealed partial class Evaluator
             return null;
         if (before == long.MaxValue)
         {
-            Report(member.DeclarationSpan, Catalogue.ArithmeticOverflow.Message($"{Value.Of(before)} + 1"), []);
+            Report(member.DeclarationSpan, Catalog.ArithmeticOverflow.Message($"{Value.Of(before)} + 1"), []);
             return null;
         }
         return before + 1;
@@ -1168,7 +1168,7 @@ internal sealed partial class Evaluator
             return Reject(op, left.IsString ? left : right);
         if (b == 0 && Operators.Divides(op))
         {
-            Report(op, Catalogue.DivisionByZero);
+            Report(op, Catalog.DivisionByZero);
             return Value.Unknown;
         }
         if (Operators.Binary(op, a, b, out var refused) is { } result)
@@ -1185,7 +1185,7 @@ internal sealed partial class Evaluator
     private Value Reject(SyntaxToken op, Value operand)
     {
         if (operand.IsString)
-            Report(op, Catalogue.OperatorOnText.Message(op.Text));
+            Report(op, Catalog.OperatorOnText.Message(op.Text));
         return Value.Unknown;
     }
 

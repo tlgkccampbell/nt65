@@ -158,7 +158,7 @@ internal static class UnpromisedKeeps
                         : $"which depends on `{decliner.DisplayName}`, whose {listed} does not promise it";
                     report.Add(new Diagnostic(
                         call.Statement.Tree.GetSpan(call.Statement.Span),
-                        Catalogue.UnpromisedKeep.Message(how, callee.DisplayName, name, why),
+                        Catalog.UnpromisedKeep.Message(how, callee.DisplayName, name, why),
                         related)
                     {
                         Fix = new DiagnosticFix(FixKind.Keeps, name.ToLowerInvariant(), decliner.DeclarationSpan),

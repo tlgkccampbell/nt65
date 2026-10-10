@@ -584,10 +584,10 @@ public sealed class ProgramModel
                 continue;
             }
             DiagnosticMessage? mismatch = declared.IsFar != actual.IsFar
-                ? Catalogue.AliasDistanceMismatch.Message(
+                ? Catalog.AliasDistanceMismatch.Message(
                     alias.Name, declared.Distance, routine.DisplayName, actual.Distance)
                 : declared != actual
-                    ? Catalogue.AliasSignatureMismatch.Message(alias.Name, declared, routine.DisplayName, actual)
+                    ? Catalog.AliasSignatureMismatch.Message(alias.Name, declared, routine.DisplayName, actual)
                     : (DiagnosticMessage?)null;
             if (mismatch is { } problem)
                 byFile[alias.Tree.Path].Add(new Diagnostic(alias.Tree.GetSpan(value.Span), problem));
@@ -615,7 +615,7 @@ public sealed class ProgramModel
                 continue;
             }
             byFile[routine.Tree.Path].Add(new Diagnostic(
-                routine.DeclarationSpan, Catalogue.SignatureRequired.Message(routine.DisplayName)));
+                routine.DeclarationSpan, Catalog.SignatureRequired.Message(routine.DisplayName)));
         }
     }
 
@@ -715,7 +715,7 @@ public sealed class ProgramModel
             if (actual is { } size && given < size)
             {
                 byFile[symbol.Tree.Path].Add(new Diagnostic(symbol.Tree.GetSpan(at),
-                    Catalogue.ExportNarrowsAddressSize.Message(symbol.Name, Format(size), symbol.Name, Format(size)))
+                    Catalog.ExportNarrowsAddressSize.Message(symbol.Name, Format(size), symbol.Name, Format(size)))
                 {
                     Fix = new DiagnosticFix(FixKind.ExportSize, Format(size)),
                 });

@@ -88,7 +88,7 @@ internal sealed class FlowChecks
                 }
                 else
                 {
-                    Report(call, step.On, Catalogue.InlineDataMissing.Message(name, "one `.strz`", "none follows this one"));
+                    Report(call, step.On, Catalog.InlineDataMissing.Message(name, "one `.strz`", "none follows this one"));
                 }
                 continue;
             }
@@ -96,7 +96,7 @@ internal sealed class FlowChecks
             if (inline.Expression is not { } count
                 || model.ValueOf(count, step.On).AsNumber() is not { } bytes || bytes < 0)
             {
-                Report(call, step.On, Catalogue.InlineCountNotConstant.Message(name, inline.Text));
+                Report(call, step.On, Catalog.InlineCountNotConstant.Message(name, inline.Text));
                 continue;
             }
 
@@ -113,7 +113,7 @@ internal sealed class FlowChecks
             }
             if (taken != bytes)
             {
-                Report(call, step.On, Catalogue.InlineDataMissing.Message(
+                Report(call, step.On, Catalog.InlineDataMissing.Message(
                     name,
                     $"{Bytes(bytes)} of data",
                     taken == 0 ? "none follows this one" : $"{Bytes(taken)} {(taken == 1 ? "follows" : "follow")} this one"));
@@ -159,7 +159,7 @@ internal sealed class FlowChecks
         {
             if (keys.Contains(variant.Written.Key) && variant.Problem is { } problem)
             {
-                Report(variant.Name, variant.On, Catalogue.PatchVariantRejected.Message(
+                Report(variant.Name, variant.On, Catalog.PatchVariantRejected.Message(
                     variant.Name.GetText().Trim(), SyntaxFacts.TextOf(variant.WrittenMnemonic), problem));
             }
         }
@@ -167,7 +167,7 @@ internal sealed class FlowChecks
         {
             if (!keys.Contains(unlisted.Written.Key))
                 continue;
-            Report(unlisted.Patch, unlisted.Store.On, Catalogue.PatchVariantsRequired.Message(
+            Report(unlisted.Patch, unlisted.Store.On, Catalog.PatchVariantsRequired.Message(
                     unlisted.Store.Statement.GetTextOnOneLine(), unlisted.Label.DisplayName),
                 unlisted.Inferred == MnemonicKind.None
                     ? null
@@ -177,7 +177,7 @@ internal sealed class FlowChecks
         {
             if (!keys.Contains(missed.Written.Key))
                 continue;
-            Report(missed.Patch, missed.Store.On, Catalogue.PatchMissesStore.Message(
+            Report(missed.Patch, missed.Store.On, Catalog.PatchMissesStore.Message(
                     missed.Store.Statement.GetTextOnOneLine(), missed.Before ? "before" : "past", missed.Label.DisplayName,
                     missed.Length == 1 ? "1 byte" : $"{missed.Length} bytes", missed.Into),
                 missed.Fix);
@@ -202,8 +202,8 @@ internal sealed class FlowChecks
                 {
                     Report(targetName, annotation.On,
                         NextTargets.IsAddressData(target.Symbol)
-                            ? Catalogue.NextTableHasNoLabels.Message(target.Symbol.DisplayName)
-                            : Catalogue.NextTargetNotATable.Message(target.Symbol.DisplayName));
+                            ? Catalog.NextTableHasNoLabels.Message(target.Symbol.DisplayName)
+                            : Catalog.NextTargetNotATable.Message(target.Symbol.DisplayName));
                     continue;
                 }
                 if (target.Symbol.IsAddress
@@ -212,14 +212,14 @@ internal sealed class FlowChecks
                     var (here, there) = model.Segments.Find(annotation.Segment!)!
                         .Excluding(model.Segments.Find(target.Symbol.Segment!)!)!.Value;
                     var what = $"`{target.Symbol.QualifiedName}`";
-                    Report(targetName, annotation.On, Catalogue.SegmentNotVisible.Message(
+                    Report(targetName, annotation.On, Catalog.SegmentNotVisible.Message(
                         annotation.a is PatchDirectiveSyntax ? what : $"`{Annotations.Format(annotation.a)}` targets {what}",
                         target.Symbol.Segment!, annotation.Segment!, there.Config, there.Area, here.Area));
                     continue;
                 }
                 if (target.Symbol.IsAddress || target.Symbol.Kind == SymbolKind.List)
                     continue;
-                Report(targetName, annotation.On, Catalogue.NextTargetNotCode.Message(
+                Report(targetName, annotation.On, Catalog.NextTargetNotCode.Message(
                     target.Symbol.DisplayName, target.Symbol.KindPhrase, Annotations.Format(annotation.a)));
             }
         }
@@ -251,7 +251,7 @@ internal sealed class FlowChecks
             {
                 var above = region.Blocks[block.Index - 1];
                 var found = Expansion.Problem(model.Tree, first.Statement, first.On, null,
-                    Catalogue.CodeUnreachable.Message(block.Stream != above.Stream
+                    Catalog.CodeUnreachable.Message(block.Stream != above.Stream
                         ? "execution does not fall into a nested segment block, so start it with a label that is "
                             + "jumped to, named by a `.next`, or declared by a `.state`"
                         : above.Steps is [.., var branch] && flow.Flags?.ProvedAt(branch) is { Taken: true } proved
@@ -277,7 +277,7 @@ internal sealed class FlowChecks
             if (model.ReferencesTo(label).Any(reference => !reference.IsDeclaration))
                 continue;
             diagnostics.Add(Expansion.Problem(model.Tree, label.Tree, label.NameSpan, block.On, null,
-                Catalogue.LabelUnreachable.Message(label.DisplayName),
+                Catalog.LabelUnreachable.Message(label.DisplayName),
                 new DiagnosticFix(FixKind.State, At: label.DeclarationSpan)));
         }
     }
@@ -352,10 +352,10 @@ internal sealed class FlowChecks
         // that does, or a jump over it.
         var message = PaddingFill.Of(unit.Step, model) switch
         {
-            { } fill when !fill.RunsOn(layout.Cpu) => Catalogue.RunsIntoData.Message(who, where,
+            { } fill when !fill.RunsOn(layout.Cpu) => Catalog.RunsIntoData.Message(who, where,
                 fill.WhyNot() + $"; give it a fill byte that runs on, such as `$ea` (`nop`), and add a `.next` {after}, "
                     + "or `jmp` over it"),
-            _ => Catalogue.RunsIntoData.Message(who, where, $"add a `.next` {after} saying where flow goes"),
+            _ => Catalog.RunsIntoData.Message(who, where, $"add a `.next` {after} saying where flow goes"),
         };
         var found = call is var (reported, _, _)
             ? new Diagnostic(reported.Tree.GetSpan(reported.Span), message,
@@ -407,8 +407,8 @@ internal sealed class FlowChecks
             if (returned is not null && routine.Signature is { HasNoCaller: true } own)
             {
                 Report(statement, unit.Step.On, own.IsInterrupt
-                    ? Catalogue.HandlerReturnsNotRti.Message(routine.DisplayName, returned)
-                    : Catalogue.NoreturnReturns.Message(routine.DisplayName, returned),
+                    ? Catalog.HandlerReturnsNotRti.Message(routine.DisplayName, returned)
+                    : Catalog.NoreturnReturns.Message(routine.DisplayName, returned),
 
                     // A handler is left by `rti`, which is the instruction to use instead. A
                     // routine that never returns has no instruction that would do. It should
@@ -425,13 +425,13 @@ internal sealed class FlowChecks
                 {
                     case { Signature.IsInterrupt: true } handler:
                         Report(statement, unit.Step.On,
-                            Catalogue.HandlerCalled.Message($"`{handler.DisplayName}` is an interrupt handler", "it returns"));
+                            Catalog.HandlerCalled.Message($"`{handler.DisplayName}` is an interrupt handler", "it returns"));
                         break;
 
                     // The path from a label inside a handler leaves by the handler's `rti`, so a
                     // call to the label is as wrong as a call to the handler.
                     case { Kind: SymbolKind.Label, Signature: null, Routine: { Signature.IsInterrupt: true } owner } label:
-                        Report(statement, unit.Step.On, Catalogue.HandlerCalled.Message(
+                        Report(statement, unit.Step.On, Catalog.HandlerCalled.Message(
                             $"`{label.DisplayName}` is inside interrupt handler `{owner.DisplayName}`", "the path from it returns"));
                         break;
                 }
@@ -439,7 +439,7 @@ internal sealed class FlowChecks
                 // A call puts nothing above the return address, so it cannot hand a routine the
                 // bytes `pulls n` says it is entered with. A label is entered as its routine is.
                 if (RegisterWalk.Owner(called) is { Signature.Pulls: > 0 and var pulls } pulling)
-                    Report(statement, unit.Step.On, Catalogue.PullsRoutineCalled.Message(pulling.DisplayName, pulls));
+                    Report(statement, unit.Step.On, Catalog.PullsRoutineCalled.Message(pulling.DisplayName, pulls));
             }
 
             // An `rti` with a `.next` is a computed jump that says where it goes, and is not a
@@ -447,7 +447,7 @@ internal sealed class FlowChecks
             if (statement is InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rti } && unit.Next is null
                 && routine.Signature is { IsInterrupt: false })
             {
-                Report(statement, unit.Step.On, Catalogue.RtiOutsideHandler.Message(routine.DisplayName),
+                Report(statement, unit.Step.On, Catalog.RtiOutsideHandler.Message(routine.DisplayName),
                     routine.Tree == model.Tree ? new DiagnosticFix(FixKind.Interrupt, At: routine.DeclarationSpan) : null);
             }
         }
@@ -492,7 +492,7 @@ internal sealed class FlowChecks
             if (unit.Next is { } claimed && (claimed.QuestionToken ?? claimed.ReturnToken) is { } unknown && IsBranch(unit))
             {
                 Report(claimed, unit.Step.On,
-                    Catalogue.NextUnknownAfterBranch.Message(
+                    Catalog.NextUnknownAfterBranch.Message(
                         $".next {unknown.Text}",
                         statement,
                         BranchTarget(unit) is { } taken
@@ -507,13 +507,13 @@ internal sealed class FlowChecks
             {
                 if (Instructions.IsCall(instruction.MnemonicKind) || flow.RelativeCallAt(unit.Step) is not null)
                 {
-                    Report(returning, unit.Step.On, Catalogue.ReturnAfterCall.Message(statement));
+                    Report(returning, unit.Step.On, Catalog.ReturnAfterCall.Message(statement));
                     continue;
                 }
                 if (instruction.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl or MnemonicKind.Rti)
                 {
                     Report(returning.Keyword, unit.Step.On,
-                        Catalogue.NextSuccessorsKnown.Message(statement, "returns to its caller", ""));
+                        Catalog.NextSuccessorsKnown.Message(statement, "returns to its caller", ""));
                     continue;
                 }
             }
@@ -530,12 +530,12 @@ internal sealed class FlowChecks
                     if (flow.Flags?.ProvedAt(unit.Step) is { Taken: false } never)
                     {
                         Report(next, unit.Step.On,
-                            Catalogue.NextNeverTaken.Message(target.DisplayName, unit.Step.Statement.GetText().Trim(), never.Why));
+                            Catalog.NextNeverTaken.Message(target.DisplayName, unit.Step.Statement.GetText().Trim(), never.Why));
                     }
                     continue;
                 }
                 Report(next.Keyword, unit.Step.On,
-                    Catalogue.NextNotTheBranchTarget.Message($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName));
+                    Catalog.NextNotTheBranchTarget.Message($"`{unit.Step.Statement.GetText().Trim()}`", target.DisplayName));
                 continue;
             }
             if (Known(unit) is not { } does)
@@ -547,7 +547,7 @@ internal sealed class FlowChecks
             var rewrite = ends && next.Tree == model.Tree && next.Targets.Count == 1
                 && flow.RoutineNamed(next.Targets[0], null) is not null;
             Report(next.Keyword, unit.Step.On,
-                Catalogue.NextSuccessorsKnown.Message(
+                Catalog.NextSuccessorsKnown.Message(
                     $"`{unit.Step.Statement.GetText().Trim()}`", does,
                     ends ? "; if this routine runs into the one after it, use `.fallthrough`" : ""),
                 rewrite ? new DiagnosticFix(FixKind.Spelling, ".fallthrough") : null);
@@ -627,13 +627,13 @@ internal sealed class FlowChecks
             if (flow.RoutineNamed(targetName, null) is not { } routine)
             {
                 diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
-                    Catalogue.FallthroughNotARoutine.Message(target.Symbol.DisplayName, target.Symbol.KindPhrase)));
+                    Catalog.FallthroughNotARoutine.Message(target.Symbol.DisplayName, target.Symbol.KindPhrase)));
                 continue;
             }
             if (step.Segment is { } here && routine.Segment is { } there && here != there)
             {
                 diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
-                    Catalogue.FallthroughOtherSegment.Message(routine.DisplayName, here, there)));
+                    Catalog.FallthroughOtherSegment.Message(routine.DisplayName, here, there)));
                 continue;
             }
             if (layout.PositionOf(directive) is { } end && routine.Tree == model.Tree && layout.PositionOf(routine) is { } start
@@ -647,7 +647,7 @@ internal sealed class FlowChecks
                 continue;
             }
             diagnostics.Add(new Diagnostic(targetName.Tree.GetSpan(targetName.Span),
-                Catalogue.FallthroughNotAdjacent.Message(routine.DisplayName)));
+                Catalog.FallthroughNotAdjacent.Message(routine.DisplayName)));
         }
     }
 

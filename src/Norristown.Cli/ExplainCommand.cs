@@ -6,7 +6,7 @@ namespace Norristown.Cli;
 /// Implements <c>nt65 explain &lt;name&gt;</c>, which prints the full explanation of a
 /// diagnostic that its one-line message has no room for. Given no name, it lists every
 /// diagnostic. Given a name nt65 does not know, it suggests the closest one. Given
-/// <c>--markdown</c>, it writes the whole catalogue as one Markdown page.
+/// <c>--markdown</c>, it writes the whole catalog as one Markdown page.
 /// </summary>
 internal static class ExplainCommand
 {
@@ -25,9 +25,9 @@ internal static class ExplainCommand
         }
         if (arguments is not [var name] || name.StartsWith('-'))
             return Commands.Wrong(error, "explain takes one diagnostic's name");
-        if (Catalogue.Find(name) is not { } descriptor)
+        if (Catalog.Find(name) is not { } descriptor)
         {
-            var nearest = Spelling.Nearest(name, Catalogue.All.Select(entry => entry.Id));
+            var nearest = Spelling.Nearest(name, Catalog.All.Select(entry => entry.Id));
             error.WriteLine(nearest is null
                 ? $"nt65: no diagnostic is named `{name}`"
                 : $"nt65: no diagnostic is named `{name}`; did you mean `{nearest}`?");
@@ -55,8 +55,8 @@ internal static class ExplainCommand
     {
         output.WriteLine("every diagnostic nt65 reports; `nt65 explain <name>` explains one.");
         output.WriteLine();
-        var width = Catalogue.All.Max(descriptor => descriptor.Id.Length);
-        foreach (var descriptor in Catalogue.All)
+        var width = Catalog.All.Max(descriptor => descriptor.Id.Length);
+        foreach (var descriptor in Catalog.All)
             output.WriteLine($"  {descriptor.Id.PadRight(width)}  {Reported(descriptor.Severity)}");
     }
 

@@ -82,7 +82,7 @@ internal sealed partial class Parser
                     ? new CallExpressionSyntax(name, null, ParseArgumentList())
                     : name;
             default:
-                Report(Catalogue.ExpectedExpression);
+                Report(Catalog.ExpectedExpression);
                 return new ErrorExpressionSyntax(null);
         }
     }
@@ -91,7 +91,7 @@ internal sealed partial class Parser
     {
         var open = Advance();
         var expression = ParseExpression();
-        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message(
+        return new ParenthesizedExpressionSyntax(open, expression, Expect(SyntaxKind.CloseParen, Catalog.ExpectedParenthesis.Message(
             "`)`")));
     }
 
@@ -103,7 +103,7 @@ internal sealed partial class Parser
     {
         var open = Advance();
         var items = Kind is not SyntaxKind.CloseBracket && !AtEnd ? ParseSeparatedList(ParseRange) : null;
-        return new SetExpressionSyntax(open, items, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message("`]`")));
+        return new SetExpressionSyntax(open, items, Expect(SyntaxKind.CloseBracket, Catalog.ExpectedBracket.Message("`]`")));
     }
 
     private ExpressionSyntax ParseBuiltinCall()
@@ -114,7 +114,7 @@ internal sealed partial class Parser
             // which always has a value, so the message says how to declare one.
             var defined = Current.Text.Equals(".defined", StringComparison.OrdinalIgnoreCase)
                 || Current.Text.Equals(".def", StringComparison.OrdinalIgnoreCase);
-            Report(Catalogue.NotAFunction.Message(Current.Text, defined
+            Report(Catalog.NotAFunction.Message(Current.Text, defined
                 ? ": every name nt65 tests is declared, so for a value the build may give, declare a setting with a "
                     + "default, `.const NAME ?= 0`, and test its value"
                 : ""));
@@ -123,7 +123,7 @@ internal sealed partial class Parser
         var name = Advance();
         if (Kind == SyntaxKind.OpenParen)
             return new CallExpressionSyntax(null, name, ParseArgumentList(name));
-        Report(Catalogue.ExpectedParenthesis.Message($"`(` after `{name.Text}`"));
+        Report(Catalog.ExpectedParenthesis.Message($"`(` after `{name.Text}`"));
         return new ErrorExpressionSyntax(name);
     }
 
@@ -137,7 +137,7 @@ internal sealed partial class Parser
         var arguments = Kind is not SyntaxKind.CloseParen && !AtEnd
             ? ParseSeparatedList(() => ParseCallArgument(builtin))
             : null;
-        var closeParen = Require(SyntaxKind.CloseParen, Catalogue.ExpectedParenthesis.Message("`)`"));
+        var closeParen = Require(SyntaxKind.CloseParen, Catalog.ExpectedParenthesis.Message("`)`"));
         return new ArgumentListSyntax(openParen, arguments, closeParen);
     }
 
@@ -151,7 +151,7 @@ internal sealed partial class Parser
         if (!AtName || Next != SyntaxKind.Equals)
             return ParseExpression();
         if (builtin is not null)
-            Report(Catalogue.BuiltinArgumentNamed.Message(builtin.Text));
+            Report(Catalog.BuiltinArgumentNamed.Message(builtin.Text));
         return new NamedArgumentSyntax(Advance(), Advance(), ParseExpression());
     }
 
@@ -171,7 +171,7 @@ internal sealed partial class Parser
         if (Kind is not (SyntaxKind.Identifier or SyntaxKind.CheapLocal
             or SyntaxKind.Register or SyntaxKind.Mnemonic))
         {
-            return new NameExpressionSyntax(global, MissingParts(Catalogue.ExpectedName.Message("a name")));
+            return new NameExpressionSyntax(global, MissingParts(Catalog.ExpectedName.Message("a name")));
         }
 
         var parts = ImmutableArray.CreateBuilder<GreenNode>();
@@ -185,7 +185,7 @@ internal sealed partial class Parser
             if (Kind is not (SyntaxKind.Identifier or SyntaxKind.Register or SyntaxKind.Mnemonic))
             {
                 parts.Add(separator);
-                parts.Add(MissingPart(Catalogue.ExpectedName.Message("a name after `::`")));
+                parts.Add(MissingPart(Catalog.ExpectedName.Message("a name after `::`")));
                 break;
             }
             parts.Add(separator);
@@ -232,10 +232,10 @@ internal sealed partial class Parser
         }
         else
         {
-            Report(Catalogue.ExpectedElementIndex);
+            Report(Catalog.ExpectedElementIndex);
             index = new ErrorExpressionSyntax(null);
         }
-        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, Catalogue.ExpectedBracket.Message(
+        return new ElementIndexSyntax(open, index, Expect(SyntaxKind.CloseBracket, Catalog.ExpectedBracket.Message(
             "`]`")));
     }
 
@@ -258,7 +258,7 @@ internal sealed partial class Parser
                 // `a && (b | c)` reads clearly enough that the language leaves `a && b | c` alone.
                 if (SyntaxFacts.IsLogicalOperator(op.Kind) && !SyntaxFacts.IsLogicalOperator(inner.Kind))
                     continue;
-                Report(operatorIndex, Catalogue.OperatorsNeedParentheses.Message(op.Text, inner.Text),
+                Report(operatorIndex, Catalog.OperatorsNeedParentheses.Message(op.Text, inner.Text),
                     new DiagnosticFix(FixKind.Parentheses));
                 return;
             }
@@ -267,7 +267,7 @@ internal sealed partial class Parser
         if (RightmostByteOperator(left) is { } byteOperator)
         {
             Report(operatorIndex,
-                Catalogue.ByteOperatorNeedsParentheses.Message(byteOperator.Text, op.Text, byteOperator.Text),
+                Catalog.ByteOperatorNeedsParentheses.Message(byteOperator.Text, op.Text, byteOperator.Text),
                 new DiagnosticFix(FixKind.Parentheses));
         }
     }

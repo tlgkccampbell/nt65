@@ -49,7 +49,7 @@ public sealed record ProjectSettings(
 
     /// <summary>
     /// Gets the severity at which each named diagnostic is reported, overriding the one the
-    /// catalogue gives it. A name mapped to null is not reported at all. An error is never
+    /// catalog gives it. A name mapped to null is not reported at all. An error is never
     /// lowered, and a project file that asks for that gets an error at the entry that asks.
     /// </summary>
     public IReadOnlyDictionary<string, Severity?> Severities { get; init; } = NoSeverities;
@@ -113,7 +113,7 @@ public sealed record ProjectSettings(
                 byName[link.Name] = link;
             return configured.Linked([.. byName.Values.OrderBy(link => link.Name, StringComparer.Ordinal)], FileDiagnostics);
         }
-        var message = Catalogue.ConfigurationUnknown.Message(name, Listed(Configurations));
+        var message = Catalog.ConfigurationUnknown.Message(name, Listed(Configurations));
         return this with { Diagnostics = [.. Diagnostics, new Diagnostic(given, message)] };
     }
 

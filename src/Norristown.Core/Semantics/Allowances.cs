@@ -51,7 +51,7 @@ internal sealed class Allowances
             .Where(allowance => !allowance.InMacroBody && !used.Contains(allowance))
             .Select(allowance => new Diagnostic(
                 allowance.Directive.Tree.GetSpan(allowance.Directive.Span),
-                Catalogue.AllowUnused.Message(
+                Catalog.AllowUnused.Message(
                     allowance.Name,
                     allowance.Covered.StartLine == allowance.Covered.EndLine ? "the line below it" : "the block below it"))
             {

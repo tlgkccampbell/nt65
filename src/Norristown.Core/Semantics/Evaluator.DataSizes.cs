@@ -403,7 +403,7 @@ internal sealed partial class Evaluator
         var from = Paths.Beside(directive.Tree.Path, path);
         if (binaryLength?.Invoke(from) is not { } length)
         {
-            Report(directive, Catalogue.IncbinUnreadable.Message(path));
+            Report(directive, Catalog.IncbinUnreadable.Message(path));
             return null;
         }
 
@@ -414,12 +414,12 @@ internal sealed partial class Evaluator
         {
             if (Evaluate(operands[1]).AsNumber() is not { } start)
             {
-                Report(operands[1], Catalogue.IncbinNotConstant.Message("offset"));
+                Report(operands[1], Catalog.IncbinNotConstant.Message("offset"));
                 return null;
             }
             if (start < 0 || start > length)
             {
-                Report(operands[1], Catalogue.IncbinOutOfRange.Message(path, $"offset {start}", length));
+                Report(operands[1], Catalog.IncbinOutOfRange.Message(path, $"offset {start}", length));
                 return null;
             }
             offset = start;
@@ -429,12 +429,12 @@ internal sealed partial class Evaluator
         {
             if (Evaluate(operands[2]).AsNumber() is not { } wanted)
             {
-                Report(operands[2], Catalogue.IncbinNotConstant.Message("length"));
+                Report(operands[2], Catalog.IncbinNotConstant.Message("length"));
                 return null;
             }
             if (wanted < 0 || wanted > bytes)
             {
-                Report(operands[2], Catalogue.IncbinOutOfRange.Message(
+                Report(operands[2], Catalog.IncbinOutOfRange.Message(
                     path, $"{wanted} {(wanted == 1 ? "byte" : "bytes")} from offset {offset}", length));
                 return null;
             }
@@ -495,7 +495,7 @@ internal sealed partial class Evaluator
         {
             if (Mapped(mapped, character) is not { } b)
             {
-                Report(operand, Catalogue.CharmapHasNoEntry.Message(charmap.Name, (char)character));
+                Report(operand, Catalog.CharmapHasNoEntry.Message(charmap.Name, (char)character));
                 return null;
             }
             bytes.Add(b);
@@ -640,16 +640,16 @@ internal sealed partial class Evaluator
             };
             if (valued is not null)
             {
-                Report(valued, Catalogue.MemberHasNoValue.Message(member.Name, spelled));
+                Report(valued, Catalog.MemberHasNoValue.Message(member.Name, spelled));
             }
             else if (element.Count is { Count: null } count)
             {
-                Report(count, Catalogue.MemberCountNotANumber.Message(member.Name, spelled));
+                Report(count, Catalog.MemberCountNotANumber.Message(member.Name, spelled));
             }
         }
         if (room is null)
         {
-            Report(member.DeclarationSpan, Catalogue.MemberReservesNothing.Message(member.Name), []);
+            Report(member.DeclarationSpan, Catalog.MemberReservesNothing.Message(member.Name), []);
             return null;
         }
 
@@ -683,7 +683,7 @@ internal sealed partial class Evaluator
     {
         if (size >= long.MinValue && size <= long.MaxValue)
             return (long)size;
-        Report(at, Catalogue.ArithmeticOverflow.Message("the room this data takes"));
+        Report(at, Catalog.ArithmeticOverflow.Message("the room this data takes"));
         return null;
     }
 

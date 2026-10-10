@@ -77,7 +77,7 @@ public sealed class Placements
                 {
                     // The misplaced `.place` still names the module, so the module is not also
                     // reported as placed nowhere.
-                    diagnostics.Add(new Diagnostic(tree.GetSpan(place.Keyword.Span), Catalogue.PlaceMisplaced));
+                    diagnostics.Add(new Diagnostic(tree.GetSpan(place.Keyword.Span), Catalog.PlaceMisplaced));
                     if (modules.TryGetValue(path, out var meant))
                         named.Add(meant.Path);
                     continue;
@@ -85,13 +85,13 @@ public sealed class Placements
                 var at = tree.GetSpan(place.Name.Span);
                 if (!modules.TryGetValue(path, out var target))
                 {
-                    diagnostics.Add(new Diagnostic(at, Catalogue.ModuleUnknown.Message(path)));
+                    diagnostics.Add(new Diagnostic(at, Catalog.ModuleUnknown.Message(path)));
                     continue;
                 }
                 named.Add(target.Path);
                 if (declared[target.Path] == ModulePlacement.Alone)
                 {
-                    diagnostics.Add(new Diagnostic(at, Catalogue.PlaceNotPlaceable.Message(path, path))
+                    diagnostics.Add(new Diagnostic(at, Catalog.PlaceNotPlaceable.Message(path, path))
                     {
                         Fix = new DiagnosticFix(FixKind.Placed, "placed", target.GetSpan(declarations[target.Path].Name.Span)),
                     });
@@ -100,13 +100,13 @@ public sealed class Placements
                 if (placedBy.TryGetValue(target.Path, out var already))
                 {
                     diagnostics.Add(new Diagnostic(
-                        at, Catalogue.PlacedTwice.Message(path, ModuleOf(already.Placer, declarations)),
+                        at, Catalog.PlacedTwice.Message(path, ModuleOf(already.Placer, declarations)),
                         [new RelatedSpan(already.Placer.GetSpan(already.At.Name.Span), "placed here")]));
                     continue;
                 }
                 if (Cycle(tree, target, placedBy, declarations) is { } cycle)
                 {
-                    diagnostics.Add(new Diagnostic(at, Catalogue.PlacementCycle.Message(cycle)));
+                    diagnostics.Add(new Diagnostic(at, Catalog.PlacementCycle.Message(cycle)));
                     continue;
                 }
                 placedBy[target.Path] = (tree, place);
@@ -125,7 +125,7 @@ public sealed class Placements
                 && PathOf(declarations[tree.Path].Name) is { } name)
             {
                 diagnostics.Add(new Diagnostic(
-                    tree.GetSpan(declarations[tree.Path].Name.Span), Catalogue.PlacedNowhere.Message(name, name)));
+                    tree.GetSpan(declarations[tree.Path].Name.Span), Catalog.PlacedNowhere.Message(name, name)));
             }
         }
 

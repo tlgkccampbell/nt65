@@ -1,13 +1,13 @@
 namespace Norristown.Tests;
 
 /// <summary>
-/// Pins the area of every catalogue entry. The area decides the heading that
+/// Pins the area of every catalog entry. The area decides the heading that
 /// <c>nt65 explain --markdown</c> prints an entry under, so moving an entry to another area
-/// should be a change made on purpose, here as well as in the catalogue.
+/// should be a change made on purpose, here as well as in the catalog.
 /// </summary>
-public sealed class CatalogueAreaTests
+public sealed class CatalogAreaTests
 {
-    // The areas in the order the catalogue declares them, each with its entries in name order.
+    // The areas in the order the catalog declares them, each with its entries in name order.
     private static readonly (string Area, string[] Ids)[] expected =
     [
         ("Reading a line",
@@ -185,10 +185,10 @@ public sealed class CatalogueAreaTests
     [Fact]
     public void EveryEntryIsInItsArea()
     {
-        Assert.Equal(expected.Select(area => area.Area), Catalogue.Areas.Select(area => area.Name));
+        Assert.Equal(expected.Select(area => area.Area), Catalog.Areas.Select(area => area.Name));
         foreach (var (area, ids) in expected)
         {
-            var actual = Catalogue.All.Where(entry => entry.Area.Name == area).Select(entry => entry.Id);
+            var actual = Catalog.All.Where(entry => entry.Area.Name == area).Select(entry => entry.Id);
             Assert.Equal(ids, actual);
         }
     }

@@ -94,7 +94,7 @@ public sealed class FlatNames
                 && other != symbol && other.QualifiedName != symbol.QualifiedName && other.Tree != symbol.Tree)
             {
                 diagnostics.Add(new Diagnostic(other.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Message(other.QualifiedName, $"`{symbol.QualifiedName}`", symbol.OutputName)));
+                    Catalog.OutputNameCollision.Message(other.QualifiedName, $"`{symbol.QualifiedName}`", symbol.OutputName)));
             }
             taken[symbol.OutputName] = symbol;
         }
@@ -114,7 +114,7 @@ public sealed class FlatNames
                     && (other.LinkerName is null || symbol.LinkerName is null))
                 {
                     diagnostics.Add(new Diagnostic(symbol.DeclarationSpan,
-                        Catalogue.OutputNameCollision.Message(symbol.QualifiedName, $"`{other.QualifiedName}`", name),
+                        Catalog.OutputNameCollision.Message(symbol.QualifiedName, $"`{other.QualifiedName}`", name),
                         [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
                 }
                 flat.names[symbol] = name;

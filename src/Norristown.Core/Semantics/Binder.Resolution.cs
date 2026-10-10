@@ -77,7 +77,7 @@ internal sealed partial class Binder
             {
                 if (use.Last)
                 {
-                    Report(token.Span, Catalogue.ModuleUsedAsAName.Message(place.Module, place.Module));
+                    Report(token.Span, Catalog.ModuleUsedAsAName.Message(place.Module, place.Module));
                     broken = true;
                 }
                 continue;
@@ -101,7 +101,7 @@ internal sealed partial class Binder
             }
             if (use.Splice && symbol.Parameter is not { Kind: ParameterKind.Block })
             {
-                Report(token.Span, Catalogue.NameAloneOnALine.Message(token.Text, symbol.KindPhrase));
+                Report(token.Span, Catalog.NameAloneOnALine.Message(token.Text, symbol.KindPhrase));
             }
         }
     }
@@ -128,7 +128,7 @@ internal sealed partial class Binder
         if (callee.Kind == SymbolKind.Charmap)
         {
             foreach (var argument in call.Arguments.Arguments.OfType<NamedArgumentSyntax>())
-                Report(argument.Name.Span, Catalogue.CharmapArgumentNamed.Message(callee.Name));
+                Report(argument.Name.Span, Catalog.CharmapArgumentNamed.Message(callee.Name));
             return;
         }
         if (callee.Kind != SymbolKind.Func || callee.Items.Count == 0)
@@ -153,19 +153,19 @@ internal sealed partial class Binder
         {
             if (use.Path)
             {
-                Report(token.Span, Catalogue.CheapLocalInAPath.Message(token.Text));
+                Report(token.Span, Catalog.CheapLocalInAPath.Message(token.Text));
                 return null;
             }
             var bare = token.Text[1..];
             var local = at.LookupCheapLocal(bare);
             if (local is null && InACalledBody(bare, cheap: true) is { } macro)
             {
-                Report(token.Span, Catalogue.NotDeclared.Message(token.Text, InTheBody(macro)));
+                Report(token.Span, Catalog.NotDeclared.Message(token.Text, InTheBody(macro)));
             }
             else if (local is null)
             {
                 var near = NearestName(at, bare, cheap: true);
-                Report(token.Span, Catalogue.NotDeclared.Message(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
+                Report(token.Span, Catalog.NotDeclared.Message(token.Text, Lookup.Suggesting(near is null ? null : "@" + near)));
                 if (near is not null)
                     Fixed(new DiagnosticFix(FixKind.NearestName, "@" + near));
             }
@@ -203,9 +203,9 @@ internal sealed partial class Binder
         if (container is null)
         {
             if (before.Symbol is { Kind: SymbolKind.AddressAlias, ValueExpression.Parent: DataDeclarationSyntax { Directive: null } })
-                Report(token.Span, Catalogue.FieldsNeedAStatedType.Message(before.Symbol.DisplayName));
+                Report(token.Span, Catalog.FieldsNeedAStatedType.Message(before.Symbol.DisplayName));
             else
-                Report(token.Span, Catalogue.NotAScope.Message(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
+                Report(token.Span, Catalog.NotAScope.Message(before.Symbol!.DisplayName, before.Symbol.KindPhrase));
             return null;
         }
 
@@ -218,7 +218,7 @@ internal sealed partial class Binder
             if (use.Last && at.Lookup(token.Text) is { Kind: SymbolKind.Binding } binding)
                 return new Resolution(binding);
             var near = Spelling.Nearest(token.Text, Lookup.Members(container));
-            Report(token.Span, Catalogue.NotDeclaredIn.Message(token.Text, $"`{container.Name}`", Lookup.Suggesting(near)));
+            Report(token.Span, Catalog.NotDeclaredIn.Message(token.Text, $"`{container.Name}`", Lookup.Suggesting(near)));
             if (near is not null)
                 Fixed(new DiagnosticFix(FixKind.NearestName, near));
             return null;
@@ -268,16 +268,16 @@ internal sealed partial class Binder
         var exporting = program.ModulesExporting(token.Text).ToList();
         if (exporting.Count == 0 && last && InACalledBody(token.Text, cheap: false) is { } macro)
         {
-            Report(token.Span, Catalogue.NotDeclared.Message(token.Text, InTheBody(macro)));
+            Report(token.Span, Catalog.NotDeclared.Message(token.Text, InTheBody(macro)));
             return;
         }
         var nearest = exporting.Count == 0 && last ? NearestName(at, token.Text, cheap: false) : null;
         Report(token.Span, exporting.Count > 0
-            ? Catalogue.DeclaredInAnotherModule.Message(
+            ? Catalog.DeclaredInAnotherModule.Message(
                 token.Text, exporting[0], exporting[0], token.Text, exporting[0], token.Text)
             : last
-                ? Catalogue.NotDeclared.Message(token.Text, Lookup.Suggesting(nearest))
-                : Catalogue.ModuleNotInTheBuild.Message(token.Text, token.Text));
+                ? Catalog.NotDeclared.Message(token.Text, Lookup.Suggesting(nearest))
+                : Catalog.ModuleNotInTheBuild.Message(token.Text, token.Text));
         if (exporting.Count > 0)
             Fixed(new DiagnosticFix(FixKind.Use, $"{exporting[0]}::{token.Text}"));
         else if (nearest is not null)
@@ -380,7 +380,7 @@ internal sealed partial class Binder
         // reported later would not be.
         if (!last || symbol.Tree == tree || symbol.IsExported || dropping || !unexported.Add(symbol))
             return symbol;
-        Report(token.Span, Catalogue.NotExported.Message(symbol.PathName, symbol.Module),
+        Report(token.Span, Catalog.NotExported.Message(symbol.PathName, symbol.Module),
             new RelatedSpan(symbol.DeclarationSpan, "declared here"));
         Fixed(new DiagnosticFix(FixKind.Export, symbol.QualifiedName, symbol.DeclarationSpan));
         return symbol;
@@ -414,7 +414,7 @@ internal sealed partial class Binder
         {
             if (statement.IsExported)
             {
-                Report(statement.Span, Catalogue.ReexportStar);
+                Report(statement.Span, Catalog.ReexportStar);
             }
             else if (target.Module is { } name && program.ModuleNamed(name) is { } module)
             {
@@ -422,7 +422,7 @@ internal sealed partial class Binder
             }
             else
             {
-                Report(path[^1].Span, Catalogue.UseStarNotAModule.Message(
+                Report(path[^1].Span, Catalog.UseStarNotAModule.Message(
                     target.Module ?? target.Symbol!.PathName,
                     path[^1].Text,
                     (target.Module is null ? "not a module" : "only the start of a module's name")));
@@ -451,18 +451,18 @@ internal sealed partial class Binder
     {
         if (exported && target.Symbol is null)
         {
-            Report(name.Span, Catalogue.ReexportModule.Message(target.Module));
+            Report(name.Span, Catalog.ReexportModule.Message(target.Module));
             return;
         }
         if (renamed && target.Symbol is { } symbol)
             references.Add(new SymbolReference(symbol, name.Span, true, IsAlias: true, InUse: true));
         if (fileScope.FindMember(name.Text) is { } local)
         {
-            Report(name.Span, Catalogue.UseCollidesWithDeclaration.Message(
+            Report(name.Span, Catalog.UseCollidesWithDeclaration.Message(
                 name.Text), new RelatedSpan(local.DeclarationSpan, "declared here"));
             return;
         }
         if (!used.TryAdd(name.Text, new BroughtName(target.Symbol, target.Module, name.Span, exported)))
-            Report(name.Span, Catalogue.UseBringsInTwice.Message(name.Text));
+            Report(name.Span, Catalog.UseBringsInTwice.Message(name.Text));
     }
 }

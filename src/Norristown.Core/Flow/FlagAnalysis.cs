@@ -569,7 +569,7 @@ internal sealed class FlagAnalysis : IKnownFlags
         // The fix promises the value only where the routine returns the flag with it on every
         // path, and not where it merely passes on what this caller set.
         report.Add(Expansion.Problem(
-            model.Tree, step.Statement, step.On, null, Catalogue.UnpromisedFlag.Message(what, origin.DisplayName, item, why),
+            model.Tree, step.Statement, step.On, null, Catalog.UnpromisedFlag.Message(what, origin.DisplayName, item, why),
             exits.Of(origin).Values.ValueOf(flag) == value ? new DiagnosticFix(FixKind.Exit, item, origin.DeclarationSpan) : null));
     }
 
@@ -590,7 +590,7 @@ internal sealed class FlagAnalysis : IKnownFlags
                 continue;
             }
             Report(report, call, call.Statement,
-                Catalogue.CallFlagMismatch.Message(callee.DisplayName, FlagValues.Item(flag, value), Said(flag, state)),
+                Catalog.CallFlagMismatch.Message(callee.DisplayName, FlagValues.Item(flag, value), Said(flag, state)),
                 Ensuring(flag, value));
         }
     }
@@ -618,7 +618,7 @@ internal sealed class FlagAnalysis : IKnownFlags
                 ? Said(flag, state)
                 : $"`{into.DisplayName}`, which it hands control to, returns with {returned}";
             Report(report, end, end.Statement,
-                Catalogue.ReturnFlagMismatch.Message(routine.DisplayName, FlagValues.Item(flag, value), why),
+                Catalog.ReturnFlagMismatch.Message(routine.DisplayName, FlagValues.Item(flag, value), why),
                 into is null ? Ensuring(flag, value) : null);
         }
     }
@@ -647,7 +647,7 @@ internal sealed class FlagAnalysis : IKnownFlags
             if (wrong.Count > 0)
             {
                 Report(report, step, item.Node,
-                    Catalogue.StateFlagMismatch.Message(item.Text, string.Join(" and ", wrong)),
+                    Catalog.StateFlagMismatch.Message(item.Text, string.Join(" and ", wrong)),
                     new DiagnosticFix(FixKind.StateItem, fixedValues.ToString()));
             }
         }
@@ -668,7 +668,7 @@ internal sealed class FlagAnalysis : IKnownFlags
             if (item.IsResult || Value(step, item) is not { } value
                 || FlagValues.Named.Any(flag => (item.Flags & flag) != 0 && !Ensurable(flag, value)))
             {
-                Report(report, step, item.Node, Catalogue.EnsureItemNotAWidth.Message(item.Text), null);
+                Report(report, step, item.Node, Catalog.EnsureItemNotAWidth.Message(item.Text), null);
             }
         }
     }

@@ -96,7 +96,7 @@ public sealed partial class CodeLayout
             (BytePosition, Step)? Invalid(string why)
             {
                 if (report)
-                    Report(directive, Catalogue.LabelPositionInvalid.Message(directive.Name.Text, why));
+                    Report(directive, Catalog.LabelPositionInvalid.Message(directive.Name.Text, why));
                 return null;
             }
         }
@@ -182,7 +182,7 @@ public sealed partial class CodeLayout
 
             HiddenPath? Unfollowed(string why)
             {
-                Report(inside.Directive, Catalogue.HiddenPathUnfollowed.Message(name, why));
+                Report(inside.Directive, Catalog.HiddenPathUnfollowed.Message(name, why));
                 return null;
             }
         }

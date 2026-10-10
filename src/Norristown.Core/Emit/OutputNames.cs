@@ -130,7 +130,7 @@ internal static class OutputNames
             if (names.Claimed(name) is { } other)
             {
                 diagnostics.Add(new Diagnostic(owner.DeclarationSpan,
-                    Catalogue.OutputNameCollision.Message(other.QualifiedName, $"{what} `{owner.QualifiedName}`", name),
+                    Catalog.OutputNameCollision.Message(other.QualifiedName, $"{what} `{owner.QualifiedName}`", name),
                     [new RelatedSpan(other.DeclarationSpan, "the other declaration")]));
             }
             names.Claim(name);

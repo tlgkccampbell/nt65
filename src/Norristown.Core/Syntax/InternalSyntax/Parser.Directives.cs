@@ -12,14 +12,14 @@ internal sealed partial class Parser
     private static (DiagnosticMessage Message, string? Replacement)? Replaced(string directive) => directive.ToLowerInvariant() switch
     {
         ".zeropage" or ".code" or ".bss" or ".rodata" =>
-            (Catalogue.Ca65Spelling.Message(directive, $".segment {directive[1..].ToUpperInvariant()}"),
+            (Catalog.Ca65Spelling.Message(directive, $".segment {directive[1..].ToUpperInvariant()}"),
                 $".segment {directive[1..].ToUpperInvariant()}"),
-        ".tag" => (Catalogue.Ca65Tag.Message(), ".type"),
-        ".asciiz" => (Catalogue.Ca65Spelling.Message(directive, ".strz"), ".strz"),
-        ".dbyt" => (Catalogue.Ca65Spelling.Message(directive, ".beword"), ".beword"),
+        ".tag" => (Catalog.Ca65Tag.Message(), ".type"),
+        ".asciiz" => (Catalog.Ca65Spelling.Message(directive, ".strz"), ".strz"),
+        ".dbyt" => (Catalog.Ca65Spelling.Message(directive, ".beword"), ".beword"),
         ".endproc" or ".endscope" or ".endmacro" or ".endstruct" or ".endunion" or ".endenum"
             or ".endif" or ".endrep" or ".endrepeat" =>
-            (Catalogue.Ca65BlockEnd.Message(directive), "}"),
+            (Catalog.Ca65BlockEnd.Message(directive), "}"),
         _ => null,
     };
 
@@ -34,10 +34,10 @@ internal sealed partial class Parser
         if (ParseDirective(SyntaxFacts.LineDirectiveKind(Current.DirectiveKind)) is { } statement)
             return Finish(statement);
         if (Current.DirectiveKind is DirectiveKind.ElseIf or DirectiveKind.Else)
-            return ErrorLine(Catalogue.ElseIfMisplaced.Message(Current.Text));
+            return ErrorLine(Catalog.ElseIfMisplaced.Message(Current.Text));
         return Replaced(Current.Text) is { } instead
             ? ErrorLine(instead.Message, Spelling(instead, wholeLine: true))
-            : ErrorLine(Catalogue.DirectiveUnknown.Message(Current.Text));
+            : ErrorLine(Catalog.DirectiveUnknown.Message(Current.Text));
     }
 
     /// <summary>
@@ -148,7 +148,7 @@ internal sealed partial class Parser
         var comma = Advance();
         if (AtName)
             return (comma, Advance());
-        Report(Catalogue.ExpectedName.Message(what));
+        Report(Catalog.ExpectedName.Message(what));
         return (comma, null);
     }
 
@@ -170,7 +170,7 @@ internal sealed partial class Parser
         GreenToken? levelComma = null;
         if (AtName && SyntaxFacts.IsAssertLevel(Current.Text))
         {
-            Report(Catalogue.AssertLevel.Message(Current.Text),
+            Report(Catalog.AssertLevel.Message(Current.Text),
                 new DiagnosticFix(FixKind.AssertLevel));
             level = Advance();
             if (Kind != SyntaxKind.Comma)
@@ -202,7 +202,7 @@ internal sealed partial class Parser
     {
         if (!AtEnd)
             return ParseExpression();
-        Report(Catalogue.ExpectedText.Message("the message: text in quotes, a text constant or a call that returns text"));
+        Report(Catalog.ExpectedText.Message("the message: text in quotes, a text constant or a call that returns text"));
         return null;
     }
 
@@ -234,11 +234,11 @@ internal sealed partial class Parser
                 return new NextDirectiveSyntax(keyword, null, returns, unknown, count, null, null, ParseItemsBrace(keyword, listed: true));
             var comma = Advance();
             var after = ParseSeparatedList(
-                () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at")));
+                () => ParseTarget(Catalog.ExpectedLabel.Message("a label flow continues at")));
             return new NextDirectiveSyntax(keyword, null, returns, unknown, count, comma, after, ParseItemsBrace(keyword, listed: true));
         }
         var targets = ParseSeparatedList(
-            () => ParseTarget(Catalogue.ExpectedLabel.Message("a label flow continues at, `?` or `.return`")));
+            () => ParseTarget(Catalog.ExpectedLabel.Message("a label flow continues at, `?` or `.return`")));
         return new NextDirectiveSyntax(keyword, null, null, null, null, null, targets, ParseItemsBrace(keyword, targets is not null));
     }
 
@@ -250,7 +250,7 @@ internal sealed partial class Parser
     {
         var keyword = Advance();
         return new FallthroughDirectiveSyntax(
-            keyword, ParseTarget(Catalogue.ExpectedLabel.Message("the routine flow runs into")));
+            keyword, ParseTarget(Catalog.ExpectedLabel.Message("the routine flow runs into")));
     }
 
     /// <summary>
@@ -281,8 +281,8 @@ internal sealed partial class Parser
     private GreenNode ParseFrame()
     {
         var keyword = Advance();
-        var name = Expect(SyntaxKind.Identifier, Catalogue.ExpectedName.Message("a name for the frame"));
-        var colon = Expect(SyntaxKind.Colon, Catalogue.ExpectedColon.Message(
+        var name = Expect(SyntaxKind.Identifier, Catalog.ExpectedName.Message("a name for the frame"));
+        var colon = Expect(SyntaxKind.Colon, Catalog.ExpectedColon.Message(
             "`:` and the struct the frame is laid out as"));
 
         // The struct comes after the `:`, so a line without the colon has no struct to read.
@@ -297,12 +297,12 @@ internal sealed partial class Parser
     private GreenNode ParsePatch()
     {
         var keyword = Advance();
-        var target = ParseTarget(Catalogue.ExpectedLabel.Message("the label of the instruction being written to"));
+        var target = ParseTarget(Catalog.ExpectedLabel.Message("the label of the instruction being written to"));
         if (!AtWord("as"))
             return new PatchDirectiveSyntax(keyword, target, null, null);
         var asKeyword = Advance();
         var variants = ParseSeparatedList(
-            () => ParseTarget(Catalogue.ExpectedLabel.Message("an instruction the store can write, such as `dex`")));
+            () => ParseTarget(Catalog.ExpectedLabel.Message("an instruction the store can write, such as `dex`")));
         return new PatchDirectiveSyntax(keyword, target, asKeyword, variants);
     }
 
@@ -315,8 +315,8 @@ internal sealed partial class Parser
         var keyword = Advance();
         var name = Kind is SyntaxKind.Identifier or SyntaxKind.CheapLocal
             ? Advance()
-            : Expect(SyntaxKind.Identifier, Catalogue.ExpectedName.Message("a name for the position"));
-        var equals = Expect(SyntaxKind.Equals, Catalogue.ExpectedEquals.Message(
+            : Expect(SyntaxKind.Identifier, Catalog.ExpectedName.Message("a name for the position"));
+        var equals = Expect(SyntaxKind.Equals, Catalog.ExpectedEquals.Message(
             "`=` and a position inside an instruction, such as `@op + 1`"));
         return new LabelDirectiveSyntax(keyword, name, equals, equals.IsMissing ? null : ParseExpression());
     }
@@ -330,7 +330,7 @@ internal sealed partial class Parser
         var keyword = Advance();
         if (AtEnd)
         {
-            Report(Catalogue.ExpectedExpression);
+            Report(Catalog.ExpectedExpression);
             return new EncodedDirectiveSyntax(keyword, null);
         }
         return new EncodedDirectiveSyntax(keyword, ParseExpression());
@@ -343,13 +343,13 @@ internal sealed partial class Parser
     private GreenNode ParseAllow()
     {
         var keyword = Advance();
-        var name = Expect(SyntaxKind.StringLiteral, Catalogue.ExpectedText.Message(
+        var name = Expect(SyntaxKind.StringLiteral, Catalog.ExpectedText.Message(
             "the name of the warning, in quotes"));
         if (Kind != SyntaxKind.Comma)
             return new AllowDirectiveSyntax(keyword, name, null, null);
         var comma = Advance();
         return new AllowDirectiveSyntax(keyword, name, comma, Expect(SyntaxKind.StringLiteral,
-            Catalogue.ExpectedText.Message("the reason, in quotes")));
+            Catalog.ExpectedText.Message("the reason, in quotes")));
     }
 
     /// <summary>

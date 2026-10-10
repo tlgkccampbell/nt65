@@ -48,7 +48,7 @@ internal sealed class Requirements
     public static void Check(SemanticModel model, CodeLayout layout, ControlFlow flow, List<Diagnostic> diagnostics)
     {
         var requirements = new Requirements(model, layout, flow,
-            [.. diagnostics.Where(d => d.Id == Catalogue.RunsIntoData.Id)
+            [.. diagnostics.Where(d => d.Id == Catalog.RunsIntoData.Id)
                 .SelectMany(d => d.Related.Select(related => related.Span).Prepend(d.Span))]);
         requirements.Collect();
         foreach (var region in flow.Regions)
@@ -80,8 +80,8 @@ internal sealed class Requirements
             ? "where the branch is always taken, add a `.next` naming its own target; otherwise " + otherwise
             : otherwise + ", or use `.next ?` where that cannot be named";
         return own
-            ? Catalogue.RoutineRunsOffTheEnd.Message(routine, "its end", "is emitted after it", fix)
-            : Catalogue.RoutineRunsOffTheEnd.Message(routine, "the end of a segment block", "that segment holds next", fix);
+            ? Catalog.RoutineRunsOffTheEnd.Message(routine, "its end", "is emitted after it", fix)
+            : Catalog.RoutineRunsOffTheEnd.Message(routine, "the end of a segment block", "that segment holds next", fix);
     }
 
     /// <summary>
@@ -227,15 +227,15 @@ internal sealed class Requirements
         switch (Transfers.Of(statement, mode))
         {
             case Transfer.Elsewhere when Instructions.IsCall(statement.MnemonicKind):
-                Report(statement, step.On, Catalogue.IndirectCallUnchecked.Message(Quoted(statement)));
+                Report(statement, step.On, Catalog.IndirectCallUnchecked.Message(Quoted(statement)));
                 break;
 
             case Transfer.Elsewhere:
-                Report(statement, step.On, Catalogue.IndirectJumpUnchecked.Message(Quoted(statement)), EndPath(step));
+                Report(statement, step.On, Catalog.IndirectJumpUnchecked.Message(Quoted(statement)), EndPath(step));
                 break;
 
             case Transfer.Return when statement.MnemonicKind is MnemonicKind.Rts or MnemonicKind.Rtl && PushesCode(block):
-                Report(statement, step.On, Catalogue.PushedReturnUnchecked.Message(SyntaxFacts.TextOf(statement.MnemonicKind)));
+                Report(statement, step.On, Catalog.PushedReturnUnchecked.Message(SyntaxFacts.TextOf(statement.MnemonicKind)));
                 break;
 
             case Transfer.Jump or Transfer.Branch when flow.RelativeCallAt(step) is null:
@@ -262,7 +262,7 @@ internal sealed class Requirements
     {
         if (OffsetFromBranch(target, step.On) is not { } offset)
         {
-            Report(statement, step.On, Catalogue.ComputedBranchUnchecked.Message(
+            Report(statement, step.On, Catalog.ComputedBranchUnchecked.Message(
                 Quoted(statement), "a computed address", "write the label it goes to as its operand"));
             return;
         }
@@ -290,7 +290,7 @@ internal sealed class Requirements
                 : new DiagnosticFix(FixKind.LandingLabel, FreeLabel(step.Routine),
                     instruction.Statement.Tree.GetSpan(instruction.Statement.Span));
         }
-        Report(statement, step.On, Catalogue.ComputedBranchUnchecked.Message(Quoted(statement), written, why), fix);
+        Report(statement, step.On, Catalog.ComputedBranchUnchecked.Message(Quoted(statement), written, why), fix);
     }
 
     /// <summary>
@@ -396,7 +396,7 @@ internal sealed class Requirements
                 if (branch)
                     ReportComputedBranch(step, statement, targetExpression);
                 else
-                    Report(statement, step.On, Catalogue.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
+                    Report(statement, step.On, Catalog.ComputedJumpUnchecked.Message(Quoted(statement)), EndPath(step));
             }
             return;
         }
@@ -405,7 +405,7 @@ internal sealed class Requirements
         {
             if (!calls)
             {
-                Report(statement, step.On, Catalogue.JumpTargetNotALabel.Message(
+                Report(statement, step.On, Catalog.JumpTargetNotALabel.Message(
                     Quoted(statement), symbol.DisplayName, symbol.KindPhrase,
                     branch ? "write the label it goes to as its operand"
                         : "add a `.next` naming the labels it reaches, or `.next ?` where they cannot be named"),
@@ -420,7 +420,7 @@ internal sealed class Requirements
         if (!labeled.IsCode && DataAt(labeled) is { } data
             && (!labeled.Block.IsDeclared || flow.AnnotationsOf(data).All(a => a is not NextDirectiveSyntax)))
         {
-            Report(statement, step.On, Catalogue.JumpIntoData.Message(symbol.DisplayName));
+            Report(statement, step.On, Catalog.JumpIntoData.Message(symbol.DisplayName));
         }
     }
 
@@ -572,7 +572,7 @@ internal sealed class Requirements
                         .Any(target => Targets.Of(model, target, step.On)?.Symbol == symbol);
                     if (!patched && !flow.CoveredStores.Contains(step.Key))
                     {
-                        Report(statement, step.On, Catalogue.SelfModifyingUnchecked.Message(
+                        Report(statement, step.On, Catalog.SelfModifyingUnchecked.Message(
                             Quoted(statement), symbol.DisplayName, symbol.DisplayName));
                     }
                     continue;
@@ -590,11 +590,11 @@ internal sealed class Requirements
                 var routine = labeled.Region.Routine.DisplayName;
                 if (labeled.Block.Steps is [var first, ..] && layout.HiddenPathAt(first) is not null)
                 {
-                    Report(name, step.On, Catalogue.CodeLabelAsData.Message(
+                    Report(name, step.On, Catalog.CodeLabelAsData.Message(
                         symbol.DisplayName, $"name it in a `.next` in `{routine}`"));
                     continue;
                 }
-                Report(name, step.On, Catalogue.CodeLabelAsData.Message(
+                Report(name, step.On, Catalog.CodeLabelAsData.Message(
                         symbol.DisplayName, $"add a `.state` after the label, or name it in a `.next` in `{routine}`"),
                     new DiagnosticFix(FixKind.State, At: symbol.DeclarationSpan));
             }
@@ -616,7 +616,7 @@ internal sealed class Requirements
                 continue;
             }
             foreach (var next in flow.AnnotationsOf(step).OfType<NextDirectiveSyntax>())
-                Report(next, step.On, Catalogue.NextAfterPadding.Message(padding.GetText().Trim(), fill.WhyNot()));
+                Report(next, step.On, Catalog.NextAfterPadding.Message(padding.GetText().Trim(), fill.WhyNot()));
         }
     }
 

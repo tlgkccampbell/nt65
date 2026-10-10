@@ -208,7 +208,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <param name="tree">The file that holds the text with the problem.</param>
     /// <param name="span">The text with the problem.</param>
     /// <param name="at">The expansion the text was found in.</param>
-    /// <param name="severity">The severity, or null for the one the catalogue gives.</param>
+    /// <param name="severity">The severity, or null for the one the catalog gives.</param>
     /// <param name="message">The message.</param>
     /// <param name="fix">The change the message names, offered only where the text is reported.</param>
     public static Diagnostic Problem(
@@ -235,7 +235,7 @@ public sealed class Expansion : IEquatable<Expansion>
     /// <param name="file">The file whose analysis found the problem.</param>
     /// <param name="node">The line, or a part of it, that has the problem.</param>
     /// <param name="at">The expansion the node was found in.</param>
-    /// <param name="severity">The severity, or null for the one the catalogue gives.</param>
+    /// <param name="severity">The severity, or null for the one the catalog gives.</param>
     /// <param name="message">The message.</param>
     /// <param name="fix">The change the message names, offered only where the node is reported.</param>
     public static Diagnostic Problem(

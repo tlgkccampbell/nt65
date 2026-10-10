@@ -47,7 +47,7 @@ internal static class Blocks
         void PopUnclosed()
         {
             var opener = stack[^1].Line;
-            errors.Add(new Error(opener, lines[opener].Tokens.Length - 2, Catalogue.BlockNotClosed));
+            errors.Add(new Error(opener, lines[opener].Tokens.Length - 2, Catalog.BlockNotClosed));
             Pop(hasCloser: false);
         }
 
@@ -68,7 +68,7 @@ internal static class Blocks
             {
                 if (stack.Count == 0)
                 {
-                    errors.Add(new Error(i, 0, Catalogue.UnmatchedBrace));
+                    errors.Add(new Error(i, 0, Catalog.UnmatchedBrace));
                 }
                 else if (line.Opens)
                 {

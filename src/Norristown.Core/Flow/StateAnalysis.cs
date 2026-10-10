@@ -527,12 +527,12 @@ public sealed class StateAnalysis : IProcessorStates
                 continue;
             if (item.Part is not (StatePart.A or StatePart.Index) || !StateChecks.IsKnown(item.Width))
             {
-                report?.ReportAt(item.Node, step, Catalogue.EnsureItemNotAWidth.Message(item.Text));
+                report?.ReportAt(item.Node, step, Catalog.EnsureItemNotAWidth.Message(item.Text));
                 continue;
             }
             if (item.Width == Width.Sixteen && processor.E != ProcessorMode.Native)
             {
-                report?.ReportAt(item.Node, step, Catalogue.EnsureNeedsNative.Message(
+                report?.ReportAt(item.Node, step, Catalog.EnsureNeedsNative.Message(
                     item.Text,
                     processor.E == ProcessorMode.Emulation
                         ? "the processor is in emulation mode here, where both widths are 8 bits"
@@ -562,7 +562,7 @@ public sealed class StateAnalysis : IProcessorStates
                 continue;
             }
             yield return new Diagnostic(model.Tree.GetSpan(at),
-                Catalogue.ExportedEntryNotDeclared.Message(label.DisplayName, owner.DisplayName))
+                Catalog.ExportedEntryNotDeclared.Message(label.DisplayName, owner.DisplayName))
             {
                 Fix = new DiagnosticFix(FixKind.State, At: label.DeclarationSpan),
             };
@@ -586,7 +586,7 @@ public sealed class StateAnalysis : IProcessorStates
             }
             yield return Expansion.Problem(
                 model.Tree, label.Tree, label.NameSpan, block.On, Severity.Error,
-                Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+                Catalog.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
                 new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
         }
     }
@@ -599,7 +599,7 @@ public sealed class StateAnalysis : IProcessorStates
     private void ReportEntry(Step step, Symbol label, Symbol owner, StateChecks report)
     {
         entriesReported.Add(label);
-        report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+        report.Report(step, Catalog.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
             new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
     }
 
@@ -1350,7 +1350,7 @@ public sealed class StateAnalysis : IProcessorStates
             && (declared & StateParts.ProgramBank) != 0 && !bank.Meets(needed))
         {
             var register = StateRegister.ProgramBank;
-            report.Report(step, Catalogue.CallStateMismatch.Message(
+            report.Report(step, Catalog.CallStateMismatch.Message(
                 $"`{step.Statement.GetText().Trim()}`",
                 $"`{needed.Format(register)}`",
                 bank.IsBounded ? $"control reaches it in bank {bank.Describe(register.Digits)}" : "the bank control reaches it in is not known"));
@@ -1556,7 +1556,7 @@ public sealed class StateAnalysis : IProcessorStates
             if (item.IsUnchanged || item.Part is StatePart.Distance or StatePart.Inline or StatePart.Pushed or StatePart.Pulls
                 or StatePart.Interrupt or StatePart.NoReturn or StatePart.Set or StatePart.ProgramBank)
             {
-                report?.ReportAt(item.Node, step, Catalogue.StateItemNotAPoint.Message(item.Text));
+                report?.ReportAt(item.Node, step, Catalog.StateItemNotAPoint.Message(item.Text));
                 continue;
             }
             switch (item.Part)
@@ -1570,7 +1570,7 @@ public sealed class StateAnalysis : IProcessorStates
                 case StatePart.E:
                     if (StateChecks.IsKnown(item.Mode) && StateChecks.IsKnown(processor.E) && item.Mode != processor.E)
                     {
-                        report?.ReportAt(item.Node, step, Catalogue.StateModeMismatch.Message(
+                        report?.ReportAt(item.Node, step, Catalog.StateModeMismatch.Message(
                             item.Text, StateChecks.Mode(processor.E)),
                             new DiagnosticFix(FixKind.StateItem, ProcessorState.Format(processor.E)));
                     }
@@ -1597,7 +1597,7 @@ public sealed class StateAnalysis : IProcessorStates
         if (processor.E == ProcessorMode.Emulation)
         {
             if (processor.A == Width.Sixteen || processor.Index == Width.Sixteen)
-                report?.Report(step, Catalogue.WidthInEmulation.Message("a 16-bit width"));
+                report?.Report(step, Catalog.WidthInEmulation.Message("a 16-bit width"));
             processor = processor with { A = Width.Eight, Index = Width.Eight };
         }
         return state with { Processor = processor };
@@ -1610,19 +1610,19 @@ public sealed class StateAnalysis : IProcessorStates
                 return StateValue.Unknown;
             if (model.ValueOf(expression, step.On).AsNumber() is not { } value)
             {
-                report?.ReportAt(expression, step, Catalogue.StateValueNotConstant.Message(item.Text, register.Name));
+                report?.ReportAt(expression, step, Catalog.StateValueNotConstant.Message(item.Text, register.Name));
                 return StateValue.Unknown;
             }
             if (value < 0 || value > register.Maximum)
             {
-                report?.ReportAt(expression, step, Catalogue.StateValueOutOfRange.Message(
+                report?.ReportAt(expression, step, Catalog.StateValueOutOfRange.Message(
                     item.Text, register.Range));
                 return StateValue.Unknown;
             }
             if (here.IsBounded && !here.Values.Contains(value))
             {
                 report?.ReportAt(item.Node, step,
-                    Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)),
+                    Catalog.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)),
                     new DiagnosticFix(FixKind.StateItem, here.Format(register)));
             }
             return StateValue.Of(value);
@@ -1633,17 +1633,17 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (register == StateRegister.DirectPage)
             {
-                report?.ReportAt(item.Node, step, Catalogue.StateBanksNotDbr.Message(item.Text, "`dp` takes one address"));
+                report?.ReportAt(item.Node, step, Catalog.StateBanksNotDbr.Message(item.Text, "`dp` takes one address"));
                 return StateValue.Unknown;
             }
             if (item.BanksOf(expression => model.ValueOf(expression, step.On).AsNumber(), out var invalid) is not { } banks)
             {
-                report?.ReportAt(invalid!, step, Catalogue.StateBanksInvalid.Message(item.Text));
+                report?.ReportAt(invalid!, step, Catalog.StateBanksInvalid.Message(item.Text));
                 return StateValue.Unknown;
             }
             if (here.Narrowed(banks) is { } narrowed)
                 return narrowed;
-            report?.ReportAt(item.Node, step, Catalogue.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)),
+            report?.ReportAt(item.Node, step, Catalog.StateValueMismatch.Message(item.Text, register.Name, here.Describe(register.Digits)),
                 new DiagnosticFix(FixKind.StateItem, here.Format(register)));
             return StateValue.Among(banks);
         }
@@ -1652,7 +1652,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (StateChecks.IsKnown(item.Width) && StateChecks.IsKnown(here) && item.Width != here)
             {
-                report?.ReportAt(item.Node, step, Catalogue.StateWidthMismatch.Message(
+                report?.ReportAt(item.Node, step, Catalog.StateWidthMismatch.Message(
                     item.Text, register.Name, register.Is, StateChecks.Format(here)),
                     new DiagnosticFix(FixKind.StateItem, ProcessorState.Format(register, here)));
             }
@@ -1674,17 +1674,17 @@ public sealed class StateAnalysis : IProcessorStates
         if (directive.Type is not { } type
             || model.SymbolOf(type) is not { IsLayout: true, Size: { } size })
         {
-            report?.Report(step, Catalogue.FrameNotARecord.Message(frame.DisplayName));
+            report?.Report(step, Catalog.FrameNotARecord.Message(frame.DisplayName));
             return state;
         }
         if (state.Stack is not { } stack)
         {
-            report?.Report(step, Catalogue.FrameStackUnknown.Message(frame.DisplayName, size, Cause.Because(state.WhyStack)));
+            report?.Report(step, Catalog.FrameStackUnknown.Message(frame.DisplayName, size, Cause.Because(state.WhyStack)));
             return state with { Stack = AnalysisStack.OnlyFrame(frame, (int)size) };
         }
         if (stack.Framed(frame, (int)size) is { } framed)
             return state with { Stack = framed };
-        report?.Report(step, Catalogue.FramePastTheStack.Message(frame.DisplayName, size, stack.Depth));
+        report?.Report(step, Catalog.FramePastTheStack.Message(frame.DisplayName, size, stack.Depth));
         return state;
     }
 
@@ -1709,17 +1709,17 @@ public sealed class StateAnalysis : IProcessorStates
             if (mode is not (AddressingMode.StackRelative or AddressingMode.StackRelativeIndirectY)
                 || name.Parent is not OperandSyntax)
             {
-                report.ReportAt(name, step, Catalogue.FrameMemberNotStackRelative.Message(text, text));
+                report.ReportAt(name, step, Catalog.FrameMemberNotStackRelative.Message(text, text));
                 continue;
             }
             if (stack is null)
             {
-                report.ReportAt(name, step, Catalogue.FrameDepthUnknown.Message(text, Cause.Because(state.WhyStack)));
+                report.ReportAt(name, step, Catalog.FrameDepthUnknown.Message(text, Cause.Because(state.WhyStack)));
                 continue;
             }
             if (stack.Above(frame) is not { } above)
             {
-                report.ReportAt(name, step, Catalogue.FrameGone.Message(text, frame.DisplayName));
+                report.ReportAt(name, step, Catalog.FrameGone.Message(text, frame.DisplayName));
                 continue;
             }
             var size = frame.TypeExpression is { } type ? model.SymbolOf(type)?.Size ?? 0 : 0;
@@ -1760,7 +1760,7 @@ public sealed class StateAnalysis : IProcessorStates
                 return state;
             var found = AtCall(before, splicing);
             if (found != processor)
-                report?.Report(step, Catalogue.BlockChangesState.Message(owner.DisplayName, found, processor));
+                report?.Report(step, Catalog.BlockChangesState.Message(owner.DisplayName, found, processor));
             return state with
             {
                 Processor = new ProcessorState(

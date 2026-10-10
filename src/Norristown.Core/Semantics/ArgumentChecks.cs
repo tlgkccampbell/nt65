@@ -54,7 +54,7 @@ public static class ArgumentChecks
                     if (given is { } number && number >= range.Low && number <= range.High)
                         break;
                     passed = false;
-                    report(value, Catalogue.ConstArgumentOutOfRange.Message(
+                    report(value, Catalog.ConstArgumentOutOfRange.Message(
                         name, accepts.Low!.GetText().Trim(), accepts.High!.GetText().Trim(),
                         given is { } wrong ? $"this is {wrong}" : "this is not a constant"));
                     break;
@@ -63,7 +63,7 @@ public static class ArgumentChecks
                     if (model.MemberOf(accepts, value, caller) is null)
                     {
                         passed = false;
-                        report(value, Catalogue.EnumArgumentNotAMember.Message(
+                        report(value, Catalog.EnumArgumentNotAMember.Message(
                             name, named.Name, $"`{value.GetText().Trim()}` is not one"));
                     }
                     break;
@@ -73,7 +73,7 @@ public static class ArgumentChecks
                         && !accepts.Words.Contains(mode.Mode) && (mode.Direct is not { } direct || !accepts.Words.Contains(direct)))
                     {
                         passed = false;
-                        report(value, Catalogue.OperandArgumentMode.Message(
+                        report(value, Catalog.OperandArgumentMode.Message(
                             name, Format(accepts.Words), mode.Direct ?? mode.Mode));
                     }
                     break;
@@ -102,11 +102,11 @@ public static class ArgumentChecks
             {
                 case ParameterKind.Const when accepts is { Low: { } low, High: { } high }:
                     if (valueOf(low) is not { } minimum || valueOf(high) is not { } maximum || minimum > maximum)
-                        report(low.Parent!.Span, Catalogue.ParameterRangeInvalid.Message(accepts.ToString()));
+                        report(low.Parent!.Span, Catalog.ParameterRangeInvalid.Message(accepts.ToString()));
                     break;
                 case ParameterKind.Enum when accepts.Enum is { } name:
                     if (symbolOf(name) is { Kind: not SymbolKind.Enum } other)
-                        report(name.Span, Catalogue.ParameterKindNotAnEnum.Message(name.GetText().Trim(), other.KindPhrase));
+                        report(name.Span, Catalog.ParameterKindNotAnEnum.Message(name.GetText().Trim(), other.KindPhrase));
                     break;
                 case ParameterKind.Operand:
                     foreach (var word in accepts.Words.Where(word => !ArgumentKind.OperandModes.Contains(word)))
@@ -117,7 +117,7 @@ public static class ArgumentChecks
                                     && node.Name.Text.Equals(word, StringComparison.OrdinalIgnoreCase))
                             : null;
                         if (inHeader is not null)
-                            report(inHeader.Span, Catalogue.OperandModeUnknown.Message(word, Format(ArgumentKind.OperandModes)));
+                            report(inHeader.Span, Catalog.OperandModeUnknown.Message(word, Format(ArgumentKind.OperandModes)));
                     }
                     break;
                 case ParameterKind.List when accepts.Element is { } element:
@@ -148,7 +148,7 @@ public static class ArgumentChecks
                 : compared.IsMode
                     ? $"`{compared.Name}` takes only {Either(compared.Choices)}"
                     : $"`{compared.Name}` is {Format(compared.Choices)}";
-            report(compared.Word.Span, Catalogue.ComparisonNeverHolds.Message(
+            report(compared.Word.Span, Catalog.ComparisonNeverHolds.Message(
                 compared.Compared, compared.Word.Text,
                 comparison.OperatorToken.Kind == SyntaxKind.EqualsEquals ? "never holds" : "always holds", why));
         }
@@ -169,7 +169,7 @@ public static class ArgumentChecks
         foreach (var operand in definition.DescendantNodes().OfType<OperandSyntax>())
         {
             if (Operands.ParameterNotWhole(operand, symbolOf) is { } parameter && macro.Parameters.Contains(parameter))
-                report(operand.Span, Catalogue.OperandParameterNotWhole.Message(parameter.Name));
+                report(operand.Span, Catalog.OperandParameterNotWhole.Message(parameter.Name));
         }
     }
 

@@ -141,7 +141,7 @@ internal static class KeepsAnalysis
         // missing.
         var unkeep = missing != Registers.None && RegisterWalk.Owner(into!) != into
             && RegisterEffects.Each(missing).Count() == 1;
-        var message = Catalogue.KeepsBroken.Message(region.Routine.DisplayName, items, names, one ? "is" : "are", fix);
+        var message = Catalog.KeepsBroken.Message(region.Routine.DisplayName, items, names, one ? "is" : "are", fix);
         var unkeeping = unkeep
             ? new DiagnosticFix(FixKind.Unkeep, RegisterEffects.Format(missing).ToLowerInvariant(), region.Routine.DeclarationSpan)
             : null;
@@ -167,7 +167,7 @@ internal static class KeepsAnalysis
                 continue;
             report.Add(Expansion.Problem(
                 file, end.Statement, end.On, null,
-                Catalogue.ReturnFlagNotSet.Message(region.Routine.DisplayName, RegisterEffects.Format(register), FlagValues.NameOf(flag))));
+                Catalog.ReturnFlagNotSet.Message(region.Routine.DisplayName, RegisterEffects.Format(register), FlagValues.NameOf(flag))));
         }
     }
 
