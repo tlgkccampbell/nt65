@@ -74,27 +74,31 @@ internal sealed class TokenRewriter
                 continue;
             if (Joined.Contains(token.Position))
             {
+                // A joined token is written straight after the one before it, so the whitespace
+                // that followed that token is taken back, and its own trailing whitespace is
+                // written only where the next token is not joined to it as well.
                 if (!Joined.Contains(tokens[i - 1].Position))
                     text.Length -= WhitespaceWidth(tokens[i - 1].TrailingTrivia);
-                text.Append(Before.GetValueOrDefault(token.Position, ""))
-                    .Append(Replacements.GetValueOrDefault(token.Position, Format(token)))
-                    .Append(After.GetValueOrDefault(token.Position, ""));
+                Append(token);
                 if (i + 1 == tokens.Count || !Joined.Contains(tokens[i + 1].Position))
                     broke = AppendWhitespace(text, token.TrailingTrivia);
                 continue;
             }
             if (!broke)
                 AppendWhitespace(text, token.LeadingTrivia);
-            if (Before.TryGetValue(token.Position, out var before))
-                text.Append(before);
-            text.Append(Replacements.TryGetValue(token.Position, out var replacement) ? replacement : Format(token));
-            if (After.TryGetValue(token.Position, out var after))
-                text.Append(after);
+            Append(token);
             broke = AppendWhitespace(text, token.TrailingTrivia);
         }
 
         var line = indent + text.ToString().Trim();
         return Comments.Count == 0 ? line : EmittedLine.Commented(line, string.Join(", ", Comments));
+
+        // A token is written with its edits: the text before it, its replacement or its own
+        // text, and the text after it.
+        void Append(SyntaxToken token) => text
+            .Append(Before.GetValueOrDefault(token.Position, ""))
+            .Append(Replacements.GetValueOrDefault(token.Position, Format(token)))
+            .Append(After.GetValueOrDefault(token.Position, ""));
     }
 
     /// <summary>

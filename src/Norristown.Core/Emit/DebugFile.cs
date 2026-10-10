@@ -50,13 +50,8 @@ public static class DebugFile
         [NotNullWhen(true)] out string? remapped, [NotNullWhen(false)] out string? problem)
     {
         remapped = null;
-        problem = null;
-        var records = text.Split('\n').Select(Record.Parse).ToList();
-        if (!records.Any(record => record.Line.TrimEnd('\r') == Version))
-        {
-            problem = "it is not a version 2.0 ld65 debug file, the kind ld65 writes with `--dbgfile`";
+        if (!TryParse(text, out var records, out problem))
             return false;
-        }
 
         var files = records.Where(record => record.Keyword == "file").ToList();
         var named = files.Select(record => record["name"] ?? "").ToHashSet(StringComparer.Ordinal);
@@ -208,13 +203,8 @@ public static class DebugFile
         [NotNullWhen(false)] out string? problem)
     {
         values = null;
-        problem = null;
-        var records = text.Split('\n').Select(Record.Parse).ToList();
-        if (!records.Any(record => record.Line.TrimEnd('\r') == Version))
-        {
-            problem = "it is not a version 2.0 ld65 debug file, the kind ld65 writes with `--dbgfile`";
+        if (!TryParse(text, out var records, out problem))
             return false;
-        }
 
         // A file record names the modules assembled from it. Each module assembled from a `.s`
         // with a map takes its names from that map.
@@ -248,6 +238,26 @@ public static class DebugFile
             values.Add((name, record["type"], value, named.GetValueOrDefault(module)));
         }
         return true;
+    }
+
+    /// <summary>
+    /// Reads the records of a debug file, and checks that it is one ld65 wrote in the version
+    /// this class reads.
+    /// </summary>
+    /// <param name="text">The text of the debug file.</param>
+    /// <param name="records">The records, one per line, or null when the text is not a debug file.</param>
+    /// <param name="problem">What is wrong, or null when the records were read.</param>
+    /// <returns>True if the text is a debug file this class reads.</returns>
+    private static bool TryParse(
+        string text, [NotNullWhen(true)] out List<Record>? records, [NotNullWhen(false)] out string? problem)
+    {
+        problem = null;
+        records = text.Split('\n').Select(Record.Parse).ToList();
+        if (records.Any(record => record.Line.TrimEnd('\r') == Version))
+            return true;
+        records = null;
+        problem = "it is not a version 2.0 ld65 debug file, the kind ld65 writes with `--dbgfile`";
+        return false;
     }
 
     /// <summary>Returns the debug file with the added records in place and the counts updated to match.</summary>
@@ -386,10 +396,15 @@ public static class DebugFile
         /// </summary>
         public string Keyword { get; }
 
+        /// <summary>Gets the value of the field named <paramref name="name"/>, unquoted, or null when the record has none.</summary>
         public string? this[string name] =>
             fields.FirstOrDefault(field => field.Name == name) is { Name.Length: > 0 } found
                 ? found.Value.Trim('"') : null;
 
+        /// <summary>
+        /// Parses one line of a debug file. A line with no tab, such as the version line, is a
+        /// record whose keyword is the whole line and which has no fields.
+        /// </summary>
         public static Record Parse(string line)
         {
             var body = line.TrimEnd('\r');

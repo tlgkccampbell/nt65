@@ -129,10 +129,7 @@ public sealed class FlatNames
         foreach (var symbol in model.Symbols.Where(symbol =>
             !symbol.IsReachableByPath && !IsLocalToAnExpansion(symbol)))
         {
-            var basis = flat.Definable(flat.placedPrefix + symbol.FlatName);
-            var name = basis;
-            for (var n = 2; taken.ContainsKey(name); n++)
-                name = $"{basis}_{n}";
+            var name = flat.Unique(flat.placedPrefix + symbol.FlatName);
             taken[name] = symbol;
             flat.names[symbol] = name;
         }
@@ -142,8 +139,8 @@ public sealed class FlatNames
     /// <summary>
     /// Returns the name the output gives <paramref name="name"/> in module
     /// <paramref name="module"/> because ca65 would read the source's spelling as an instruction,
-    /// or null where the output keeps that spelling. What an editor shows about such a name comes from here,
-    /// so that it always matches what the emitter actually does.
+    /// or null where the output keeps that spelling. What an editor shows about such a name comes
+    /// from here, so that it always matches what the emitter actually does.
     /// </summary>
     /// <param name="name">The name as it appears in the source.</param>
     /// <param name="cpu">The processor the program is built for, whose ca65 table decides.</param>
@@ -151,6 +148,10 @@ public sealed class FlatNames
     public static string? Prefixed(string name, Cpu cpu, string? module) =>
         Prefixed(name, Ca65Instructions.Of(cpu), module);
 
+    /// <summary>
+    /// Returns <paramref name="name"/> with <paramref name="module"/> in front where
+    /// <paramref name="instructions"/> holds it, or null where the output keeps the spelling.
+    /// </summary>
     private static string? Prefixed(string name, IReadOnlySet<string> instructions, string? module) =>
         instructions.Contains(name) && module is { } own
             ? $"{own.Replace("::", "__", StringComparison.Ordinal)}__{name}"
@@ -170,19 +171,13 @@ public sealed class FlatNames
     /// </summary>
     public string Of(Symbol symbol, Expansion? on)
     {
-        if (on is null || !IsLocalToAnExpansion(symbol))
+        if (on is null || !IsLocalToAnExpansion(symbol) || Expansion.Owning(on, symbol) is not { } owning)
             return Of(symbol);
-
-        var at = (symbol, Expansion.Owning(on, symbol));
-        if (at.Item2 is null)
-            return Of(symbol);
+        var at = (symbol, owning);
         if (perExpansion.TryGetValue(at, out var already))
             return already;
 
-        var basis = Definable(Basis(symbol, at.Item2));
-        var name = basis;
-        for (var n = 2; taken.ContainsKey(name); n++)
-            name = $"{basis}_{n}";
+        var name = Unique(Basis(symbol, owning));
         taken[name] = symbol;
         perExpansion[at] = name;
         return name;
@@ -207,9 +202,7 @@ public sealed class FlatNames
     /// </summary>
     public string Generated(string basis)
     {
-        var name = basis = Definable(basis);
-        for (var n = 2; taken.ContainsKey(name); n++)
-            name = $"{basis}_{n}";
+        var name = Unique(basis);
         taken[name] = null;
         return name;
     }
@@ -255,6 +248,20 @@ public sealed class FlatNames
                 return $"{Of(instance)}__{symbol.Name}";
         }
         return placedPrefix + symbol.FlatName;
+    }
+
+    /// <summary>
+    /// Returns a name derived from <paramref name="basis"/> that nothing has claimed yet. The
+    /// basis is made definable first, and then given the lowest suffix from <c>_2</c> up that
+    /// no claimed name has. The caller claims the name it is given.
+    /// </summary>
+    private string Unique(string basis)
+    {
+        basis = Definable(basis);
+        var name = basis;
+        for (var n = 2; taken.ContainsKey(name); n++)
+            name = $"{basis}_{n}";
+        return name;
     }
 
     /// <summary>

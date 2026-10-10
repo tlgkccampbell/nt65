@@ -251,7 +251,10 @@ internal sealed class ExpressionWriter(
     /// <c>player</c> plus 255.
     /// </summary>
     private static void ReplaceOperation(SyntaxNode node, string text, TokenRewriter rewriter) =>
-        rewriter.Replace(node, node.Parent is BinaryExpressionSyntax or UnaryExpressionSyntax ? $"({text})" : text);
+        rewriter.Replace(node, IsOperation(node.Parent) ? $"({text})" : text);
+
+    /// <summary>Returns whether a node is an operation, whose text needs parentheses where it is an operand.</summary>
+    private static bool IsOperation(SyntaxNode? node) => node is BinaryExpressionSyntax or UnaryExpressionSyntax;
 
     /// <summary>Returns the name a symbol has in the output, in the expansion being written.</summary>
     private string NameOf(Symbol symbol) => names.Of(symbol, Expansion);
@@ -524,9 +527,7 @@ internal sealed class ExpressionWriter(
         var rewriter = new TokenRewriter();
         Substitute(argument, rewriter, nested: false);
         var text = rewriter.Inline(argument, comments);
-        return argument is BinaryExpressionSyntax or UnaryExpressionSyntax
-            ? "(" + text + ")"
-            : text;
+        return IsOperation(argument) ? "(" + text + ")" : text;
     }
 
     /// <summary>
@@ -646,7 +647,7 @@ internal sealed class ExpressionWriter(
         {
             if (model.BytesOf(name, Expansion) is { Count: > 0 } bytes)
             {
-                rewriter.Replace(name, string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2))));
+                rewriter.Replace(name, BytesText(bytes));
                 rewriter.Comments.Add(name.GetText().Trim());
             }
             return;
@@ -763,7 +764,7 @@ internal sealed class ExpressionWriter(
 
         // `.bankof(name)` is ca65's `.bank(name)`, which ld65 answers from the memory area the
         // name runs in. ca65 gives that call the address size of the name, which no byte holds, so
-        // the bank is written as its low byte, which is how ca65's own documentation writes it.
+        // the bank is written as its low byte, which fits one.
         if (call.BuiltinKind == BuiltinKind.Bankof && call.Arguments.Arguments is [var banked])
         {
             rewriter.Replace(call, $".lobyte(.bank({Substituted(banked, rewriter.Comments)}))");
@@ -962,8 +963,7 @@ internal sealed class ExpressionWriter(
     {
         if (DataLengths.Bytes(literal, model) is not { Count: > 0 } bytes)
             return;
-        rewriter.Replacements[literal.Token.Position] =
-            string.Join(", ", bytes.Select(b => Hex(b & 0xff, 2)));
+        rewriter.Replacements[literal.Token.Position] = BytesText(bytes);
         rewriter.Comments.Add(literal.GetText());
     }
 
@@ -1061,7 +1061,7 @@ internal sealed class ExpressionWriter(
             _ => CodeLayout.Expression(operand) is { } address && NarrowAddress(address, mode, rewriter),
         };
         var text = rewriter.Inline(operand, comments);
-        return !narrowed && operand is BinaryExpressionSyntax or UnaryExpressionSyntax ? "(" + text + ")" : text;
+        return !narrowed && IsOperation(operand) ? "(" + text + ")" : text;
     }
 
     /// <summary>
