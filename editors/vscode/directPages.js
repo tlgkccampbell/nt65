@@ -6,6 +6,7 @@
 const vscode = require('vscode');
 const { Grid } = require('./directPagesGrid');
 const { Caret, keyOf, uriOf } = require('./directPagesCaret');
+const { isSource } = require('./documents');
 
 const VIEW = 'nt65.directPages';
 
@@ -30,7 +31,7 @@ const REFERENCES = 3;
 // The routines a location's tooltip lists before it counts the rest.
 const ROUTINE_ROWS = 6;
 
-const COLOUR = {
+const COLOR = {
   shared: 'nt65.directPages.shared',
   nested: 'nt65.directPages.nested',
   irq: 'nt65.directPages.irq',
@@ -63,12 +64,12 @@ const RELATIONS = {
 };
 
 const ROLES = {
-  in: { glyph: '↓', word: 'in', colour: COLOUR.access },
-  out: { glyph: '↑', word: 'out', colour: COLOUR.shared },
-  inout: { glyph: '↕', word: 'in · out', colour: COLOUR.inout },
-  temp: { glyph: '◦', word: 'temp', colour: COLOUR.dim },
-  write: { glyph: 'w', word: 'write', colour: COLOUR.hw },
-  read: { glyph: 'r', word: 'read', colour: COLOUR.hw },
+  in: { glyph: '↓', word: 'in', color: COLOR.access },
+  out: { glyph: '↑', word: 'out', color: COLOR.shared },
+  inout: { glyph: '↕', word: 'in · out', color: COLOR.inout },
+  temp: { glyph: '◦', word: 'temp', color: COLOR.dim },
+  write: { glyph: 'w', word: 'write', color: COLOR.hw },
+  read: { glyph: 'r', word: 'read', color: COLOR.hw },
 };
 
 const REASONS = {
@@ -212,9 +213,9 @@ function segmentLabel(segment) {
   return segment.hardware ? 'hardware' : 'fixed addresses';
 }
 
-// Returns a coloured codicon.
-function icon(name, colour) {
-  return new vscode.ThemeIcon(name, colour ? new vscode.ThemeColor(colour) : undefined);
+// Returns a colored codicon.
+function icon(name, color) {
+  return new vscode.ThemeIcon(name, color ? new vscode.ThemeColor(color) : undefined);
 }
 
 // Escapes text for Markdown with HTML allowed, leaving code spans as they are, since nothing in a
@@ -225,10 +226,10 @@ function markdown(text) {
     : part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/([\\*_[\]#|])/g, '\\$1')).join('');
 }
 
-// Returns text wrapped in a span that colours it with a theme colour. Hover HTML accepts a colour
-// only as a hexadecimal value or a `--vscode-` variable, and every theme colour has one.
-function coloured(colour, text) {
-  return `<span style="color:var(--vscode-${colour.replace(/\./g, '-')});">${text}</span>`;
+// Returns text wrapped in a span that colors it with a theme color. Hover HTML accepts a color
+// only as a hexadecimal value or a `--vscode-` variable, and every theme color has one.
+function colored(color, text) {
+  return `<span style="color:var(--vscode-${color.replace(/\./g, '-')});">${text}</span>`;
 }
 
 // Returns a link to a line, written `L12`, that opens the file at that line.
@@ -250,21 +251,21 @@ function lineLinks(places) {
     ? a.range.start.line - b.range.start.line
     : a.uri.localeCompare(b.uri));
   const shown = all.slice(0, REFERENCES).map(lineLink);
-  if (all.length > REFERENCES) shown.push(coloured(COLOUR.dim, `+${all.length - REFERENCES}`));
+  if (all.length > REFERENCES) shown.push(colored(COLOR.dim, `+${all.length - REFERENCES}`));
   return shown.join(' ');
 }
 
 // Builds a tooltip in the hover's shape: a header line with a name and a few words about it,
-// then one row per fact, each a coloured glyph, a short phrase and where it is.
+// then one row per fact, each a colored glyph, a short phrase and where it is.
 class Tip {
   constructor(name, meta) {
-    this.parts = [`**${markdown(name)}**${meta ? ` &nbsp;${coloured(COLOUR.dim, markdown(meta))}` : ''}`, '\n\n---\n\n'];
+    this.parts = [`**${markdown(name)}**${meta ? ` &nbsp;${colored(COLOR.dim, markdown(meta))}` : ''}`, '\n\n---\n\n'];
     this.rows = [];
   }
 
   // Adds a row. `phrase` is Markdown, and `where` is Markdown or an empty string.
-  row(glyph, colour, phrase, where) {
-    this.rows.push(`${coloured(colour, glyph)}&nbsp;&nbsp;${phrase}${where ? `&nbsp;&nbsp;${where}` : ''}`);
+  row(glyph, color, phrase, where) {
+    this.rows.push(`${colored(color, glyph)}&nbsp;&nbsp;${phrase}${where ? `&nbsp;&nbsp;${where}` : ''}`);
     return this;
   }
 
@@ -276,7 +277,7 @@ class Tip {
 
   // Returns the tooltip as a Markdown string.
   build() {
-    const text = new vscode.MarkdownString(this.parts.join('') + (this.rows.length > 0 ? this.rows.join('  \n') : coloured(COLOUR.dim, 'nothing to show')));
+    const text = new vscode.MarkdownString(this.parts.join('') + (this.rows.length > 0 ? this.rows.join('  \n') : colored(COLOR.dim, 'nothing to show')));
     text.supportHtml = true;
     return text;
   }
@@ -284,7 +285,7 @@ class Tip {
 
 // Returns a picture of one page's 256 bytes as an SVG data URI, in Markdown: the bytes the page's
 // own locations take, the stretches other pages cover hatched, and the bytes both take amber.
-// The picture is an image, so theme colours do not reach it, and its colours are ones that read
+// The picture is an image, so theme colors do not reach it, and its colors are ones that read
 // on light and dark backgrounds alike.
 function pageBar(page) {
   const clip = ([from, to]) => [Math.max(0, from), Math.min(256, to)];
@@ -304,8 +305,8 @@ function pageBar(page) {
     + spans(other, 'url(#h)') + spans(used, '#3794ff') + spans(shared, '#cca700')
     + text(0, 'start', hex4(page.base)) + text(128, 'middle', '+$80') + text(256, 'end', hex4(page.base + 0xFF))
     + '</svg>';
-  const key = `${coloured(COLOUR.own, '■')} this page &nbsp;${coloured(COLOUR.hw, '▨')} other page`
-    + (shared.length > 0 ? ` &nbsp;${coloured(COLOUR.nested, '■')} both` : '');
+  const key = `${colored(COLOR.own, '■')} this page &nbsp;${colored(COLOR.hw, '▨')} other page`
+    + (shared.length > 0 ? ` &nbsp;${colored(COLOR.nested, '■')} both` : '');
   return `![page](data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')})  \n${key}`;
 }
 
@@ -327,8 +328,8 @@ function pageTip(result, page, hazards) {
     const tip = new Tip('D = ?', `${count} group${count === 1 ? '' : 's'}`);
     for (const group of page.groups) {
       const n = group.routines.length;
-      tip.row(group.reason === 'interrupted' ? '⚡' : '?', group.reason === 'interrupted' ? COLOUR.irq : COLOUR.dim,
-        markdown(REASONS[group.reason] || group.reason), coloured(COLOUR.dim, `${n} routine${n === 1 ? '' : 's'}`));
+      tip.row(group.reason === 'interrupted' ? '⚡' : '?', group.reason === 'interrupted' ? COLOR.irq : COLOR.dim,
+        markdown(REASONS[group.reason] || group.reason), colored(COLOR.dim, `${n} routine${n === 1 ? '' : 's'}`));
     }
     return tip.build();
   }
@@ -339,17 +340,17 @@ function pageTip(result, page, hazards) {
   const tip = new Tip(pageLabel(page), meta);
   if (page.overlaps.length > 0) tip.block(pageBar(page));
   if ((page.base & 0xFF) !== 0 && page.direct > 0) {
-    tip.row('⚠', COLOUR.nested, `not page-aligned · +1 cycle on ${count(page.direct, 'instruction')}`, '');
+    tip.row('⚠', COLOR.nested, `not page-aligned · +1 cycle on ${count(page.direct, 'instruction')}`, '');
   }
-  for (const note of page.notes) tip.row(note.glyph, note.glyph === '⧉' ? COLOUR.nested : COLOUR.dim, markdown(note.text), '');
+  for (const note of page.notes) tip.row(note.glyph, note.glyph === '⧉' ? COLOR.nested : COLOR.dim, markdown(note.text), '');
   for (const overlap of page.overlaps) {
     if (overlap.shared.length === 0) {
-      tip.row('⧉', COLOUR.dim, `overlaps the ${markdown(pageName(result, overlap.page))} page, no bytes shared`,
-        coloured(COLOUR.dim, addresses(overlap.first, overlap.last)));
+      tip.row('⧉', COLOR.dim, `overlaps the ${markdown(pageName(result, overlap.page))} page, no bytes shared`,
+        colored(COLOR.dim, addresses(overlap.first, overlap.last)));
     }
     for (const bytes of overlap.shared) {
-      tip.row('⧉', COLOUR.nested, `\`${bytes.there}\` on the ${markdown(pageName(result, bytes.page))} page takes these bytes too`,
-        coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
+      tip.row('⧉', COLOR.nested, `\`${bytes.there}\` on the ${markdown(pageName(result, bytes.page))} page takes these bytes too`,
+        colored(COLOR.dim, addresses(bytes.first, bytes.last)));
     }
   }
   relationRows(tip, page.locations, hazards);
@@ -369,22 +370,22 @@ function segmentTip(segment, hazards) {
 function relationRows(tip, locations, hazards) {
   for (const location of locations) {
     if (hazards && location.hazard) {
-      tip.row('⚠', COLOUR.nested, `\`${location.name}\` · ${RELATIONS[location.relation] || ''}`, '');
+      tip.row('⚠', COLOR.nested, `\`${location.name}\` · ${RELATIONS[location.relation] || ''}`, '');
     } else if (location.relation === 'irq') {
-      tip.row('⚡', COLOUR.irq, `\`${location.name}\` · shared with an interrupt`, '');
+      tip.row('⚡', COLOR.irq, `\`${location.name}\` · shared with an interrupt`, '');
     } else if (location.relation === 'nested') {
-      tip.row('●', COLOUR.nested, `\`${location.name}\` · ${RELATIONS.nested}`, '');
+      tip.row('●', COLOR.nested, `\`${location.name}\` · ${RELATIONS.nested}`, '');
     }
   }
 }
 
-// Returns the glyph and colour that stand for a relation in a tooltip row.
+// Returns the glyph and color that stand for a relation in a tooltip row.
 function relationMark(relation) {
   switch (relation) {
-    case 'unused': return ['○', COLOUR.unused];
-    case 'irq': return ['⚡', COLOUR.irq];
-    case 'hw': return ['w', COLOUR.hw];
-    default: return ['●', COLOUR[relation] || COLOUR.dim];
+    case 'unused': return ['○', COLOR.unused];
+    case 'irq': return ['⚡', COLOR.irq];
+    case 'hw': return ['w', COLOR.hw];
+    default: return ['●', COLOR[relation] || COLOR.dim];
   }
 }
 
@@ -399,27 +400,27 @@ function locationTip(result, page, location, hazards) {
   const nodes = flatten(location.routines);
   const users = new Set(nodes.filter(node => node.role).map(node => node.name));
   if (addressTaken(location)) {
-    tip.row('◎', COLOUR.referenced, 'address taken', lineLinks(location.references));
+    tip.row('◎', COLOR.referenced, 'address taken', lineLinks(location.references));
   } else if (declaredOnly(location)) {
-    tip.row('○', COLOUR.hw, 'hardware · declared, not reached', '');
+    tip.row('○', COLOR.hw, 'hardware · declared, not reached', '');
   } else {
-    const [glyph, colour] = relationMark(location.relation);
+    const [glyph, color] = relationMark(location.relation);
     const relation = RELATIONS[location.relation] || location.relation;
-    tip.row(glyph, colour, users.size > 1 ? `${relation} · ${users.size} routines` : relation, '');
+    tip.row(glyph, color, users.size > 1 ? `${relation} · ${users.size} routines` : relation, '');
   }
   if (location.accesses > 0) {
-    tip.row('#', COLOUR.dim, `${count(location.accesses, 'instruction')} · ${times(location.perPass)} a pass`, '');
-    if (location.uncounted > 0) tip.row('∞', COLOUR.dim, `${location.uncounted} in a loop of unknown count`, '');
+    tip.row('#', COLOR.dim, `${count(location.accesses, 'instruction')} · ${times(location.perPass)} a pass`, '');
+    if (location.uncounted > 0) tip.row('∞', COLOR.dim, `${location.uncounted} in a loop of unknown count`, '');
   }
   const roles = nodes.filter(node => node.role);
   for (const node of roles.slice(0, ROUTINE_ROWS)) {
     const role = ROLES[node.role];
-    tip.row(role.glyph, role.colour, `\`${node.name}\``, lineLinks(node.accesses.map(access => access.place)));
+    tip.row(role.glyph, role.color, `\`${node.name}\``, lineLinks(node.accesses.map(access => access.place)));
   }
-  if (roles.length > ROUTINE_ROWS) tip.row('…', COLOUR.dim, `${roles.length - ROUTINE_ROWS} more`, '');
+  if (roles.length > ROUTINE_ROWS) tip.row('…', COLOR.dim, `${roles.length - ROUTINE_ROWS} more`, '');
   if (hazards) {
     for (const node of nodes) {
-      for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOUR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+      for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
     }
   }
   for (const bytes of location.shared) {
@@ -433,8 +434,8 @@ function locationTip(result, page, location, hazards) {
         : bytes.kind === 'authored' ? `placed with \`${bytes.there}\`, by the config`
           : bytes.kind === 'deliberate' ? `an alias of \`${bytes.there}\``
             : `shared between pages with \`${bytes.there}\` on ${markdown(pageName(result, bytes.page))}`;
-    tip.row(bytes.kind === 'unverified' ? '?' : '⧉', bytes.kind === 'collision' || !here ? COLOUR.nested : COLOUR.dim, `${at}${phrase}`,
-      coloured(COLOUR.dim, addresses(bytes.first, bytes.last)));
+    tip.row(bytes.kind === 'unverified' ? '?' : '⧉', bytes.kind === 'collision' || !here ? COLOR.nested : COLOR.dim, `${at}${phrase}`,
+      colored(COLOR.dim, addresses(bytes.first, bytes.last)));
   }
   return tip.build();
 }
@@ -444,32 +445,32 @@ function routineTip(location, node, hazards) {
   const role = node.role ? ROLES[node.role] : null;
   if (node.unknown) {
     const tip = new Tip(node.name, `${location.name} · D unknown`);
-    tip.row('?', COLOUR.dim, 'names it while D is not known · see `D = ?`', lineLinks(node.accesses.map(access => access.place)));
+    tip.row('?', COLOR.dim, 'names it while D is not known · see `D = ?`', lineLinks(node.accesses.map(access => access.place)));
     if (hazards) {
-      for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOUR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+      for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
     }
     return tip.build();
   }
   const tip = new Tip(node.name, `${location.name}${role ? ` · ${role.word}` : ''}`);
-  if (node.handler) tip.row('⚡', COLOUR.irq, 'interrupt handler', '');
-  else if (node.interrupt) tip.row('⚡', COLOUR.irq, node.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
+  if (node.handler) tip.row('⚡', COLOR.irq, 'interrupt handler', '');
+  else if (node.interrupt) tip.row('⚡', COLOR.irq, node.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
   if (role) {
     const writes = node.accesses.filter(access => access.writes).map(access => access.place);
     const reads = node.accesses.filter(access => !access.writes).map(access => access.place);
-    if (writes.length > 0) tip.row(role.glyph, role.colour, 'writes', lineLinks(writes));
-    if (reads.length > 0) tip.row(role.glyph, role.colour, 'reads', lineLinks(reads));
+    if (writes.length > 0) tip.row(role.glyph, role.color, 'writes', lineLinks(writes));
+    if (reads.length > 0) tip.row(role.glyph, role.color, 'reads', lineLinks(reads));
   }
-  if (node.via.length > 0) tip.row('↳', COLOUR.dim, node.runs > 1 ? `called · runs ${times(node.runs)} a pass` : 'called', lineLinks(node.via));
-  if (node.runsUncounted) tip.row('∞', COLOUR.dim, 'called in a loop of unknown count', '');
+  if (node.via.length > 0) tip.row('↳', COLOR.dim, node.runs > 1 ? `called · runs ${times(node.runs)} a pass` : 'called', lineLinks(node.via));
+  if (node.runsUncounted) tip.row('∞', COLOR.dim, 'called in a loop of unknown count', '');
   const looped = node.accesses.filter(access => access.times > 1);
-  if (looped.length > 0) tip.row('↻', COLOUR.dim, `${count(looped.length, 'instruction')} in counted loops`, lineLinks(looped.map(access => access.place)));
+  if (looped.length > 0) tip.row('↻', COLOR.dim, `${count(looped.length, 'instruction')} in counted loops`, lineLinks(looped.map(access => access.place)));
   const open = node.accesses.filter(access => access.uncounted);
-  if (open.length > 0) tip.row('∞', COLOUR.dim, `${count(open.length, 'instruction')} in a loop of unknown count`, lineLinks(open.map(access => access.place)));
+  if (open.length > 0) tip.row('∞', COLOR.dim, `${count(open.length, 'instruction')} in a loop of unknown count`, lineLinks(open.map(access => access.place)));
   for (const child of node.children || []) {
-    if (child.via.length > 0) tip.row('↳', COLOUR.dim, `\`${child.name}\``, lineLinks(child.via));
+    if (child.via.length > 0) tip.row('↳', COLOR.dim, `\`${child.name}\``, lineLinks(child.via));
   }
   if (hazards) {
-    for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOUR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+    for (const note of node.hazards) tip.row(note.glyph || '⚠', COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
   }
   return tip.build();
 }
@@ -477,19 +478,19 @@ function routineTip(location, node, hazards) {
 // Builds the tooltip of a routine's row that takes a location's address without reaching it.
 function referrerTip(location, referrer) {
   return new Tip(referrer.name, `${location.name} · address taken`)
-    .row('◎', COLOUR.referenced, 'takes its address', lineLinks(referrer.places))
-    .row('?', COLOUR.dim, 'accesses through the address are not followed', '')
+    .row('◎', COLOR.referenced, 'takes its address', lineLinks(referrer.places))
+    .row('?', COLOR.dim, 'accesses through the address are not followed', '')
     .build();
 }
 
 // Builds the tooltip of a routine's row on the page whose D is not known.
 function unknownRoutineTip(group, routine, hazards) {
   const tip = new Tip(routine.name, group.reason === 'interrupted' ? 'D left as the interrupted code had it' : 'D not known');
-  if (routine.handler) tip.row('⚡', COLOUR.irq, 'interrupt handler', '');
-  else if (routine.interrupt) tip.row('⚡', COLOUR.irq, routine.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
+  if (routine.handler) tip.row('⚡', COLOR.irq, 'interrupt handler', '');
+  else if (routine.interrupt) tip.row('⚡', COLOR.irq, routine.main ? 'runs in an interrupt too' : 'runs in an interrupt', '');
   for (const use of routine.uses) {
     const role = ROLES[use.role];
-    tip.row(role ? role.glyph : '?', role ? role.colour : COLOUR.dim, `\`${use.name}\``,
+    tip.row(role ? role.glyph : '?', role ? role.color : COLOR.dim, `\`${use.name}\``,
       lineLinks(use.accesses.map(access => access.place)));
     if (hazards) noteRows(tip, use.hazards || []);
   }
@@ -501,8 +502,8 @@ function useTip(result, routine, use, hazards) {
   const at = use.offset === null ? '' : ` · +${hex2(use.offset)}`;
   const tip = new Tip(routine.name, `${use.name}${at}`);
   const role = ROLES[use.role];
-  tip.row(role ? role.glyph : '?', role ? role.colour : COLOUR.dim, role ? role.word : '', lineLinks(use.accesses.map(access => access.place)));
-  if (use.home) tip.row('●', COLOUR.dim, `declared on the ${markdown(pageName(result, use.home))} page`, coloured(COLOUR.dim, use.home));
+  tip.row(role ? role.glyph : '?', role ? role.color : COLOR.dim, role ? role.word : '', lineLinks(use.accesses.map(access => access.place)));
+  if (use.home) tip.row('●', COLOR.dim, `declared on the ${markdown(pageName(result, use.home))} page`, colored(COLOR.dim, use.home));
   if (hazards) noteRows(tip, use.hazards || []);
   return tip.build();
 }
@@ -511,7 +512,7 @@ function useTip(result, routine, use, hazards) {
 // interrupted code's, where the access lands on each page that code holds D at, and any hazard.
 function noteRows(tip, notes) {
   for (const note of notes) {
-    tip.row(note.glyph || '⚠', note.glyph === '◦' ? COLOUR.dim : COLOUR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
+    tip.row(note.glyph || '⚠', note.glyph === '◦' ? COLOR.dim : COLOR.nested, markdown(note.text), note.place ? lineLink(note.place) : '');
   }
 }
 
@@ -530,7 +531,7 @@ function joined(...parts) {
 
 // Returns the codicon of a routine's row.
 function routineIcon(routine) {
-  return routine.handler ? icon('zap', COLOUR.irq) : icon('symbol-method', COLOUR.method);
+  return routine.handler ? icon('zap', COLOR.irq) : icon('symbol-method', COLOR.method);
 }
 
 // Builds the tree item of an element.
@@ -544,9 +545,9 @@ function itemOf(result, element, hazards) {
     case 'page': {
       item = new vscode.TreeItem(pageLabel(page), state(!page.hardware));
       item.description = joined(pageKind(page), marks(page.overlaps.length > 0, page.hazard, hazards));
-      if (page.base === null) item.iconPath = icon('question', COLOUR.unknown);
-      else if (page.hardware) item.iconPath = icon('circuit-board', COLOUR.hw);
-      else item.iconPath = icon('window', COLOUR[page.relation]);
+      if (page.base === null) item.iconPath = icon('question', COLOR.unknown);
+      else if (page.hardware) item.iconPath = icon('circuit-board', COLOR.hw);
+      else item.iconPath = icon('window', COLOR[page.relation]);
       item.tooltip = pageTip(result, page, hazards);
       item.contextValue = page.base === null ? 'unknownPage' : 'page';
       break;
@@ -554,7 +555,7 @@ function itemOf(result, element, hazards) {
     case 'segment': {
       item = new vscode.TreeItem(segmentLabel(page), state(!page.hardware));
       item.description = marks(false, page.hazard, hazards);
-      item.iconPath = page.hardware ? icon('circuit-board', COLOUR.hw) : icon('database', COLOUR[page.relation]);
+      item.iconPath = page.hardware ? icon('circuit-board', COLOR.hw) : icon('database', COLOR[page.relation]);
       item.tooltip = segmentTip(page, hazards);
       item.contextValue = 'segment';
       break;
@@ -567,13 +568,13 @@ function itemOf(result, element, hazards) {
         : offsets(location);
       item = new vscode.TreeItem(location.name, state(page.locations.length <= OPEN_LOCATIONS));
       item.description = joined(where, marks(location.shared, location.hazard, hazards));
-      item.iconPath = addressTaken(location) ? icon('target', COLOUR.referenced)
-        : declaredOnly(location) ? icon('circle-outline', COLOUR.hw)
-        : location.relation === 'unused' ? icon('circle-outline', COLOUR.unused)
-          : icon('symbol-variable', COLOUR[location.relation]);
+      item.iconPath = addressTaken(location) ? icon('target', COLOR.referenced)
+        : declaredOnly(location) ? icon('circle-outline', COLOR.hw)
+        : location.relation === 'unused' ? icon('circle-outline', COLOR.unused)
+          : icon('symbol-variable', COLOR[location.relation]);
       item.tooltip = locationTip(result, page, location, hazards);
       item.contextValue = 'location';
-      // The URI is only there so that the caret's decorations can colour the row.
+      // The URI is only there so that the caret's decorations can color the row.
       item.resourceUri = uriOf(keyOf(page, location));
       break;
     }
@@ -582,7 +583,7 @@ function itemOf(result, element, hazards) {
       item = new vscode.TreeItem(node.name, state(true));
       const glyph = node.unknown ? '?' : node.role ? ROLES[node.role].glyph : '';
       item.description = joined(glyph, marks(false, node.hazards.length > 0, hazards));
-      item.iconPath = node.unknown && !node.handler ? icon('symbol-method', COLOUR.unknown) : routineIcon(node);
+      item.iconPath = node.unknown && !node.handler ? icon('symbol-method', COLOR.unknown) : routineIcon(node);
       item.tooltip = routineTip(location, node, hazards);
       item.contextValue = 'routine';
       break;
@@ -591,7 +592,7 @@ function itemOf(result, element, hazards) {
       const { referrer, location } = element;
       item = new vscode.TreeItem(referrer.name, vscode.TreeItemCollapsibleState.None);
       item.description = '◎';
-      item.iconPath = icon('target', COLOUR.referenced);
+      item.iconPath = icon('target', COLOR.referenced);
       item.tooltip = referrerTip(location, referrer);
       item.contextValue = 'referrer';
       break;
@@ -600,7 +601,7 @@ function itemOf(result, element, hazards) {
       const { group } = element;
       item = new vscode.TreeItem(REASONS[group.reason] || group.reason, state(true));
       item.description = String(group.routines.length);
-      item.iconPath = icon(group.reason === 'interrupted' ? 'zap' : 'folder', group.reason === 'interrupted' ? COLOUR.irq : COLOUR.unknown);
+      item.iconPath = icon(group.reason === 'interrupted' ? 'zap' : 'folder', group.reason === 'interrupted' ? COLOR.irq : COLOR.unknown);
       const n = group.routines.length;
       item.tooltip = new Tip(item.label, `${n} routine${n === 1 ? '' : 's'}`).build();
       item.contextValue = 'group';
@@ -620,7 +621,7 @@ function itemOf(result, element, hazards) {
       item = new vscode.TreeItem(use.name, vscode.TreeItemCollapsibleState.None);
       const at = use.offset === null ? '' : `+${hex2(use.offset)}`;
       item.description = joined(at, ROLES[use.role] ? ROLES[use.role].glyph : '', marks(false, use.hazard, hazards));
-      item.iconPath = icon('symbol-variable', routine.interrupt ? COLOUR.irq : COLOUR.unknown);
+      item.iconPath = icon('symbol-variable', routine.interrupt ? COLOR.irq : COLOR.unknown);
       item.tooltip = useTip(result, routine, use, hazards);
       item.contextValue = 'use';
     }
@@ -833,9 +834,9 @@ function count(n, one, many) {
 // The decoration types, made once. A line gets one bar and tint type and at most one tag type.
 function decorationTypes() {
   const tints = {
-    access: ['nt65.directPages.accessBackground', COLOUR.access],
-    warning: ['nt65.directPages.warningBackground', COLOUR.nested],
-    interrupt: ['nt65.directPages.interruptBackground', COLOUR.irq],
+    access: ['nt65.directPages.accessBackground', COLOR.access],
+    warning: ['nt65.directPages.warningBackground', COLOR.nested],
+    interrupt: ['nt65.directPages.interruptBackground', COLOR.irq],
   };
   const bars = {
     write: { borderWidth: '0 0 0 3px', borderStyle: 'solid' },
@@ -843,37 +844,37 @@ function decorationTypes() {
     none: {},
   };
   const types = { lines: {} };
-  for (const [tint, [background, colour]] of Object.entries(tints)) {
+  for (const [tint, [background, color]] of Object.entries(tints)) {
     for (const [bar, border] of Object.entries(bars)) {
       types.lines[`${bar}:${tint}`] = vscode.window.createTextEditorDecorationType({
         isWholeLine: true,
         backgroundColor: new vscode.ThemeColor(background),
         ...border,
-        borderColor: new vscode.ThemeColor(colour),
-        overviewRulerColor: new vscode.ThemeColor(colour),
+        borderColor: new vscode.ThemeColor(color),
+        overviewRulerColor: new vscode.ThemeColor(color),
         overviewRulerLane: vscode.OverviewRulerLane.Left,
       });
     }
   }
-  const tag = (text, colour) => vscode.window.createTextEditorDecorationType({
-    after: { contentText: text, color: new vscode.ThemeColor(colour), margin: '0 0 0 0.6em' },
+  const tag = (text, color) => vscode.window.createTextEditorDecorationType({
+    after: { contentText: text, color: new vscode.ThemeColor(color), margin: '0 0 0 0.6em' },
   });
-  types.call = tag('↳', COLOUR.dim);
+  types.call = tag('↳', COLOR.dim);
   types.declaration = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
     backgroundColor: new vscode.ThemeColor('nt65.directPages.accessBackground'),
-    overviewRulerColor: new vscode.ThemeColor(COLOUR.access),
+    overviewRulerColor: new vscode.ThemeColor(COLOR.access),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
-    after: { contentText: '◆', color: new vscode.ThemeColor(COLOUR.access), margin: '0 0 0 0.6em' },
+    after: { contentText: '◆', color: new vscode.ThemeColor(COLOR.access), margin: '0 0 0 0.6em' },
   });
   types.reference = vscode.window.createTextEditorDecorationType({
     isWholeLine: true,
     backgroundColor: new vscode.ThemeColor('nt65.directPages.accessBackground'),
-    overviewRulerColor: new vscode.ThemeColor(COLOUR.referenced),
+    overviewRulerColor: new vscode.ThemeColor(COLOR.referenced),
     overviewRulerLane: vscode.OverviewRulerLane.Left,
-    after: { contentText: '◎', color: new vscode.ThemeColor(COLOUR.referenced), margin: '0 0 0 0.6em' },
+    after: { contentText: '◎', color: new vscode.ThemeColor(COLOR.referenced), margin: '0 0 0 0.6em' },
   });
-  types.hazard = tag('⚠', COLOUR.nested);
+  types.hazard = tag('⚠', COLOR.nested);
   return types;
 }
 
@@ -952,7 +953,7 @@ class DirectPages {
     this.asked = 0;
     this.stale = true;
     this.selected = null;
-    this.source = vscode.window.activeTextEditor && applies(vscode.window.activeTextEditor.document)
+    this.source = vscode.window.activeTextEditor && isSource(vscode.window.activeTextEditor.document)
       ? vscode.window.activeTextEditor.document.uri.toString()
       : null;
     this.column = vscode.ViewColumn.One;
@@ -1138,7 +1139,7 @@ class DirectPages {
   // Follows the editor: a new nt65 source may be in another program, and is where the column for
   // opening files comes from.
   follow(editor) {
-    if (!editor || !applies(editor.document)) return;
+    if (!editor || !isSource(editor.document)) return;
     if (editor.viewColumn) this.column = editor.viewColumn;
     const uri = editor.document.uri.toString();
     if (uri === this.source) return;
@@ -1159,15 +1160,10 @@ class DirectPages {
 // Returns an nt65 source to ask about when no editor has made one current, as after a restart
 // that reopens the grid on its own: one that is open, or else any in the workspace.
 async function anySource() {
-  const open = vscode.workspace.textDocuments.find(applies);
+  const open = vscode.workspace.textDocuments.find(isSource);
   if (open) return open.uri.toString();
   const [found] = await vscode.workspace.findFiles('**/*.nt65', '**/node_modules/**', 1);
   return found ? found.toString() : null;
-}
-
-// Checks whether a document is an nt65 source the server analyzes.
-function applies(document) {
-  return document.languageId === 'nt65' && (document.uri.scheme === 'file' || document.uri.scheme === 'untitled');
 }
 
 // Registers the views, the grid and their commands. `outputChanged` fires whenever the server
@@ -1187,7 +1183,7 @@ function register(context, client, outputChanged) {
       pages.caret.schedule(pages.result);
     }),
     vscode.window.onDidChangeTextEditorSelection(event => {
-      if (event.textEditor === vscode.window.activeTextEditor && applies(event.textEditor.document)) {
+      if (event.textEditor === vscode.window.activeTextEditor && isSource(event.textEditor.document)) {
         pages.caret.schedule(pages.result);
       }
     }),

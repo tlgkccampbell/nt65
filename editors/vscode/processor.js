@@ -7,6 +7,7 @@
 // routine, and the stack rows then go on into that caller's pushes. That is true only along the
 // path through the call, so it is a choice the reader makes for each routine, never the default.
 const vscode = require('vscode');
+const { showsSource, Requests } = require('./documents');
 
 const VIEW = 'nt65.processor';
 
@@ -37,7 +38,7 @@ function asLocation(location) {
 
 class Processor {
   constructor(client) {
-    this.client = client;
+    this.requests = new Requests(client);
     this.changed = new vscode.EventEmitter();
     this.onDidChangeTreeData = this.changed.event;
 
@@ -47,13 +48,7 @@ class Processor {
     this.chosen = new Map();
 
     this.timer = undefined;
-    this.cancel = undefined;
     this.view = vscode.window.createTreeView(VIEW, { treeDataProvider: this });
-  }
-
-  applies(editor) {
-    return editor && editor.document.languageId === 'nt65'
-      && (editor.document.uri.scheme === 'file' || editor.document.uri.scheme === 'untitled');
   }
 
   // Asks about the active editor's caret after `delay`, when the view can be seen.
@@ -61,7 +56,7 @@ class Processor {
     clearTimeout(this.timer);
     if (!this.view.visible) return;
     const editor = vscode.window.activeTextEditor;
-    if (!this.applies(editor)) {
+    if (!showsSource(editor)) {
       this.show(null, undefined);
       return;
     }
@@ -73,22 +68,14 @@ class Processor {
     const version = document.version;
     const uri = document.uri.toString();
     const position = editor.selection.active;
+    const result = await this.requests.send('nt65/processor', {
+      textDocument: { uri },
+      position: { line: position.line, character: position.character },
+      callers: [...this.chosen.values()],
+    });
 
-    // A newer question makes any older one moot.
-    if (this.cancel) this.cancel.cancel();
-    const cancel = new vscode.CancellationTokenSource();
-    this.cancel = cancel;
-    let result;
-    try {
-      result = await this.client.sendRequest('nt65/processor', {
-        textDocument: { uri },
-        position: { line: position.line, character: position.character },
-        callers: [...this.chosen.values()],
-      }, cancel.token);
-    } catch {
-      result = null;
-    }
-    if (cancel.token.isCancellationRequested || document.version !== version) return;
+    // An answer that arrives after the text has changed is dropped.
+    if (result === undefined || document.version !== version) return;
     this.show(result, uri);
   }
 
@@ -118,7 +105,7 @@ class Processor {
     if (picked.caller) this.chosen.set(key, picked.caller);
     else this.chosen.delete(key);
     const editor = vscode.window.activeTextEditor;
-    if (this.applies(editor)) this.ask(editor);
+    if (showsSource(editor)) this.ask(editor);
   }
 
   getChildren(element) {
@@ -158,7 +145,7 @@ class Processor {
 
   dispose() {
     clearTimeout(this.timer);
-    if (this.cancel) this.cancel.cancel();
+    this.requests.cancel();
     this.view.dispose();
     this.changed.dispose();
   }

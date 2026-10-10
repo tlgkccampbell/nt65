@@ -5,6 +5,7 @@
 // margin is a prefix before the first character of every line of a routine, the same width on
 // each line so that the code does not jog.
 const vscode = require('vscode');
+const { showsSource, Requests } = require('./documents');
 
 // How long the caret has to rest on a line before the server is asked about it.
 const DELAY = 100;
@@ -26,13 +27,13 @@ const LEVELS = [
 const STYLES = ['caret', 'bracketCaret', 'bracket', 'arrow', 'declared', 'faded'];
 
 // Returns how thick lines are in a style, in pixels. Brackets and the caret's arrow are drawn
-// twice as thick, so that they stand out from the other arrows by more than their colour.
+// twice as thick, so that they stand out from the other arrows by more than their color.
 function thicknessOf(style) {
   return style === 'caret' || style === 'bracket' || style === 'bracketCaret' ? 2 : 1;
 }
 
-// Returns the CSS colour of a style, which is the theme colour that VS Code exposes as a variable.
-function colour(style) {
+// Returns the CSS color of a style, which is the theme color that VS Code exposes as a variable.
+function color(style) {
   if (style === 'bracket') return 'var(--vscode-nt65-loopBrackets-bracket)';
   if (style === 'bracketCaret') return 'var(--vscode-nt65-loopBrackets-caret)';
   return `var(--vscode-nt65-flowArrows-${style})`;
@@ -40,7 +41,7 @@ function colour(style) {
 
 // Returns the style of an arrow. The arrow that starts or ends on the caret's line is highlighted,
 // like a matched bracket. One the flags prove always or never taken, or that starts on a line
-// nothing reaches, is faded, and one a `.next` declared has a colour of its own.
+// nothing reaches, is faded, and one a `.next` declared has a color of its own.
 function styleOf(arrow, caret) {
   if (arrow.from === caret || arrow.to === caret) return 'caret';
   if (arrow.proved || !arrow.reached) return 'faded';
@@ -61,7 +62,7 @@ function innermostOf(routine, caret) {
 // Returns the cells of a routine's prefix, one row per line of the routine. Each row holds a cell
 // per column and two cells that join the columns to the code. A column's cell index counts from
 // the left, and column 0 is the one nearest the code. A cell names the style of each part drawn in
-// it: the half lines `up`, `down`, `left` and `right` from its centre, and the head `into`.
+// it: the half lines `up`, `down`, `left` and `right` from its center, and the head `into`.
 function cellsOf(routine, caret) {
   const width = routine.columns + 2;
   const rows = [];
@@ -115,19 +116,19 @@ function cellsOf(routine, caret) {
 }
 
 // Returns the CSS background that draws a row of cells, in a box `height` pixels tall. Every part
-// is a layer of its own, a gradient of one colour sized to the line or the half of a head it
+// is a layer of its own, a gradient of one color sized to the line or the half of a head it
 // draws, so the uprights of one line meet those of the next with no gap.
 function backgroundOf(row, height) {
   const middle = Math.floor(height / 2);
-  const centre = middle + 0.5;
+  const center = middle + 0.5;
   const head = Math.max(3, Math.round(height * 0.22));
   const layers = [];
   const add = (style, image, x, y, width, tall) =>
     layers.push({ style, css: `${image} ${x} ${y} / ${width} ${tall} no-repeat` });
-  const solid = style => `linear-gradient(${colour(style)}, ${colour(style)})`;
+  const solid = style => `linear-gradient(${color(style)}, ${color(style)})`;
 
   // A half of a triangular head fills the half of its box on one side of the box's diagonal.
-  const half = (style, towards) => `linear-gradient(to ${towards}, ${colour(style)} 50%, transparent 50%)`;
+  const half = (style, toward) => `linear-gradient(to ${toward}, ${color(style)} 50%, transparent 50%)`;
   row.forEach((cell, index) => {
     const upright = style => `calc(${index}ch + 0.5ch - ${thicknessOf(style) / 2}px)`;
     if (cell.up) {
@@ -140,8 +141,8 @@ function backgroundOf(row, height) {
     }
     const box = `calc(${index}ch + 0.1ch)`;
     if (cell.into) {
-      add(cell.into, half(cell.into, 'top right'), box, `${centre - head}px`, '0.8ch', `${head}px`);
-      add(cell.into, half(cell.into, 'bottom right'), box, `${centre}px`, '0.8ch', `${head}px`);
+      add(cell.into, half(cell.into, 'top right'), box, `${center - head}px`, '0.8ch', `${head}px`);
+      add(cell.into, half(cell.into, 'bottom right'), box, `${center}px`, '0.8ch', `${head}px`);
     }
   });
 
@@ -226,7 +227,7 @@ function tripsOf(bracket) {
 
 class Margin {
   constructor(client) {
-    this.client = client;
+    this.requests = new Requests(client);
 
     // Every line's prefix is drawn by this one type, each with a background of its own.
     this.prefix = vscode.window.createTextEditorDecorationType({});
@@ -248,7 +249,6 @@ class Margin {
     this.hover = vscode.window.createTextEditorDecorationType({});
 
     this.timer = undefined;
-    this.cancel = undefined;
 
     // What is shown: the editor, the document version the answer is for, and the answer.
     this.shown = undefined;
@@ -267,17 +267,12 @@ class Margin {
     return this.level === 'flow';
   }
 
-  applies(editor) {
-    return editor && editor.document.languageId === 'nt65'
-      && (editor.document.uri.scheme === 'file' || editor.document.uri.scheme === 'untitled');
-  }
-
   // Redraws what is shown for the caret's new line at once, then waits for the caret to rest and
   // asks again. Only the arrows depend on the caret's line, since it may be in another routine,
   // so with the arrows off a caret that moves asks nothing.
   schedule(editor, delay = DELAY) {
     clearTimeout(this.timer);
-    if (this.level === 'off' || !this.applies(editor)) {
+    if (this.level === 'off' || !showsSource(editor)) {
       this.clear();
       return;
     }
@@ -294,28 +289,15 @@ class Margin {
     const key = `${document.uri}@${version}:${arrows ? position.line : ''}`;
     if (key === this.asked) return;
     this.asked = key;
-
-    // A newer question makes any older one moot.
-    if (this.cancel) this.cancel.cancel();
-    const cancel = new vscode.CancellationTokenSource();
-    this.cancel = cancel;
-    let result;
-    try {
-      result = await this.client.sendRequest('nt65/margin', {
-        textDocument: { uri: document.uri.toString() },
-        position: { line: position.line, character: position.character },
-        arrows,
-      }, cancel.token);
-    } catch {
-      result = null;
-    }
+    const result = await this.requests.send('nt65/margin', {
+      textDocument: { uri: document.uri.toString() },
+      position: { line: position.line, character: position.character },
+      arrows,
+    });
 
     // An answer that arrives after the text has changed, or for an editor no longer active, is
     // dropped. One for a caret that has since moved still holds the right margin.
-    if (cancel.token.isCancellationRequested || document.version !== version
-      || vscode.window.activeTextEditor !== editor) {
-      return;
-    }
+    if (result === undefined || document.version !== version || vscode.window.activeTextEditor !== editor) return;
     if (!result) {
       this.forget();
       return;
@@ -378,8 +360,7 @@ class Margin {
 
   clear() {
     clearTimeout(this.timer);
-    if (this.cancel) this.cancel.cancel();
-    this.cancel = undefined;
+    this.requests.cancel();
     this.asked = undefined;
     this.forget();
   }
