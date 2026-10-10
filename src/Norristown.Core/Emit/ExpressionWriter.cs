@@ -87,7 +87,7 @@ internal sealed class ExpressionWriter(
             return;
         }
         Substitute(value, rewriter, nested: false);
-        Narrow(value, width, rewriter, inBank);
+        Narrow(value, width, rewriter, inBank && RangeChecksInBank(null));
     }
 
     /// <summary>
@@ -103,7 +103,7 @@ internal sealed class ExpressionWriter(
         if (Datum(value, width, bigEndian, []) is { } text)
             return text;
         var rendered = Rendered(value);
-        return Narrows(value, width, inBank) ? LowPartOf(rendered, width) : rendered;
+        return Narrows(value, width, inBank && RangeChecksInBank(null)) ? LowPartOf(rendered, width) : rendered;
     }
 
     /// <summary>
@@ -267,18 +267,33 @@ internal sealed class ExpressionWriter(
     /// Returns whether the output writes <paramref name="value"/>, the value of a slot
     /// <paramref name="width"/> bytes wide, inside <c>.lobyte()</c> or <c>.loword()</c>. That is
     /// the case where <see cref="LinkRange.Narrows"/> says so. It is also the case for a slot that
-    /// holds the address within its bank, as <paramref name="inBank"/> marks it, where the value
-    /// names an address placed past $FFFF on any CPU but the 65816.
+    /// holds the address within its bank and that ca65 range-checks, as <paramref name="inBank"/>
+    /// marks it, where the value names an address placed past $FFFF.
     /// </summary>
-    /// <remarks>
-    /// An <c>.addr</c> and an absolute operand hold the address within its bank on every CPU.
-    /// ca65 keeps only the low 16 bits of either on the 65816, but range-checks them on the 6502
-    /// and the 65C02, where ld65 would then refuse a label placed past $FFFF. <c>.loword()</c>
-    /// gives ca65 the address within the bank on those CPUs.
-    /// </remarks>
     private bool Narrows(SyntaxNode value, int width, bool inBank) =>
         LinkRange.Narrows(model, value, Expansion, width)
-        || (inBank && layout.Cpu != Cpu.Wdc65816 && LinkRange.NamesWideAddress(model, value, Expansion, width));
+        || (inBank && LinkRange.NamesWideAddress(model, value, Expansion, width));
+
+    /// <summary>
+    /// Returns whether ca65 range-checks a slot that holds an address within its bank, so that
+    /// ld65 would refuse a label placed past $FFFF there. The slot is an <c>.addr</c> where
+    /// <paramref name="mode"/> is null, and the two-byte address of an operand in
+    /// <paramref name="mode"/> otherwise.
+    /// </summary>
+    /// <remarks>
+    /// An <c>.addr</c> and every two-byte operand hold the address within its bank on every CPU.
+    /// On the 65816, ca65 keeps only the low 16 bits of an <c>.addr</c> and of an operand in the
+    /// absolute, absolute X, absolute Y and absolute indexed indirect modes. It range-checks every
+    /// other slot, so <c>jmp (abs)</c> and <c>jml [abs]</c> are range-checked on the 65816 as
+    /// well. <c>.loword()</c> gives ca65 the address within the bank wherever it range-checks.
+    /// </remarks>
+    private bool RangeChecksInBank(AddressingMode? mode) => mode switch
+    {
+        null or AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY
+            or AddressingMode.AbsoluteIndirectX => layout.Cpu != Cpu.Wdc65816,
+        AddressingMode.AbsoluteIndirect or AddressingMode.AbsoluteIndirectLong => true,
+        _ => false,
+    };
 
     /// <summary>
     /// Writes <paramref name="value"/>, the value of a slot <paramref name="width"/> bytes wide,
@@ -343,8 +358,20 @@ internal sealed class ExpressionWriter(
                     return;
                 foreach (var child in operand.ChildNodes)
                     Substitute(child, rewriter, nested: false);
-                InBank(operand, rewriter);
+                NarrowAddress(operand, operand.Address, rewriter);
                 Prefix(operand, rewriter);
+                return;
+
+            // ca65 takes no `z:` or `a:` inside the parentheses or brackets of an indirect
+            // operand, so the narrowing alone sizes the pointer's address.
+            case IndirectOperandSyntax indirect:
+                Pointer(indirect, indirect.Address, rewriter);
+                return;
+            case IndexedIndirectOperandSyntax indexed:
+                Pointer(indexed, indexed.Address, rewriter);
+                return;
+            case LongIndirectOperandSyntax indirectLong:
+                Pointer(indirectLong, indirectLong.Address, rewriter);
                 return;
 
             case DataDirectiveSyntax directive:
@@ -987,18 +1014,39 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
-    /// Writes the address of an absolute operand inside <c>.loword()</c> where it names an address
-    /// placed past $FFFF on any CPU but the 65816, as <see cref="Narrows"/> describes. Only the
-    /// absolute, absolute X and absolute Y modes count, because those are the ones whose operand
-    /// ca65 keeps the low 16 bits of on the 65816.
+    /// Writes the address of an operand inside <c>.lobyte()</c> or <c>.loword()</c> where ca65 or
+    /// ld65 would otherwise refuse it. A one-byte address is written so where
+    /// <see cref="LinkRange.Narrows"/> says so, as the run address of a zero-page segment is,
+    /// which the output imports as absolute. A two-byte address is written so where it names an
+    /// address placed past $FFFF in a mode that <see cref="RangeChecksInBank"/> says ca65
+    /// range-checks.
     /// </summary>
-    private void InBank(AbsoluteOperandSyntax operand, TokenRewriter rewriter)
+    private void NarrowAddress(OperandSyntax operand, ExpressionSyntax address, TokenRewriter rewriter)
     {
-        if (layout.Cpu != Cpu.Wdc65816 && operand.Parent is { } instruction
-            && layout.Of(instruction, Expansion)?.Mode is AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
+        if (operand.Parent is not { } instruction || layout.Of(instruction, Expansion)?.Mode is not { } mode)
+            return;
+        switch (Instructions.Width(mode))
         {
-            Narrow(operand.Address, 2, rewriter, inBank: true);
+            case AddressSize.ZeroPage:
+                Narrow(address, 1, rewriter);
+                break;
+            case AddressSize.Absolute when RangeChecksInBank(mode):
+                Narrow(address, 2, rewriter, inBank: true);
+                break;
+            default:
+                break;
         }
+    }
+
+    /// <summary>
+    /// Records the edits for an indirect operand, whose <paramref name="address"/> is the address
+    /// of the pointer, as <see cref="NarrowAddress"/> narrows it.
+    /// </summary>
+    private void Pointer(OperandSyntax operand, ExpressionSyntax address, TokenRewriter rewriter)
+    {
+        foreach (var child in operand.ChildNodes)
+            Substitute(child, rewriter, nested: false);
+        NarrowAddress(operand, address, rewriter);
     }
 
     /// <summary>Writes the <c>z:</c> or <c>a:</c> that shows which mode was chosen.</summary>

@@ -22,7 +22,8 @@ public sealed partial class CodeLayout
         /// it, or any other operand that addresses memory through it, is reported. A name in a
         /// segment in another home bank is reported only for a near jump, call or branch on the
         /// 65816, because a long one reaches it and data goes through the data bank, which the
-        /// processor-state analysis checks.
+        /// processor-state analysis checks. On the other CPUs, a jump, call or branch to a target
+        /// placed in another bank is reported as <see cref="OutOfBank"/> decides.
         /// </summary>
         private void CheckReach(SyntaxToken mnemonic, SyntaxNode? operand, AddressingMode mode)
         {
@@ -49,14 +50,18 @@ public sealed partial class CodeLayout
                 : Expression(operand) is { } only ? [only] : [];
             foreach (var expression in expressions)
             {
+                var reported = false;
                 foreach (var (name, segmentName) in Named(expression))
                 {
                     if (Unseen(mnemonic.Text, mnemonic.MnemonicKind, name, segmentName, transfer, mode != AddressingMode.Long)
                         is { } message)
                     {
                         Report(expression, message);
+                        reported = true;
                     }
                 }
+                if (transfer && !reported && OutOfBank(mnemonic.Text, expression) is { } outOfBank)
+                    Report(expression, outOfBank);
             }
         }
 
@@ -66,11 +71,17 @@ public sealed partial class CodeLayout
         /// </summary>
         private void CheckReach(SyntaxToken mnemonic, SyntaxNode target)
         {
+            var reported = false;
             foreach (var (name, segmentName) in Named(target))
             {
                 if (Unseen(mnemonic.Text, MnemonicKind.Beq, name, segmentName, transfer: true, near: true) is { } message)
+                {
                     Report(target, message);
+                    reported = true;
+                }
             }
+            if (!reported && OutOfBank(mnemonic.Text, target) is { } outOfBank)
+                Report(target, outOfBank);
         }
 
         /// <summary>
@@ -114,6 +125,37 @@ public sealed partial class CodeLayout
                 default:
                     return null;
             }
+        }
+
+        /// <summary>
+        /// Returns the diagnostic for a jump, call or branch, written <paramref name="text"/>, to
+        /// <paramref name="target"/> on a CPU with only 16-bit addresses, or null when the code can
+        /// reach the target. It is reported when the target's linked range, as
+        /// <see cref="LinkRange"/> bounds it, lies wholly in one bank other than <c>$00</c>, and
+        /// no area the code's segment runs in reaches that bank.
+        /// </summary>
+        /// <remarks>
+        /// The processor keeps only the address within the bank, so it reaches a target in
+        /// another bank only at whatever is mapped at that address. A target in bank <c>$00</c> is
+        /// at the address the processor uses, so code in any bank reaches it. A target or a
+        /// segment whose placement nt65 cannot bound is not reported, because the linker decides
+        /// where it lands and nothing declared says otherwise.
+        /// </remarks>
+        private DiagnosticMessage? OutOfBank(string text, SyntaxNode target)
+        {
+            if (cpu == Cpu.Wdc65816 || segment is null || model.Segments.Find(segment) is not { } here
+                || LinkRange.Of(model, target, expansion) is not { } range)
+            {
+                return null;
+            }
+            var bank = range.Low >> 16;
+            if (bank <= 0 || range.High >> 16 != bank
+                || LinkRange.AreasOf(here) is not { Count: > 0 } areas
+                || areas.Any(area => area.First >> 16 <= bank && area.Last >> 16 >= bank))
+            {
+                return null;
+            }
+            return Catalogue.TargetInAnotherBank.Message(text, $"`{target.GetText().Trim()}`", StateValue.Hex(bank, 2));
         }
 
         /// <summary>

@@ -10,14 +10,22 @@
 
 .export main__pointers
 .export main__start
+.export main__dispatch
 
 .segment "BANK1": absolute
-table: .byte 1, 2, 3
+table:  .byte 1, 2, 3
+vector: .addr .loword(far_side)
 
-; .proc far_side  main.nt65:11
+; .proc far_side  main.nt65:13
 far_side:
+    jsr .loword(far_helper)
     rts
 ; end of far_side
+
+; .proc far_helper  main.nt65:18
+far_helper:
+    rts
+; end of far_helper
 
 .segment "RODATA": absolute
 main__pointers:
@@ -27,12 +35,16 @@ main__pointers:
     .word .loword(table - $10000)
 
 .segment "CODE": absolute
-; .proc start  main.nt65:24
+; .proc start  main.nt65:31
 main__start:
     ldx #2
     lda a:.loword(table),x
     sta a:.loword(table + 1)
-    jsr .loword(far_side)
     lda a:main__pointers
     rts
 ; end of start
+
+; .proc dispatch  main.nt65:39
+main__dispatch:
+    jmp (.loword(vector))
+; end of dispatch

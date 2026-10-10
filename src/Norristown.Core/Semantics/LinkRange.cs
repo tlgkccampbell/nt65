@@ -92,8 +92,11 @@ internal static class LinkRange
                     && Wider(size, AddressRange(model, symbol, size), bytes, placed);
 
             // A segment function is a symbol ld65 defines, as wide as the segment's placement.
+            // ld65 exports it as absolute and the output imports it so, which makes a zero-page
+            // one absolute to ca65.
             case CallExpressionSyntax segmental when SegmentFunctions.Of(segmental, model) is { } about:
-                return Wider(SegmentFunctions.SizeOf(about.Function, about.Segment),
+                var linked = SegmentFunctions.SizeOf(about.Function, about.Segment);
+                return Wider(linked == AddressSize.ZeroPage ? AddressSize.Absolute : linked,
                     SegmentFunctions.RangeOf(about.Function, about.Segment), bytes, placed);
 
             // An argument counts only where the body uses its parameter outside every byte
