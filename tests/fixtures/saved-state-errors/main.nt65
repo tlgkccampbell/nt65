@@ -184,3 +184,21 @@
     outer!()
     rts
 }
+
+; A data bank entered as one of a set of banks comes back as that same bank, at the routine's
+; level and in a body whose signature declares the set.
+.macro banked(): a8, dbr = [$00..$3f, $80..$bf] {
+    phb
+    phk
+    plb
+    plb
+}
+
+.proc kept_set: a8, dbr = [$00..$3f, $80..$bf] {
+    banked!()
+    phb
+    phk
+    plb
+    plb
+    rts
+}

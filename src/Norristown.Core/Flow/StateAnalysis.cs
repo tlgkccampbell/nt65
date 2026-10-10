@@ -1670,8 +1670,14 @@ public sealed class StateAnalysis : IProcessorStates
             new ProcessorState(entry.A, entry.Index, ProcessorMode.Unknown, held ?? StateValue.Unknown, held ?? StateValue.Unknown),
             null,
             on);
+
+        // A `*` item for D or B is what its owner was entered with, which may be one of a set of
+        // banks. The routine's is the value the push saved, and a macro's is its signature's.
+        var items = entry.Terms is { Call: { } call } && model.MacroAt(call)?.MacroSignature is { } signature
+            ? signature.Entry
+            : new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unknown, held ?? default, held ?? default);
         var starred = Translated(
-            new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unknown, StateValue.Unchanged, StateValue.Unchanged),
+            new ProcessorState(Width.Unchanged, Width.Unchanged, ProcessorMode.Unknown, Item(items.D), Item(items.B)),
             entry.Terms,
             on);
         return new ProcessorState(
@@ -1682,6 +1688,8 @@ public sealed class StateAnalysis : IProcessorStates
             Starred(StateParts.DataBank) ? starred.B : routine.B);
 
         bool Starred(StateParts part) => (parts & entry.Starred & part) != 0;
+
+        static StateValue Item(StateValue value) => value.IsEntered ? value : StateValue.Unchanged;
     }
 
     /// <summary>
