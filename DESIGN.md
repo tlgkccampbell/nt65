@@ -3233,6 +3233,28 @@ what ca65 code uses `.ident` for.
 Over a list or a count the binding names no member, so a path ending in it is an error, and
 so is a scope with no member of the name the binding stands for on some turn.
 
+**The index.** An `.each` may bind a second name after the item's, `.each what, item, i`, the
+way `.repeat count, i` binds its counter. It counts the items or members from zero, whatever
+values they have. It is a constant in the body, so a condition may test it as it may test a
+`.repeat` counter. It computes no name and declares nothing, so which declarations exist still
+follows from the headers. It names no member, so a path ending in it is an error, and a
+declaration named after it is not a family. Two tables, or a table and the numbers that select
+its entries, built from one list cannot fall out of step:
+
+```nt65
+.list statements {
+    do_end
+    do_for
+    do_next
+}
+
+.data keywords: .byte[] {
+    .each statements, stmt, id {
+        $80 + id, <(stmt - 1), >(stmt - 1)  ; the token, then the RTS dispatch address
+    }
+}
+```
+
 **A list of lists.** A list's items may name other lists, or enums, and an `.each` may walk
 what an outer `.each` has bound, so a table laid out in rows is walked row by row:
 

@@ -131,27 +131,36 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Parses <c>.repeat count, name {</c> or <c>.each what, name {</c>. The name is bound to the
-    /// index or the item, and a body that does not use it may leave the name out.
+    /// Parses <c>.repeat count, name {</c> or <c>.each what, name, index {</c>. The name is bound
+    /// to the index or the item, and a body that does not use it may leave the name out. An
+    /// <c>.each</c> may also bind the item's zero-based index, as the counter of a <c>.repeat</c>
+    /// is bound, after the item's name.
     /// </summary>
     private GreenNode ParseRepetition(SyntaxKind kind)
     {
         var keyword = Advance();
         var expression = ParseExpression();
-        GreenToken? comma = null;
-        GreenToken? name = null;
-        if (Kind == SyntaxKind.Comma)
-        {
-            comma = Advance();
-            if (AtName)
-                name = Advance();
-            else
-                Report(Catalogue.ExpectedName.Message("the name to bind"));
-        }
-        var openBrace = ExpectOpenBrace();
-        return kind == SyntaxKind.RepeatDirective
-            ? new RepeatDirectiveSyntax(keyword, expression, comma, name, openBrace)
-            : new EachDirectiveSyntax(keyword, expression, comma, name, openBrace);
+        var (comma, name) = ParseBoundName("the name to bind");
+        if (kind == SyntaxKind.RepeatDirective)
+            return new RepeatDirectiveSyntax(keyword, expression, comma, name, ExpectOpenBrace());
+        var (indexComma, index) = name is null ? (null, null) : ParseBoundName("the name to bind the index to");
+        return new EachDirectiveSyntax(keyword, expression, comma, name, indexComma, index, ExpectOpenBrace());
+    }
+
+    /// <summary>
+    /// Parses the <c>, name</c> after a repetition's expression or its first name, and returns
+    /// both tokens, or two nulls when the line has no comma there.
+    /// </summary>
+    /// <param name="what">The phrase that names what is expected when the comma has no name after it.</param>
+    private (GreenToken? Comma, GreenToken? Name) ParseBoundName(string what)
+    {
+        if (Kind != SyntaxKind.Comma)
+            return (null, null);
+        var comma = Advance();
+        if (AtName)
+            return (comma, Advance());
+        Report(Catalogue.ExpectedName.Message(what));
+        return (comma, null);
     }
 
     /// <summary>

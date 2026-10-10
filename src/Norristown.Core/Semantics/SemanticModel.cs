@@ -423,6 +423,8 @@ public sealed class SemanticModel
         var bound = new Dictionary<Symbol, Expansion.Bound>();
         for (var level = on; level is not null; level = level.Outer)
         {
+            if (level.IndexBinding is { } index)
+                bound.TryAdd(index, new Expansion.Bound(Value.Of(level.Index), null));
             if (level.Binding is { } name)
             {
                 bound.TryAdd(name, new Expansion.Bound(level.Value, level.Item, Member: level.Member));

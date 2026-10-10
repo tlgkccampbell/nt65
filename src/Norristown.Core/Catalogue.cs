@@ -1589,10 +1589,11 @@ public static class Catalogue
         Area.Values,
         "binding-not-over-an-enum",
         Severity.Error,
-        "`{0}` cannot end a path: only the binding of an `.each` over an enum can",
+        "`{0}` cannot end a path: only the name an `.each` over an enum binds to each member can",
         "Inside `.each Enum, e`, a path such as `handlers::e` names the member of `handlers` that has the same "
             + "name as the current enum member. When `.each` iterates over a `.list` or a list parameter, its "
-            + "variable stands for a value rather than a name, so it cannot be used at the end of a path.");
+            + "variable stands for a value rather than a name, so it cannot be used at the end of a path. Neither can "
+            + "the index that `.each Enum, e, i` binds, which is a number.");
 
     internal static DiagnosticDescriptor FamilyMemberMissing { get; } = Entry(
         Area.Values,

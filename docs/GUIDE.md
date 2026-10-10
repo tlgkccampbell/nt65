@@ -837,6 +837,25 @@ ca65 code uses `.ident` for:
 }
 ```
 
+An `.each` may also name the item's index after the item, as `.repeat` names its counter. The
+index counts from zero and is a constant, so a condition may test it. A table and the IDs
+that select its entries then come from one list, and adding, removing or reordering an item
+changes both together:
+
+```nt65
+.list statements {
+    do_end
+    do_for
+    do_next
+}
+
+.data keywords: .byte[] {
+    .each statements, stmt, id {
+        $80 + id, <(stmt - 1), >(stmt - 1)  ; the token, then the RTS dispatch address
+    }
+}
+```
+
 **Families.** Run the same rule the other way and a declaration named after the binding
 declares one routine or one data declaration per member of the enum. `.multiproc` is the
 short form for routines:

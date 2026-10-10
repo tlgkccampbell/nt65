@@ -670,7 +670,7 @@ internal sealed partial class Binder
     /// </summary>
     private FamilyDeclarer.Repeated? RepeatedIn(BlockSyntax block, StatementSyntax opener, Scope around, BlockKind kind)
     {
-        if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding])
+        if (scope.Symbols is not [{ Kind: SymbolKind.Binding } binding, ..])
             return null;
         DiagnosticMessage? why = kind == BlockKind.Repeat
             ? Catalogue.FamilyMisplaced.Message("a family must be in an `.each` over a named enum, because each routine it "
@@ -884,9 +884,10 @@ internal sealed partial class Binder
     }
 
     /// <summary>
-    /// Opens the scope of a <c>.repeat</c> or an <c>.each</c>, which holds the one name it binds
-    /// and nothing else. The body is read in it once. The binding's value differs in each
-    /// iteration, but the symbol each name refers to does not, so one reading serves them all.
+    /// Opens the scope of a <c>.repeat</c> or an <c>.each</c>, which holds the names it binds and
+    /// nothing else. The first is the item's name, and an <c>.each</c> may bind its index after it.
+    /// The body is read in the scope once. The bindings' values differ in each iteration, but the
+    /// symbol each name refers to does not, so one reading serves them all.
     /// </summary>
     private Scope OpenRepetition(StatementSyntax opener)
     {
@@ -898,6 +899,8 @@ internal sealed partial class Binder
         var outer = scope;
         scope = body;
         Declare(name, SymbolKind.Binding);
+        if (opener is EachDirectiveSyntax { Index: { IsMissing: false } index })
+            Declare(index, SymbolKind.Binding);
         scope = outer;
         return body;
     }

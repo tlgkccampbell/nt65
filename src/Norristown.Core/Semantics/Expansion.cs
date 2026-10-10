@@ -26,10 +26,11 @@ public sealed class Expansion : IEquatable<Expansion>
 
     private Expansion(
         Expansion? outer, Symbol? binding, Value value, SyntaxNode? item, int index,
-        MacroCallSyntax? call, BlockSyntax? body, bool splice = false, Symbol? member = null)
+        MacroCallSyntax? call, BlockSyntax? body, bool splice = false, Symbol? member = null, Symbol? indexBinding = null)
     {
         this.splice = splice;
         Member = member;
+        IndexBinding = indexBinding;
         Outer = outer;
         Binding = binding;
         Value = value;
@@ -47,6 +48,12 @@ public sealed class Expansion : IEquatable<Expansion>
     /// binds no name.
     /// </summary>
     public Symbol? Binding { get; }
+
+    /// <summary>
+    /// Gets the name an <c>.each</c> binds to the iteration's <see cref="Index"/>, or null when it
+    /// binds none.
+    /// </summary>
+    public Symbol? IndexBinding { get; }
 
     /// <summary>Gets the value of the bound name in this iteration.</summary>
     public Value Value { get; }
@@ -97,13 +104,14 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>
-    /// Creates the expansion for one iteration of a repetition, with the name it binds and that
-    /// name's value.
+    /// Creates the expansion for one iteration of a repetition, with the names it binds and the
+    /// first name's value. The name an <c>.each</c> binds to the index, when it binds one, is
+    /// worth <paramref name="index"/>.
     /// </summary>
     public static Expansion Iteration(
         Expansion? outer, BlockSyntax block, Symbol? binding, Value value, SyntaxNode? item, int index,
-        Symbol? member = null) =>
-        new(outer, binding, value, item, index, null, block, member: member);
+        Symbol? member = null, Symbol? indexBinding = null) =>
+        new(outer, binding, value, item, index, null, block, member: member, indexBinding: indexBinding);
 
     /// <summary>Creates one expansion of the macro that <paramref name="call"/> names.</summary>
     public static Expansion Of(Expansion? outer, MacroCallSyntax call, BlockSyntax definition) =>

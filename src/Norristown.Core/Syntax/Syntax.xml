@@ -703,11 +703,29 @@
     </Field>
   </Node>
 
-  <Node Name="EachDirectiveSyntax" Base="RepetitionDirectiveSyntax">
+  <Node Name="EachDirectiveSyntax" Base="RepetitionDirectiveSyntax"
+      Layout="Keyword Expression CommaToken Name IndexCommaToken Index OpenBraceToken">
     <Kind Name="EachDirective"/>
     <TypeComment>
-      <summary>Represents an <c>.each what, name {</c> line.</summary>
+      <summary>Represents an <c>.each what, name {</c> or <c>.each what, name, index {</c> line.</summary>
     </TypeComment>
+    <Field Name="IndexCommaToken" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>Gets the <c>,</c> token before the index's name, or null.</summary>
+      </PropertyComment>
+      <Kind Name="Comma"/>
+    </Field>
+    <Field Name="Index" Type="SyntaxToken" Optional="true">
+      <PropertyComment>
+        <summary>
+          Gets the name bound to the zero-based index of the item or member, or null if the source
+          omits it.
+        </summary>
+      </PropertyComment>
+      <Kind Name="Identifier"/>
+      <Kind Name="Register"/>
+      <Kind Name="Mnemonic"/>
+    </Field>
   </Node>
 
   <Node Name="ElementCountSyntax" Base="SyntaxNode">

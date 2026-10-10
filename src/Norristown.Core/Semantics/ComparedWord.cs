@@ -58,14 +58,16 @@ public sealed record ComparedWord(SyntaxToken Word, string Compared, string Name
     /// <summary>
     /// Returns the kind listing the words <paramref name="symbol"/> may stand for, or null when a
     /// condition cannot compare it with a word. Only a <c>one(...)</c> parameter, or a repetition's
-    /// binding over a <c>list(one(...))</c> parameter, can be compared with a word.
+    /// binding over a <c>list(one(...))</c> parameter, can be compared with a word. The index an
+    /// <c>.each</c> binds is a number, not a word.
     /// </summary>
     public static ArgumentKind? WordsOf(Symbol symbol, Func<NameExpressionSyntax, Symbol?> symbolOf)
     {
         if (symbol.Parameter is { Kind: ParameterKind.One } one)
             return one.Accepts;
         return symbol.Kind == SymbolKind.Binding
-            && symbol.Tree.Root.FindToken(symbol.NameSpan.Start).Parent is EachDirectiveSyntax { Expression: NameExpressionSyntax walked }
+            && symbol.Tree.Root.FindToken(symbol.NameSpan.Start).Parent is EachDirectiveSyntax { Expression: NameExpressionSyntax walked } each
+            && each.Name?.Span.Start == symbol.NameSpan.Start
             && symbolOf(walked) is { Parameter: { Kind: ParameterKind.List, Accepts.Element: { Kind: ParameterKind.One } element } }
                 ? element
                 : null;

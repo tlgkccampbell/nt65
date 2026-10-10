@@ -10,6 +10,7 @@
 
 .export repeat__row_lo
 .export repeat__dispatch
+.export repeat__keywords
 .exportzp repeat__Channel__pulse1
 .exportzp repeat__Channel__pulse2
 .exportzp repeat__Channel__noise
@@ -46,6 +47,25 @@ repeat__dispatch:
     .addr actions__move - 1
     .addr actions__fire - 1
 
+repeat__keywords:
+    .byte $80 + $00, <(do_end - 1), >(do_end - 1)
+    .byte $80 + $01, <(do_for - 1), >(do_for - 1)
+    .byte $80 + $02, <(do_next - 1), >(do_next - 1)
+
+.segment "CODE": absolute
+; .proc do_end  repeat.nt65:51
+do_end:
+    rts
+; end of do_end
+; .proc do_for  repeat.nt65:54
+do_for:
+    rts
+; end of do_for
+; .proc do_next  repeat.nt65:57
+do_next:
+    rts
+; end of do_next
+
 repeat__Channel__pulse1 = $00
 repeat__Channel__pulse2 = $01
 repeat__Channel__noise = $02
@@ -56,19 +76,19 @@ repeat__level__pulse2: .res 1
 repeat__level__noise:  .res 1
 
 .segment "CODE": absolute
-; .multiproc Channel, ch  repeat.nt65:53  play::pulse1
+; .multiproc Channel, ch  repeat.nt65:76  play::pulse1
 repeat__play__pulse1:
     lda a:repeat__level__pulse1
     sta a:repeat__level__pulse1
     rts
 ; end of pulse1
-; .multiproc Channel, ch  repeat.nt65:53  play::pulse2
+; .multiproc Channel, ch  repeat.nt65:76  play::pulse2
 repeat__play__pulse2:
     lda a:repeat__level__pulse2
     sta a:repeat__level__pulse2
     rts
 ; end of pulse2
-; .multiproc Channel, ch  repeat.nt65:53  play::noise
+; .multiproc Channel, ch  repeat.nt65:76  play::noise
 repeat__play__noise:
     lda a:repeat__level__noise
     ora #$80
