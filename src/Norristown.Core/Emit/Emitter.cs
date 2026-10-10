@@ -1018,7 +1018,7 @@ public sealed class Emitter
         {
             var (width, bigEndian) = ElementFormat(directive);
             foreach (var value in list.Values)
-                expressions.InPlace(value, width, bigEndian, rewriter);
+                expressions.InPlace(value, width, bigEndian, rewriter, directive.Directive.DirectiveKind == DirectiveKind.Addr);
             rewriter.Replacements[list.OpenBraceToken.Position] = "";
             if (!list.CloseBraceToken.IsMissing)
                 rewriter.Replacements[list.CloseBraceToken.Position] = "";
@@ -1685,9 +1685,10 @@ public sealed class Emitter
         /// <param name="value">The value.</param>
         /// <param name="width">The width of the slot, in bytes.</param>
         /// <param name="bigEndian">Whether the slot's bytes are written high first.</param>
+        /// <param name="inBank">Whether the slot is an <c>.addr</c>, which holds the address within its bank.</param>
         /// <returns>The value as the output writes it.</returns>
-        public string ValueText(SyntaxNode value, int width, bool bigEndian) =>
-            emitter.expressions.SlotText(value, width, bigEndian);
+        public string ValueText(SyntaxNode value, int width, bool bigEndian, bool inBank) =>
+            emitter.expressions.SlotText(value, width, bigEndian, inBank);
     }
 
     /// <summary>

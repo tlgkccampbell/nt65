@@ -1,0 +1,31 @@
+; An `.addr` and an absolute operand hold the address within its bank on the 6502, as they do
+; on the 65816. ca65 range-checks both on the 6502, so one that names a label the linked config
+; places past $ffff is written inside `.loword()`, which gives ca65 the address within the bank.
+.module main
+
+.export start, pointers
+
+.segment BANK1
+.data table: .byte 1, 2, 3
+
+.proc far_side {
+    rts
+}
+
+.segment RODATA
+.data pointers {
+    .addr table                             ; $8000 in bank $01
+    .addr table + 2
+    .addr start                             ; placed below $10000, so written as it stands
+    .word table - $10000                    ; $8000 to $ffff
+}
+
+.segment CODE
+.proc start {
+    ldx #2
+    lda table,x                             ; the bank $01 cartridge window
+    sta table + 1
+    jsr far_side
+    lda pointers
+    rts
+}
