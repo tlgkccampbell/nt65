@@ -1946,8 +1946,8 @@ Examples. A jump table inside a proc: the targets need no declarations because t
 ```
 
 Every item of `table` is a code label, so `.next table` says the same. A table is read only
-from data declared as addresses: a label on a line of `.addr` directives is a position, and
-names no targets.
+from data declared as addresses, or from a label on a line of `.addr` or `.faraddr`, whose
+items are the addresses on that line and no others.
 
 Data that names a label says nothing about which jump reaches it, so the flag analysis enters a
 label that data names with every flag unknown. A table that only this routine's `.next`
