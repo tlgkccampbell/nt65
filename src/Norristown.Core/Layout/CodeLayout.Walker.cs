@@ -413,6 +413,13 @@ public sealed partial class CodeLayout
             statement.DescendantNodes().OfType<CallExpressionSyntax>()
                 .Any(call => call.BuiltinKind is BuiltinKind.Mincycles or BuiltinKind.Maxcycles);
 
+        /// <summary>
+        /// Returns a value indicating whether <paramref name="operand"/> gives an operand
+        /// parameter an index, a prefix, parentheses or <c>#</c>, which the language does not allow.
+        /// </summary>
+        private bool NotWhole(SyntaxNode? operand) =>
+            Operands.ParameterNotWhole(operand, name => model.SymbolOf(name)) is not null;
+
         /// <summary>Marks the routine being walked as one in which an instruction could not be laid out.</summary>
         private void Unlayable()
         {
@@ -479,6 +486,15 @@ public sealed partial class CodeLayout
             // address size come from the argument the call passed rather than from the body's text.
             var sourceOperand = statement.Operand;
             var substituted = Operands.Substituted(model, sourceOperand, expansion);
+
+            // An operand that gives an operand parameter an index, a prefix, parentheses or `#` has
+            // been reported where the macro is declared, so neither it nor an operand passed on
+            // that way is laid out.
+            if (expansion is not null && (NotWhole(sourceOperand) || NotWhole(substituted?.Operand)))
+            {
+                Unlayable();
+                return;
+            }
             CheckSubstitution(substituted);
 
             // The values of an operand's expressions are checked here, as a data directive's are,

@@ -411,6 +411,7 @@
         "operand-missing",
         "operand-mode-unknown",
         "operand-not-taken",
+        "operand-parameter-not-whole",
         "operator-on-text",
         "operators-need-parentheses",
         "output-name-collision",

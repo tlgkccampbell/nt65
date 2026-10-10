@@ -1883,6 +1883,17 @@ public static class Catalogue
         "An `operand(...)` parameter lists the addressing modes it takes, as `.mode` names them, with `zp`, `zpx` "
             + "and `zpy` for a direct-page address, so a call in another mode is reported at the call.");
 
+    internal static DiagnosticDescriptor OperandParameterNotWhole { get; } = Entry(
+        Area.Macros,
+        "operand-parameter-not-whole",
+        Severity.Error,
+        "`{0}` is an `operand` parameter, which stands as a whole operand and takes no index, prefix, parentheses "
+            + "or immediate of its own",
+        "An `operand` parameter is given a whole operand, with its addressing mode, index and address size, so in "
+            + "the body it stands alone as the operand. `p + n`, `p - n` and `.byteof(p, n)` are the only other forms "
+            + "allowed, and each addresses a byte of the operand given. To index or wrap the operand, pass it that "
+            + "way at the call, as in `load!({buf,x})`, or write the expression inside it with `.exprof(p)`.");
+
     internal static DiagnosticDescriptor ParameterRangeInvalid { get; } = Entry(
         Area.Macros,
         "parameter-range-invalid",

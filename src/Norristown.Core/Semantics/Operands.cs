@@ -20,9 +20,11 @@ public static class Operands
         if (on is null || operand is not AbsoluteOperandSyntax absolute)
             return null;
 
-        // Only a bare expression can name an operand parameter. A prefix or an index of its own
-        // would wrap a whole operand, which the language does not allow.
-        if (absolute.Prefix is not null || absolute.Second is not null)
+        // Only a bare expression can name an operand parameter. A prefix, an index or a bit
+        // branch's second expression would wrap a whole operand, which the language does not
+        // allow, and such a line is reported where the macro is declared. Reading it as the
+        // operand given would silently drop what the line wrote.
+        if (absolute.Prefix is not null || absolute.IndexRegister is not null || absolute.Second is not null)
             return null;
         return Read(model, absolute.Address, on);
     }
@@ -59,6 +61,39 @@ public static class Operands
             'f' => AddressSize.Far,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// Returns the <c>operand</c> parameter that <paramref name="operand"/> names in a place
+    /// where it does not stand as the whole operand, or null when there is none. Such a place is
+    /// an operand with an index, a prefix, parentheses or <c>#</c>, or a bit branch's second
+    /// expression. The parameter counts as named when it stands alone, with <c>+ n</c> or
+    /// <c>- n</c>, or inside <c>.byteof</c>.
+    /// </summary>
+    public static MacroParameter? ParameterNotWhole(SyntaxNode? operand, Func<NameExpressionSyntax, Symbol?> symbolOf)
+    {
+        if (operand is not OperandSyntax)
+            return null;
+        var whole = operand is AbsoluteOperandSyntax { Prefix: null, IndexRegister: null, Second: null };
+        return (whole ? null : Named(ExpressionOf(operand)))
+            ?? (operand is AbsoluteOperandSyntax { Second: { } second } ? Named(second) : null);
+
+        MacroParameter? Named(SyntaxNode? expression)
+        {
+            var name = expression switch
+            {
+                NameExpressionSyntax plain => plain,
+                BinaryExpressionSyntax { OperatorToken.Kind: SyntaxKind.Plus or SyntaxKind.Minus } binary =>
+                    binary.Left as NameExpressionSyntax,
+                CallExpressionSyntax call when IsByteOf(call) && call.Arguments.Arguments.Count > 0 =>
+                    call.Arguments.Arguments[0] as NameExpressionSyntax,
+                _ => null,
+            };
+            return name is not null
+                && symbolOf(name) is { Kind: SymbolKind.MacroParameter, Parameter: { Kind: ParameterKind.Operand } parameter }
+                ? parameter
+                : null;
+        }
     }
 
     /// <summary>Returns a value indicating whether <paramref name="call"/> calls <c>.exprof</c>.</summary>

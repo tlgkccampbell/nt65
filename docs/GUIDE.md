@@ -952,6 +952,8 @@ is `#<(label+1)`.
 **Operands.** An `operand` parameter takes a whole operand. Any addressing mode other than a
 plain address is written in braces: `{#$0400}`, `{buf,x}`, `{(ptr),y}`. In the body,
 `dest+1` adds to the operand's address and keeps its mode, so `{buf,x}` becomes `buf+1,x`.
+The operand already carries its mode, so the body may not give it an index, a prefix,
+parentheses or `#` of its own.
 `.byteof(src, n)` is byte n of either an immediate or an address, which is how `mov16` above
 serves both. `.mode(p)` names the argument's mode (`imm`, `abs`, `absx`, `indy` and so on) for
 an `.if` to test, and `.exprof(p)` is the expression inside it.
