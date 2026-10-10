@@ -934,7 +934,10 @@ an `.if` to test, and `.exprof(p)` is the expression inside it.
 | an enum's name | one of that enum's members |
 
 A mistake in an argument is reported at the call, naming the parameter, rather than as an
-error somewhere inside the expansion.
+error somewhere inside the expansion. So is any other problem with a line the body emits, such
+as a `.next` that is not needed or code no path reaches: it is reported at your call, with a
+note pointing at the line in the body, because the call is what you can change. A problem
+evaluating a `.func` body with the arguments a call gave is reported at the call the same way.
 
 **Defaults and named arguments.** `.macro note(pitch: const, frames: const = 1)` gives
 `frames` a default, and a call can name its arguments after the positional ones:

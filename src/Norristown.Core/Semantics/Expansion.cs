@@ -22,6 +22,12 @@ namespace Norristown.Semantics;
 /// </summary>
 public sealed class Expansion : IEquatable<Expansion>
 {
+    /// <summary>
+    /// The note that a diagnostic reported at a call gives the body line it is about. An
+    /// <c>.allow</c> in the body covers such a diagnostic through this note.
+    /// </summary>
+    public const string InTheMacroBody = "in the macro body";
+
     private readonly bool splice;
 
     private Expansion(
@@ -178,30 +184,56 @@ public sealed class Expansion : IEquatable<Expansion>
 
     /// <summary>
     /// Creates a diagnostic for a problem with the text at <paramref name="span"/> of
-    /// <paramref name="tree"/>, found while laying out or emitting <paramref name="file"/> within
-    /// the expansion <paramref name="at"/>. Text in the file itself is reported at its own
-    /// position. Text in another file's macro body is reported at the nearest call in this file
-    /// that expanded it, which this file controls, with the body's text as a related location.
-    /// The body's position belongs to the other file, and this file's diagnostics should not move
-    /// when that file is edited.
+    /// <paramref name="tree"/>, found while laying out, analyzing or emitting
+    /// <paramref name="file"/> within the expansion <paramref name="at"/>. Where the text is a line
+    /// a macro body emits, as <see cref="BodyLine(SyntaxNode, Expansion?, SyntaxTree)"/> finds, the
+    /// problem is reported at the call in the file's own text, with the body's text as a related
+    /// location and without <paramref name="fix"/>. Any other text is reported where it is.
     /// </summary>
+    /// <remarks>
+    /// A body serves every call, and the call is the side that chose to expand it there, so the
+    /// call is where the problem can be fixed. The fix is dropped because it would change a line
+    /// that every call expands. A body in another file also belongs to that file, and this file's
+    /// diagnostics should not move when that file is edited.
+    /// </remarks>
+    /// <param name="file">The file whose analysis found the problem.</param>
+    /// <param name="tree">The file that holds the text with the problem.</param>
+    /// <param name="span">The text with the problem.</param>
+    /// <param name="at">The expansion the text was found in.</param>
+    /// <param name="severity">The severity, or null for the one the catalogue gives.</param>
+    /// <param name="message">The message.</param>
+    /// <param name="fix">The change the message names, offered only where the text is reported.</param>
     public static Diagnostic Problem(
-        SyntaxTree file, SyntaxTree tree, TextSpan span, Expansion? at, Severity? severity, DiagnosticMessage message)
+        SyntaxTree file, SyntaxTree tree, TextSpan span, Expansion? at, Severity? severity, DiagnosticMessage message,
+        DiagnosticFix? fix = null)
     {
-        if (tree != file)
+        if (BodyLine(tree, span.Start, at, file) is var (call, _, _))
         {
-            for (var level = at; level is not null; level = level.Outer)
-            {
-                if (level.Call is { } call && call.Tree == file)
-                {
-                    return new Diagnostic(
-                        file.GetSpan(call.Span), severity ?? message.Descriptor.Severity, message,
-                        [new RelatedSpan(tree.GetSpan(span), "in the macro body")]);
-                }
-            }
+            return new Diagnostic(
+                call.Tree.GetSpan(call.Span), severity ?? message.Descriptor.Severity, message,
+                [new RelatedSpan(tree.GetSpan(span), InTheMacroBody)]);
         }
-        return new Diagnostic(tree.GetSpan(span), severity ?? message.Descriptor.Severity, message);
+        return new Diagnostic(tree.GetSpan(span), severity ?? message.Descriptor.Severity, message) { Fix = fix };
     }
+
+    /// <summary>
+    /// Creates a diagnostic for a problem with <paramref name="node"/>, found while laying out,
+    /// analyzing or emitting <paramref name="file"/> within the expansion <paramref name="at"/>. A
+    /// line a macro body emits is reported at the call in the file's own text, with the line as a
+    /// related location and without <paramref name="fix"/>, as
+    /// <see cref="Problem(SyntaxTree, SyntaxTree, TextSpan, Expansion?, Severity?, DiagnosticMessage, DiagnosticFix?)"/>
+    /// describes.
+    /// </summary>
+    /// <param name="file">The file whose analysis found the problem.</param>
+    /// <param name="node">The line, or a part of it, that has the problem.</param>
+    /// <param name="at">The expansion the node was found in.</param>
+    /// <param name="severity">The severity, or null for the one the catalogue gives.</param>
+    /// <param name="message">The message.</param>
+    /// <param name="fix">The change the message names, offered only where the node is reported.</param>
+    public static Diagnostic Problem(
+        SyntaxTree file, SyntaxNode node, Expansion? at, Severity? severity, DiagnosticMessage message,
+        DiagnosticFix? fix = null) =>
+        Problem(file, node.Tree, node.Span, at, severity, message, fix);
 
     /// <summary>
     /// Returns where a problem with a line of a macro body is reported, or null where
@@ -219,15 +251,24 @@ public sealed class Expansion : IEquatable<Expansion>
     /// that call expanded.
     /// </returns>
     public static (MacroCallSyntax Call, MacroCallSyntax Holder, Expansion Level)? BodyLine(
-        SyntaxNode node, Expansion? on, SyntaxTree file)
+        SyntaxNode node, Expansion? on, SyntaxTree file) =>
+        BodyLine(node.Tree, node.Position, on, file);
+
+    /// <summary>
+    /// Returns where a problem with the text at <paramref name="position"/> of
+    /// <paramref name="tree"/> is reported, as
+    /// <see cref="BodyLine(SyntaxNode, Expansion?, SyntaxTree)"/> describes for a node.
+    /// </summary>
+    private static (MacroCallSyntax Call, MacroCallSyntax Holder, Expansion Level)? BodyLine(
+        SyntaxTree tree, int position, Expansion? on, SyntaxTree file)
     {
         MacroCallSyntax? holder = null;
         for (var level = on; level is not null && holder is null; level = level.Outer)
         {
-            if (level.Call is { } call && level.Holds(node))
+            if (level.Call is { } call && level.Holds(tree, position))
                 holder = call;
         }
-        if (holder is null && node.Tree == file)
+        if (holder is null && tree == file)
             return null;
         for (var level = on; level is not null; level = level.Outer)
         {
@@ -304,8 +345,14 @@ public sealed class Expansion : IEquatable<Expansion>
     }
 
     /// <summary>Returns whether the block this expansion emits contains <paramref name="node"/>.</summary>
-    private bool Holds(SyntaxNode node) =>
-        Body is { } body && body.Tree == node.Tree && node.Position >= body.Position && node.Position < body.FullSpan.End;
+    private bool Holds(SyntaxNode node) => Holds(node.Tree, node.Position);
+
+    /// <summary>
+    /// Returns whether the block this expansion emits contains the text at
+    /// <paramref name="position"/> of <paramref name="tree"/>.
+    /// </summary>
+    private bool Holds(SyntaxTree tree, int position) =>
+        Body is { } body && body.Tree == tree && position >= body.Position && position < body.FullSpan.End;
 
     /// <summary>
     /// Represents what one name is bound to in one expansion. An item is kept as the expression

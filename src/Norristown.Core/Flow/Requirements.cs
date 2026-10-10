@@ -394,7 +394,7 @@ internal sealed class Requirements
         // what runs off, and the `.fallthrough` the fix adds still goes at the routine's end.
         var found = Expansion.BodyLine(step.Statement, step.On, model.Tree) is var (call, _, _)
             ? new Diagnostic(call.Tree.GetSpan(call.Span), RunsOff(routine, own, branch),
-                [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), "in the macro body")])
+                [new RelatedSpan(step.Statement.Tree.GetSpan(step.Statement.Span), Expansion.InTheMacroBody)])
             : new Diagnostic(step.Statement.Tree.GetSpan(step.Statement.Span), RunsOff(routine, own, branch));
         diagnostics.Add(found with
         {
@@ -496,16 +496,8 @@ internal sealed class Requirements
     /// chose to expand it there, with the body line as a note. Such a report has no fix, since a
     /// fix would change a line that every call expands.
     /// </summary>
-    private void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null)
-    {
-        if (Expansion.BodyLine(node, on, model.Tree) is var (call, _, _))
-        {
-            diagnostics.Add(new Diagnostic(call.Tree.GetSpan(call.Span), Severity.Error, message,
-                [new RelatedSpan(node.Tree.GetSpan(node.Span), "in the macro body")]));
-            return;
-        }
-        diagnostics.Add(new Diagnostic(node.Tree.GetSpan(node.Span), Severity.Error, message) { Fix = fix });
-    }
+    private void Report(SyntaxNode node, Expansion? on, DiagnosticMessage message, DiagnosticFix? fix = null) =>
+        diagnostics.Add(Expansion.Problem(model.Tree, node, on, Severity.Error, message, fix));
 
     /// <summary>
     /// Returns a fix that adds a <c>.next ?</c> after the step's statement, or null where the

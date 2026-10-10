@@ -100,17 +100,19 @@ public sealed class FlagAnalysisTests
 
     /// <summary>
     /// A line of a macro body serves every call, so code there is reported as never reached only
-    /// where no call reaches it.
+    /// where no call reaches it. It is then reported at each call, which is the side that can
+    /// change.
     /// </summary>
     [Fact]
     public void AMacroLineIsUnreachedOnlyWhereNoCallReachesIt()
     {
         const string Macro = ".macro skip_if_plus(v: const) {\n    lda #v\n    bpl @skip\n    nop\n@skip:\n}\n";
+        const string Message = ": this code is never reached: `bpl @skip` above is always taken, because N is 0 here, and "
+            + "nothing branches or jumps here";
 
         Assert.Empty(Problems(Macro + ".proc p {\n    skip_if_plus!(1)\n    skip_if_plus!($80)\n    rts\n}\n"));
         Assert.Equal(
-            ["main.nt65:7: this code is never reached: `bpl @skip` above is always taken, because N is 0 here, and "
-                + "nothing branches or jumps here"],
+            ["main.nt65:11" + Message, "main.nt65:12" + Message],
             Problems(Macro + ".proc p {\n    skip_if_plus!(1)\n    skip_if_plus!(2)\n    rts\n}\n"));
     }
 

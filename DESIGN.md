@@ -3708,11 +3708,19 @@ A diagnostic lands on the side of the call that can fix it. A definition is chec
 what holds under any arguments: parsing, names, the forbidden items above, and how its
 parameters are used. A call is checked for each argument against its parameter's kind: a
 `const` that is not constant, a word not in its `one` list, an unbraced `(ptr)` for an
-`operand`. What depends on a particular binding, such as `stx dest` with `dest` bound to
-`buf,x`, is reported at the call with a note naming the line in the body. So is what the flow
-and state analyses find in an expansion, since they analyze each call's code where it is called:
-data the code runs into, a construct without the annotation §7.4 requires, a return the routine
-may not make, or the wrong state. A fix is offered only where it edits the caller's own lines.
+`operand`. Everything else is found in an expansion, and one rule places it: a problem with a
+line a macro body emits is reported at the call written in the file's own text, outside every
+body, with a note naming the line in the body. That covers what depends on a particular
+binding, such as `stx dest` with `dest` bound to `buf,x`, and what layout and the flow and
+state analyses find, since they analyze each call's code where it is called: data the code runs
+into, a construct without the annotation §7.4 requires, an annotation that is not needed or
+names the wrong place, code or a label nothing reaches, a return the routine may not make, or
+the wrong state. It holds for a body in the same file as the call and for one in another file
+alike. Code a body line emits counts as unreached only where no call reaches it, and is then
+reported at each call. A `.func` body is treated the same way: a problem evaluating it with
+what a call gave, such as a division by zero, is reported at the call, with a note naming the
+body. An `.allow` in a body covers what is reported at a call through that line. A fix is
+offered only where it edits the caller's own lines.
 
 A word a condition compares with what a parameter stands for is never looked up, so a
 misspelt one would quietly never match. A comparison of `.mode(p)` with a word that is not a
