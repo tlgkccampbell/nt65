@@ -35,7 +35,7 @@
     lda #gfx::Color::white  ; an enum member from another module
     ldx #gfx::Sprite::y     ; and a member offset from one
     lda #gfx::screen('A')   ; a charmap, a function and a list from gfx
-    ldy #gfx::centred(10)
+    ldy #gfx::centered(10)
     lda #gfx::palette::ink  ; a constant in an exported scope
     lda gfx::tables::lo     ; a member of exported data
     lda #<BORDER            ; from the facade, which `hw::*` brought in

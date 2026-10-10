@@ -5,7 +5,7 @@
 .cpu 6502
 
 .export .const SCREEN = $0400       ; screen memory, 40 by 25 screen codes
-.export .data COLOURS:  .byte = $D800           ; colour memory, a colour for each place on the screen
+.export .data COLORS:   .byte = $D800           ; color memory, a color for each place on the screen
 .export .data POINTERS: .byte = SCREEN + $03F8  ; the eight sprites' shape pointers, after the screen
 
 ; The cycles in a raster line of the PAL machine, which the demo is timed for, and which VICE's
@@ -13,17 +13,17 @@
 .export .const CYCLES = 63
 
 .export .scope vic {
-    .mmio SPRITE_X:      .byte = $D000  ; sprite 0's X, then its Y, then sprite 1's, two bytes apart
-    .mmio SPRITE_Y:      .byte = $D001
-    .mmio X_HIGH:        .byte = $D010  ; bit n is the ninth bit of sprite n's X
-    .mmio CONTROL:       .byte = $D011  ; bit 7 is the ninth bit of RASTER
-    .mmio RASTER:        .byte = $D012  ; the line being drawn, and the line that raises the interrupt
-    .mmio ENABLE:        .byte = $D015
-    .mmio IRQ_FLAG:      .byte = $D019  ; a 1 written to a bit acknowledges that interrupt
-    .mmio IRQ_MASK:      .byte = $D01A
-    .mmio BORDER:        .byte = $D020
-    .mmio PAPER:         .byte = $D021
-    .mmio SPRITE_COLOUR: .byte = $D027  ; sprite 0's colour, then sprite 1's
+    .mmio SPRITE_X:     .byte = $D000  ; sprite 0's X, then its Y, then sprite 1's, two bytes apart
+    .mmio SPRITE_Y:     .byte = $D001
+    .mmio X_HIGH:       .byte = $D010  ; bit n is the ninth bit of sprite n's X
+    .mmio CONTROL:      .byte = $D011  ; bit 7 is the ninth bit of RASTER
+    .mmio RASTER:       .byte = $D012  ; the line being drawn, and the line that raises the interrupt
+    .mmio ENABLE:       .byte = $D015
+    .mmio IRQ_FLAG:     .byte = $D019  ; a 1 written to a bit acknowledges that interrupt
+    .mmio IRQ_MASK:     .byte = $D01A
+    .mmio BORDER:       .byte = $D020
+    .mmio PAPER:        .byte = $D021
+    .mmio SPRITE_COLOR: .byte = $D027  ; sprite 0's color, then sprite 1's
 }
 
 .export .scope cia1 {
@@ -58,7 +58,7 @@
     .proc EXIT = $EA81: interrupt
 }
 
-.export .enum Colour {
+.export .enum Color {
     black
     white
     red
@@ -70,9 +70,9 @@
     orange
     brown
     light_red
-    dark_grey
-    grey
+    dark_gray
+    gray
     light_green
     light_blue
-    light_grey
+    light_gray
 }

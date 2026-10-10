@@ -16,8 +16,8 @@ This program has four load segments:
 | `$2000` | `CODE`, `RODATA` | INITAD `loader::hide` turns the loading screen off |
 | `$A000` | `SCREEN` | the program's screen, loaded over the loader |
 
-and then RUNAD `main::start`, which shows the program's screen. Colour bars in two bands are
-drawn on the blank lines above and below the text by display list interrupts, one colour a line,
+and then RUNAD `main::start`, which shows the program's screen. Color bars in two bands are
+drawn on the blank lines above and below the text by display list interrupts, one color a line,
 and a hook in the vertical blank moves them on a line each frame and counts the frames. The
 screen says how many frames the load took and shows the frame count.
 
@@ -68,7 +68,7 @@ saves memory once the system check has written why it refused. The checks are:
 - **loaded**: at RUNAD, every byte the XEX loads is in memory, the later of two where they load
   at the same addresses. That is the program's screen where the loading screen was.
 - **state**: at RUNAD, the loader's two frame counts are set, the screen is off and the loading
-  screen's colour is still in its shadow, which says both of the loader's routines ran. After a
+  screen's color is still in its shadow, which says both of the loader's routines ran. After a
   hundred frames, the display list, the display list interrupt and the vertical blank point at
   the program's own; both bands were drawn in the last frame; and the frame count and the screen's
   last row are as `tests/expected.txt` has them. So is the message on the refused run's screen.
@@ -86,7 +86,7 @@ no network. SDL's dummy video driver runs it with no window. `./test.ps1 -Update
 - `src/main.nt65`: the start, which RUNAD jumps to, and the main loop, which shows the frame
   count.
 - `src/bars.nt65`: the display list interrupt, the hook in the vertical blank, and the bars'
-  colours.
+  colors.
 - `src/display.nt65`: the program's display list and its text, in the segment loaded over the
   loader.
 - `src/atari.nt65`: ANTIC, GTIA and the operating system's shadows, vectors and routines, the
@@ -112,7 +112,7 @@ no network. SDL's dummy video driver runs it with no window. `./test.ps1 -Update
   address.
 - **Data laid out by the compiler.** Each row of text is a `.byte[40]` padded with zeros, which
   are spaces in screen codes. The number of rows comes from the size of the text, and the bars'
-  colours are worked out with a `.func` and `.repeat`.
+  colors are worked out with a `.func` and `.repeat`.
 
 ### What nt65 does not see
 

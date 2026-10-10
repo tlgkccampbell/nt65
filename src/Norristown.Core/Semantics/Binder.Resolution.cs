@@ -258,7 +258,7 @@ internal sealed partial class Binder
 
     /// <summary>
     /// Reports a name that no scope or <c>.use</c> declares, naming the modules that
-    /// export a name spelt the same. A name that starts a path (<paramref name="last"/> is
+    /// export a name spelled the same. A name that starts a path (<paramref name="last"/> is
     /// false) is most likely a module the build does not have, such as one left off the
     /// command line.
     /// </summary>

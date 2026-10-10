@@ -5,7 +5,7 @@
 .cpu r65c02
 
 .use script::{Op, REVERSE}
-.use x16::{Colour, colours}
+.use x16::{Color, colors}
 .use nt65::cbm::screen_lower
 
 .export card
@@ -15,9 +15,9 @@
     .byte Op::at, column, row
 }
 
-; Sets the colours of what comes next.
-.macro paint(foreground: Colour, background: Colour) {
-    .byte Op::colour, colours(foreground, background)
+; Sets the colors of what comes next.
+.macro paint(foreground: Color, background: Color) {
+    .byte Op::color, colors(foreground, background)
 }
 
 ; Draws a box with its top left corner where the last `at!` moved to.
@@ -40,10 +40,10 @@
 
 .segment CARD
 .data card {
-    paint!(Colour::yellow, Colour::blue)
+    paint!(Color::yellow, Color::blue)
     at!(10, 6)
     box!(60, 15)
-    paint!(Colour::white, Colour::blue)
+    paint!(Color::white, Color::blue)
     at!(14, 8)
     reverse!(" Commander X16 ")
     at!(14, 10)
@@ -51,11 +51,11 @@
     text!("script in RAM bank 2. The KERNAL loaded each bank")
     text!("from a file of its own, beside the program.")
     at!(14, 14)
-    paint!(Colour::light_green, Colour::blue)
+    paint!(Color::light_green, Color::blue)
     text!("Written in nt65 for the 65C02, with the Rockwell")
     text!("bit instructions, and assembled by ca65.")
     at!(14, 17)
-    paint!(Colour::cyan, Colour::blue)
+    paint!(Color::cyan, Color::blue)
     text!("nt65 checks that neither bank reaches into the other.")
     .byte Op::end
 }

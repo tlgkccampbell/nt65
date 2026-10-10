@@ -80,7 +80,7 @@
     rts
 }
 
-; Copy dma_len bytes from the far pointer dma_src to CGRAM from colour 0.
+; Copy dma_len bytes from the far pointer dma_src to CGRAM from color 0.
 .proc cgram_copy: std {
     stz CGADD
     ldx dma_src

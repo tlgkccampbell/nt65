@@ -80,7 +80,7 @@
     sta BRKV
     lda #>on_brk
     sta BRKV+1
-    lda #text('.')                  ; a line cancelled with Ctrl-X starts again with the prompt
+    lda #text('.')                  ; a line canceled with Ctrl-X starts again with the prompt
     sta PROMPT
     lda #text(' ')
     jsr EIGHTY

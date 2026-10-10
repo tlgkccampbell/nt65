@@ -131,7 +131,7 @@ public sealed class ViewRequestsTests
     /// hover shows eight and a link to the view that holds the rest, saying how much was left out.
     /// </summary>
     [Fact]
-    public async Task ALongExpansionIsSummarisedAndLinkedTo()
+    public async Task ALongExpansionIsSummarizedAndLinkedTo()
     {
         var timeout = TestTimeout.Token();
         const string Text = """

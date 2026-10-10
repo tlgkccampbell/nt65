@@ -22,7 +22,7 @@
 ; adds only what differs.
 .export .signature std = a8, i16, native, dp = 0, dbr = CODE_BANK
 
-; A BGR555 colour from 5-bit components.
+; A BGR555 color from 5-bit components.
 .func rgb15(r, g, b) = r | (g << 5) | (b << 10)
 
 .enum GameState {

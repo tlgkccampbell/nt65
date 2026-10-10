@@ -762,7 +762,7 @@
             "Draw the loops, and also the branches and jumps of the routine at the caret as arrows."
           ],
           "default": "off",
-          "description": "What nt65 draws in front of the lines of a routine. A loop's bracket is nested where loops nest, and its trip count is `×16` for a loop that counts a register down from 16, and `×?` where the program does not say. The bracket of the innermost loop that holds the caret is brighter. An arrow a `.next` declares has its own colour, a branch the flags prove one way is faded, and transfers to other routines are not drawn. A bracket that starts at its loop's label draws the branches back to it, so they are not arrows as well. `nt65: Choose What the Margin Shows` picks one."
+          "description": "What nt65 draws in front of the lines of a routine. A loop's bracket is nested where loops nest, and its trip count is `×16` for a loop that counts a register down from 16, and `×?` where the program does not say. The bracket of the innermost loop that holds the caret is brighter. An arrow a `.next` declares has its own color, a branch the flags prove one way is faded, and transfers to other routines are not drawn. A bracket that starts at its loop's label draws the branches back to it, so they are not arrows as well. `nt65: Choose What the Margin Shows` picks one."
         },
         "nt65.widths.enabled": {
           "type": "boolean",
@@ -778,7 +778,7 @@
         "nt65.sources.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Show, when the caret is on an instruction, where each value it reads was set: the lines are tinted in the value's colour, and the caret line gets a chip per value. On a call, the values are the ones the routine called reads. The lines that read the values it writes are highlighted too, with tags such as `→Y`, and where a value leaves the routine with a hollow tag such as `Y↱`. A store with a `.patch` and the instruction it writes into are linked the same way. `nt65: Toggle Input Sources` turns this on and off."
+          "description": "Show, when the caret is on an instruction, where each value it reads was set: the lines are tinted in the value's color, and the caret line gets a chip per value. On a call, the values are the ones the routine called reads. The lines that read the values it writes are highlighted too, with tags such as `→Y`, and where a value leaves the routine with a hollow tag such as `Y↱`. A store with a `.patch` and the instruction it writes into are linked the same way. `nt65: Toggle Input Sources` turns this on and off."
         }
       }
     }

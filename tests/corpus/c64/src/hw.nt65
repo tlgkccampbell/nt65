@@ -62,11 +62,11 @@
     orange
     brown
     light_red
-    dark_grey
-    grey
+    dark_gray
+    gray
     light_green
     light_blue
-    light_grey
+    light_gray
 }
 
 ; The eight sprites. Their position registers are two bytes apart and their high X bits are

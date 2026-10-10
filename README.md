@@ -128,14 +128,14 @@ typed on with the joypad. Its sessions run in VICE and MAME.
 checksum and a string routine written in nt65, through the header `nt65 build --c-header`
 writes. It checks their answers in sim65, cc65's own simulator.
 
-[`examples/c64-demo`](examples/c64-demo) is a one-screen C64 demo written for nt65: colour bars
+[`examples/c64-demo`](examples/c64-demo) is a one-screen C64 demo written for nt65: color bars
 on a stable raster whose cycle counts the build checks, a sprite multiplexer with self-modifying
 code, screens unpacked by an LZ4 decruncher that runs in the zero page, and a small SID music
 driver. Its test runs it in VICE.
 
 [`examples/atari-xex`](examples/atari-xex) is an Atari 800XL program written for nt65 whose
 subject is the XEX's loading: a system check and a loading screen that run while the rest
-loads, the program's own screen loaded over the loader, and colour bars drawn by display list
+loads, the program's own screen loaded over the loader, and color bars drawn by display list
 interrupts and moved by a hook in the vertical blank. Its test runs it in Atari800.
 
 [`examples/x16`](examples/x16) is a card for the Commander X16 written for nt65, for the 65C02

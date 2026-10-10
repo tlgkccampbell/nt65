@@ -205,7 +205,7 @@ public sealed class ExtensionTests : IDisposable
     /// that names nothing does nothing, and nothing else would notice.
     /// </summary>
     [Fact]
-    public void TheKeybindingsAndColoursAreComplete()
+    public void TheKeybindingsAndColorsAreComplete()
     {
         var contributes = Package.RootElement.GetProperty("contributes");
         var commands = contributes.GetProperty("commands").EnumerateArray()
@@ -233,7 +233,7 @@ public sealed class ExtensionTests : IDisposable
     /// them drifting apart.
     /// </summary>
     [Fact]
-    public void TheHoverGrammarColoursTheGridTheServerWrites()
+    public void TheHoverGrammarColorsTheGridTheServerWrites()
     {
         var contributes = Package.RootElement.GetProperty("contributes");
         Assert.Contains(

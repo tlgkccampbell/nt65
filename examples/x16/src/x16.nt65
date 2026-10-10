@@ -32,7 +32,7 @@
 }
 
 ; The text screen, as the KERNAL sets it up: a map of 128 by 64 cells from $1B000 in video
-; memory, two bytes to a cell, a screen code and then its colours. The screen shows the first
+; memory, two bytes to a cell, a screen code and then its colors. The screen shows the first
 ; 80 columns and 60 rows of it.
 .export .scope text {
     .const MAP     = $1B000
@@ -40,10 +40,10 @@
     .const COLUMNS = 80
 }
 
-; A cell's colours: the background in the high nibble, the foreground in the low.
-.export .func colours(foreground, background) = (background << 4) | foreground
+; A cell's colors: the background in the high nibble, the foreground in the low.
+.export .func colors(foreground, background) = (background << 4) | foreground
 
-.export .enum Colour {
+.export .enum Color {
     black
     white
     red
@@ -55,11 +55,11 @@
     orange
     brown
     light_red
-    dark_grey
-    grey
+    dark_gray
+    gray
     light_green
     light_blue
-    light_grey
+    light_gray
 }
 
 ; The KERNAL's routines, through its jump table.

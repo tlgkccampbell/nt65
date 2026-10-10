@@ -5,7 +5,7 @@
 # to build/test/dump.bin and stops. The script then checks the following:
 #
 #   screen     the text on the screen is tests/screen.txt
-#   colours    each cell's colours are as tests/colours.txt has them
+#   colors    each cell's colors are as tests/colors.txt has them
 #   reverse    the cells shown in reverse are the ones tests/reverse.txt lists
 #   banks      RAM banks 1 and 2 hold build/card.prg.01 and build/card.prg.02
 #
@@ -58,7 +58,7 @@ $bytes = [IO.File]::ReadAllBytes($dump)
 $bankAt = { param($bank) 0xA000 + $bank * 0x2000 }
 $video = & $bankAt $banks
 
-# The text map is 128 cells to a row, and each cell is a screen code and its colours.
+# The text map is 128 cells to a row, and each cell is a screen code and its colors.
 $map = 0x1B000
 $columns = 80
 $rows = 60
@@ -79,11 +79,11 @@ function Character([byte]$code) {
     return '#'
 }
 
-# A cell's colours as one character: `.` for white on blue, which the KERNAL starts with, the
-# foreground's hex digit for another colour on blue, and `?` for any other background.
-function Colours([byte]$colours) {
-    if ($colours -eq 0x61) { return '.' }
-    if (($colours -shr 4) -eq 6) { return '{0:X}' -f ($colours -band 0x0F) }
+# A cell's colors as one character: `.` for white on blue, which the KERNAL starts with, the
+# foreground's hex digit for another color on blue, and `?` for any other background.
+function Colors([byte]$colors) {
+    if ($colors -eq 0x61) { return '.' }
+    if (($colors -shr 4) -eq 6) { return '{0:X}' -f ($colors -band 0x0F) }
     return '?'
 }
 
@@ -98,8 +98,8 @@ function Trimmed([string[]]$lines, [char]$blank) {
 $screen = Trimmed @(for ($r = 0; $r -lt $rows; $r++) {
     -join (0..($columns - 1) | ForEach-Object { Character $bytes[(Cell $r $_)] })
 }) ' '
-$colours = Trimmed @(for ($r = 0; $r -lt $rows; $r++) {
-    -join (0..($columns - 1) | ForEach-Object { Colours $bytes[(Cell $r $_) + 1] })
+$colors = Trimmed @(for ($r = 0; $r -lt $rows; $r++) {
+    -join (0..($columns - 1) | ForEach-Object { Colors $bytes[(Cell $r $_) + 1] })
 }) '.'
 $reverse = @(for ($r = 0; $r -lt $rows; $r++) {
     $cells = @(0..($columns - 1) | Where-Object { $bytes[(Cell $r $_)] -band 0x80 })
@@ -109,7 +109,7 @@ $reverse = @(for ($r = 0; $r -lt $rows; $r++) {
 $failed = @()
 foreach ($check in @(
     @{ Name = 'screen';  File = 'screen.txt';  Lines = $screen }
-    @{ Name = 'colours'; File = 'colours.txt'; Lines = $colours }
+    @{ Name = 'colors'; File = 'colors.txt'; Lines = $colors }
     @{ Name = 'reverse'; File = 'reverse.txt'; Lines = $reverse })) {
     $expected = Join-Path $PSScriptRoot "tests/$($check.File)"
     if ($Update) {

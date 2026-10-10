@@ -1,7 +1,7 @@
 ; The raster interrupts that run the frame. A frame's interrupts come in this order:
 ;
 ;   top      line TOP         asks for `stable` two lines on, and waits for it
-;   stable   line TOP + 2     starts on the same cycle every frame, draws the colour bars in
+;   stable   line TOP + 2     starts on the same cycle every frame, draws the color bars in
 ;                             the top border, and shows the first eight sprites
 ;   plex     as it asks       shows the other sprites, each when its sprite comes free
 ;   bottom   line BOTTOM      plays the music, counts the frame, and runs the KERNAL's handler
@@ -12,13 +12,13 @@
 
 .cpu 6502
 
-.use c64::{vic, cia1, cia2, kernal, Colour, CYCLES}
+.use c64::{vic, cia1, cia2, kernal, Color, CYCLES}
 
 .export install, bottom, frames, BOTTOM
 
 .const TOP    = 16                  ; a line of the top border, above the bars
 .const BOTTOM = 250                 ; the line after the last line of the screen's characters
-.const BARS   = 24                  ; the colour bars, one to a line
+.const BARS   = 24                  ; the color bars, one to a line
 
 ; The cycles a bar's line spends waiting, which the assertion after the code keeps in step with
 ; the line's 63.
@@ -116,7 +116,7 @@
 ; which would cost a cycle.
 .align 256
 
-; Starts on a cycle that is the same every frame, and draws a bar's colour on the border at the
+; Starts on a cycle that is the same every frame, and draws a bar's color on the border at the
 ; same cycle of each of BARS lines.
 .proc stable: interrupt {
     ldx stack                       ; drops what this interrupt pushed, and keeps `top`'s
@@ -164,10 +164,10 @@
 
 .align 32
 .data bars: .byte[BARS] {
-    Colour::blue, Colour::light_blue, Colour::cyan, Colour::white
-    Colour::cyan, Colour::light_blue, Colour::blue, Colour::black
-    Colour::brown, Colour::orange, Colour::yellow, Colour::white
-    Colour::yellow, Colour::orange, Colour::brown, Colour::black
-    Colour::red, Colour::light_red, Colour::purple, Colour::white
-    Colour::purple, Colour::light_red, Colour::red, Colour::black
+    Color::blue, Color::light_blue, Color::cyan, Color::white
+    Color::cyan, Color::light_blue, Color::blue, Color::black
+    Color::brown, Color::orange, Color::yellow, Color::white
+    Color::yellow, Color::orange, Color::brown, Color::black
+    Color::red, Color::light_red, Color::purple, Color::white
+    Color::purple, Color::light_red, Color::red, Color::black
 }

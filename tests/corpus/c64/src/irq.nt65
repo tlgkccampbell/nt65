@@ -1,4 +1,4 @@
-; Raster interrupt: two colour splits per frame, chained into the KERNAL IRQ.
+; Raster interrupt: two color splits per frame, chained into the KERNAL IRQ.
 .module irq
 
 .cpu 6502
@@ -12,10 +12,10 @@
 .const SPLITS = 3
 
 .segment RODATA
-; raster line, border colour, background colour for each split
+; raster line, border color, background color for each split
 .data split_line:   .byte 0, 100, 200
 .data split_border: .byte Color::light_blue, Color::red, Color::black
-.data split_bg:     .byte Color::blue, Color::black, Color::dark_grey
+.data split_bg:     .byte Color::blue, Color::black, Color::dark_gray
 
 .assert .countof(split_line) == SPLITS, "split tables out of step"
 .assert .countof(split_border) == SPLITS, "split tables out of step"

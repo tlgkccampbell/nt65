@@ -1,11 +1,11 @@
-# Packs the screen and its colours into build/screens, which src/screens.nt65 includes: each as
+# Packs the screen and its colors into build/screens, which src/screens.nt65 includes: each as
 # the bytes the C64 holds, in a .bin, and those bytes packed in the LZ4 block format, in a .lz4.
 # build.ps1 runs it before nt65, which measures every file an .incbin names, and test.ps1 checks
 # the .bin files against what the demo unpacked.
 #
 # screens/title.txt is the screen as 25 lines of up to 40 characters, each a letter, a digit,
 # a space or one of the signs the C64's screen codes share with ASCII, or `#` for a solid block.
-# screens/colours.txt is the colours as 25 lines of 40 hex digits, a colour to each place.
+# screens/colors.txt is the colors as 25 lines of 40 hex digits, a color to each place.
 [CmdletBinding()]
 param([string]$Out = (Join-Path (Split-Path -Parent $PSScriptRoot) 'build/screens'))
 
@@ -106,14 +106,14 @@ $screen = Read-Screen (Join-Path $example 'screens/title.txt') {
     param($line)
     foreach ($c in $line.PadRight(40).ToCharArray()) { Screen-Code $c }
 }
-$colours = Read-Screen (Join-Path $example 'screens/colours.txt') {
+$colors = Read-Screen (Join-Path $example 'screens/colors.txt') {
     param($line)
-    if ($line.Length -ne 40) { throw "a line of colours is not 40 hex digits: $line" }
+    if ($line.Length -ne 40) { throw "a line of colors is not 40 hex digits: $line" }
     foreach ($c in $line.ToCharArray()) { [Convert]::ToByte([string]$c, 16) }
 }
 
 New-Item -ItemType Directory -Force $Out | Out-Null
-foreach ($file in @{ Name = 'title'; Bytes = $screen }, @{ Name = 'colours'; Bytes = $colours }) {
+foreach ($file in @{ Name = 'title'; Bytes = $screen }, @{ Name = 'colors'; Bytes = $colors }) {
     [IO.File]::WriteAllBytes((Join-Path $Out "$($file.Name).bin"), $file.Bytes)
     [IO.File]::WriteAllBytes((Join-Path $Out "$($file.Name).lz4"), [Lz4Block]::Pack($file.Bytes))
 }

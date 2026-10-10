@@ -47,7 +47,7 @@ public sealed class SlowAnalysisTests
     /// The publish that is waiting for the same analysis still gets it.
     /// </summary>
     [Fact]
-    public async Task ACancelledRequestStopsWaitingForAnAnalysisThePublishStillNeeds()
+    public async Task ACanceledRequestStopsWaitingForAnAnalysisThePublishStillNeeds()
     {
         var timeout = TestTimeout.Token();
         var held = new HeldAnalysis();
@@ -66,11 +66,11 @@ public sealed class SlowAnalysisTests
     }
 
     /// <summary>
-    /// Cancelling the only request waiting for an analysis cancels the analysis, and the next
+    /// Canceling the only request waiting for an analysis cancels the analysis, and the next
     /// request starts a new one rather than waiting for the canceled one.
     /// </summary>
     [Fact]
-    public async Task ACancelledRequestCancelsItsAnalysis()
+    public async Task ACanceledRequestCancelsItsAnalysis()
     {
         var timeout = TestTimeout.Token();
         var held = new HeldAnalysis();
@@ -94,7 +94,7 @@ public sealed class SlowAnalysisTests
     /// other gets it.
     /// </summary>
     [Fact]
-    public async Task AnAnalysisAnotherRequestWaitsForIsNotCancelled()
+    public async Task AnAnalysisAnotherRequestWaitsForIsNotCanceled()
     {
         var timeout = TestTimeout.Token();
         var held = new HeldAnalysis();

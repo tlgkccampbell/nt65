@@ -159,7 +159,7 @@
     rts
 }
 
-; Copy the player into OAM slot 0 in the WRAM shadow, and centre the camera with div16.
+; Copy the player into OAM slot 0 in the WRAM shadow, and center the camera with div16.
 .proc update_sprite: std, a16 -> std {
     lda player_x
     pha                         ; dividend

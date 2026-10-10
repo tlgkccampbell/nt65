@@ -4,7 +4,7 @@
 # cartridge. The script then checks the following:
 #
 #   screen     screen memory is screens/title.txt, as the decruncher unpacked it
-#   colours    colour memory is screens/colours.txt, likewise
+#   colors    color memory is screens/colors.txt, likewise
 #   sorted     plex::order holds each object once, from the top of the screen down
 #   stable     raster::stable::steady ran on the same cycle of its line in every frame
 #   state      the frame count, the music's place, the SID's registers and the objects are as
@@ -78,12 +78,12 @@ $ram = [IO.File]::ReadAllBytes($memory)
 # Returns the bytes from an address, `$count` of them.
 function Bytes([int]$address, [int]$count) { [byte[]]$ram[$address..($address + $count - 1)] }
 
-# The screen and its colours, against what the packer packed. Colour memory has four bits.
+# The screen and its colors, against what the packer packed. Color memory has four bits.
 $title = [IO.File]::ReadAllBytes((Join-Path $build 'screens/title.bin'))
 if (Compare-Object $title (Bytes 0x0400 1000) -SyncWindow 0) { $failed += 'screen: screen memory is not screens/title.txt' }
-$colours = [IO.File]::ReadAllBytes((Join-Path $build 'screens/colours.bin'))
-if (Compare-Object $colours (Bytes 0xD800 1000 | ForEach-Object { $_ -band 0x0F }) -SyncWindow 0) {
-    $failed += 'colours: colour memory is not screens/colours.txt'
+$colors = [IO.File]::ReadAllBytes((Join-Path $build 'screens/colors.bin'))
+if (Compare-Object $colors (Bytes 0xD800 1000 | ForEach-Object { $_ -band 0x0F }) -SyncWindow 0) {
+    $failed += 'colors: color memory is not screens/colors.txt'
 }
 
 # The order the multiplexer shows the objects in, each once and from the top down.

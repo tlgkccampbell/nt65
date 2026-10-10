@@ -86,7 +86,7 @@ accepting ca65 source. nt65 promises a project that mixes them:
 nt65 does not promise:
 
 - to read ca65 source, include files, macros or object files;
-- to check calls into nt65 routines from ca65: a ca65 caller must honour the routine's
+- to check calls into nt65 routines from ca65: a ca65 caller must honor the routine's
   declared signature, and checking stops at the boundary;
 - a calling convention: signatures describe processor state only, and cc65's C calling
   convention (the software stack, return values in A/X) is the programmer's job;
@@ -542,7 +542,7 @@ a program's links.
 
 **What code can see.** Whether code in one segment can reach an address in another is one
 question, answered from the segment table and the linked configs alone. nt65 tracks no mapper
-state and models no memory behaviour, and the rule is the same on every processor:
+state and models no memory behavior, and the rule is the same on every processor:
 
 - **Another address space is never seen** (below).
 - **An alternative is never seen.** Two memory areas of one config that cover the same
@@ -842,7 +842,7 @@ rooted where the command runs.
 A diagnostic is one line, `file:line:column: severity: message [name]`, on standard error.
 The name is the catalogue's (§14), and goes last, where compilers put it: it is what a project
 file switches and what CI matches on, and nobody reads it first. Where standard error is a
-terminal and `NO_COLOR` is unset, `error:` and `warning:` are coloured and nothing else on the
+terminal and `NO_COLOR` is unset, `error:` and `warning:` are colored and nothing else on the
 line is, so the position stays selectable. `--json` puts them on standard output instead, one
 object per line, with `file`, `line`, `column`, `endColumn`, `severity`, `id`, `message`, and
 `related` where a diagnostic points at a second place, which the line form leaves to an editor.
@@ -2501,7 +2501,7 @@ it says the store only saves X, so the store is not a use of X's value and does 
 what the routine reads. nt65 checks what it can without knowing what the memory is: that the line
 above is `sta`, `stx` or `sty`, and that the register it stores holds X's value there, which lets
 the 6502's `txa` … `sta` save X. It does not check that the byte stays put until the restore,
-because nothing about a location's behaviour is nt65's to know: it may be a mirror, a bank a
+because nothing about a location's behavior is nt65's to know: it may be a mirror, a bank a
 mapper switches, or a device register. The model covers what the CPU defines, and memory is
 defined by the board, so both ends of a save through memory are the programmer's word. `saves`
 describes one store and not a routine, so it is an error in a signature.
@@ -3871,7 +3871,7 @@ body. An `.allow` in a body covers what is reported at a call through that line.
 offered only where it edits the caller's own lines.
 
 A word a condition compares with what a parameter stands for is never looked up, so a
-misspelt one would quietly never match. A comparison of `.mode(p)` with a word that is not a
+misspelled one would quietly never match. A comparison of `.mode(p)` with a word that is not a
 mode, or not one of the modes `p` lists, and of a `one` parameter, or a repetition's binding
 over a `list(one(...))`, with a word it does not list, is a warning at the definition: it
 holds for no argument at all. An `operand(zp)` is `abs` to `.mode`, so that is what such a
@@ -4555,7 +4555,7 @@ alone and without an assembler:
   and the parameters a named argument names included. A segment name leads to where it is declared: each linked config line that places
   it, answered for every project that builds the file, since a library's `CODE` is each
   platform's `CODE`;
-- colour every name by what it refers to, so `Joy::A` is an enum member and not a register. A
+- color every name by what it refers to, so `Joy::A` is an enum member and not a register. A
   long file is asked about a screenful at a time, and after an edit only what changed about it
   is sent: a file of thousands of lines is thousands of numbers, and a keystroke moves a
   handful of them;
@@ -4609,8 +4609,8 @@ alone and without an assembler:
   the registers and the stack stand under the rule;
 - show, while the caret rests on an instruction, where each value it reads was set, and on a
   call, where each value the routine called reads was set (§7.7). This is the one fact about
-  an instruction that leaves the hover, and only as colour and a few characters. Each line
-  that set a value is tinted in that value's colour, with a bar at its left edge and a mark in
+  an instruction that leaves the hover, and only as color and a few characters. Each line
+  that set a value is tinted in that value's color, with a bar at its left edge and a mark in
   the scrollbar; a line the value only passed through, such as a call that keeps it or the
   `pla` that restored it, gets a dotted bar. The caret line gets one short chip per value:
   `A↑12` for a source twelve lines up, `A ×2` for two of them, `A↰` for a value the caller
@@ -4811,7 +4811,7 @@ says so that an editor that would rather count differently knows not to.
 JSON is answered as a parse error and the next frame is read; a request that arrives before
 the editor has initialized the server, or after it has shut it down, is answered as that
 rather than acted on, and a notification at either point is dropped. A request the person has
-moved on from is cancelled, and a cancelled request stops at the next file of the program
+moved on from is canceled, and a canceled request stops at the next file of the program
 rather than finishing. `exit` ends the process: cleanly where the editor shut the server down
 first and as a failure where it did not. An editor that crashes never says goodbye, so the
 server watches the process the editor named as its own when it connected, and leaves when that
@@ -4974,7 +4974,7 @@ Recorded so the reasoning survives. None is open.
   name means never depends on which other files the build holds. One file per module keeps a
   private name private at the link, where ca65 has no namespace but the global one, and
   keeps nt65 from choosing the order of two files' bytes. A module's path is only a name,
-  with no relative paths and no special view of its neighbours.
+  with no relative paths and no special view of its neighbors.
 - **Layout across modules is placement, stated in the source.** A ca65 program built as one
   file of `.include`s puts one file's routine in the middle of another's and lets it run into
   what follows, and a module being one object could not say that. A fall-through into another
@@ -5683,7 +5683,7 @@ Recorded so the reasoning survives. None is open.
 - **`$schema` in the project file.** A project file that names its schema gets completion,
   hover and validation in every editor that reads one, and the key is the convention for
   saying so. nt65 reads nothing from it. It is the one key nt65 accepts and ignores: every
-  other unknown key stays an error, because a misspelt key that is quietly accepted is a
+  other unknown key stays an error, because a misspelled key that is quietly accepted is a
   setting that silently does nothing.
 - **`.if` in an enum body, and no repetition there.** The alternative is two whole enums under
   exclusive conditions, which says twice what differs once and splits the type a program is
@@ -5733,7 +5733,7 @@ Recorded so the reasoning survives. None is open.
   A person reads the line, and it is the line an editor's problem matcher already reads, so it
   stays where it is. Something reading nt65 that is not an editor wants structure, wants it on
   the stream it is capturing, and wants nothing else on that stream, so `--json` writes to
-  standard output and what nt65 says about itself stays on standard error. Colour marks
+  standard output and what nt65 says about itself stays on standard error. Color marks
   `error:` and `warning:` and nothing else: the position is what gets selected and copied, and
   a message wrapped in escapes is one nobody can grep.
 - **One layout, and no setting for it.** Leading whitespace means nothing to the language, so
@@ -5744,16 +5744,16 @@ Recorded so the reasoning survives. None is open.
   after its last, and sets the one gap a run of data lines lines up on; everything else on a
   line is the programmer's, because a formatter that reflows an expression has to be told when
   not to, and that is the setting there is not.
-- **Names are coloured by the language server; the grammar colours declarations the same way.**
+- **Names are colored by the language server; the grammar colors declarations the same way.**
   What a name refers to is the server's to say: a use, `jsr init` or `Joy::A`, names something
   only resolution can see, and a member of a named enum, struct or union may be spelled like a
   register or a mnemonic. So the server classifies every name as semantic tokens, drawn over the
-  TextMate grammar's colours. The grammar is all there is while an editor starts and where no
-  server runs, and a name that changed colour when the server answered would flicker, so the
+  TextMate grammar's colors. The grammar is all there is while an editor starts and where no
+  server runs, and a name that changed color when the server answered would flicker, so the
   grammar gives each declaration the scope the editor maps the server's token to: the name after
   `.proc` or `.enum`, a label, a constant, a parameter, and the members of an enum, a struct, a
   union and a record. It knows these from the line and the block they are in; a use keeps the
-  plain colour until the server answers, and so does a constant whose expression turns out to be
+  plain color until the server answers, and so does a constant whose expression turns out to be
   an address.
 
 ## 17. Version 1
@@ -5806,7 +5806,7 @@ bytes, linker names, export sizes or debug lines; when a project file or a comma
 release accepts is refused or means something else; or when output one release writes needs a
 different ca65. Breaking changes wait for version 2. These are not breaking:
 
-- a fix where the earlier behaviour broke the contract itself: output ca65 refuses or warns
+- a fix where the earlier behavior broke the contract itself: output ca65 refuses or warns
   about, bytes that differ from what this document says they are, or a program accepted that
   this document says is an error;
 - a new warning, a better message, and anything the editor does;

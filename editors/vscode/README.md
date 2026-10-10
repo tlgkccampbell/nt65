@@ -18,10 +18,10 @@ build tasks and a schema for the project file.
   them — `preserves X, Y, C`, or `preserves X, ?` where a call could not be followed and it may
   preserve more. It is on hover too, because lenses can be turned off; and hovering an
   instruction shows what each register holds at that line. A hover's grid of facts is
-  coloured from a grammar this extension contributes, so the keys, what the analysis could
+  colored from a grammar this extension contributes, so the keys, what the analysis could
   not work out and what is about the block rather than the line each read as themselves.
 - **Where an instruction's inputs come from.** Rest the caret on an instruction and each line
-  that set a value it reads is tinted in that value's colour, with a bar at its left edge, a
+  that set a value it reads is tinted in that value's color, with a bar at its left edge, a
   tag naming the value and a mark in the scrollbar. On a `jsr`, the values are the ones the
   routine called reads, so you see what is passed to it. A line the value only passed through,
   such as the `pla` that restored it or a call that keeps it, gets a dotted bar. The caret line
@@ -33,7 +33,7 @@ build tasks and a schema for the project file.
   store through a pointer, gets a thin dashed bar and a faded tag ending in `?`. **Shift+Alt+PageDown** and
   **Shift+Alt+PageUp** step through the sources, and **nt65: Peek Input Sources** lists them.
   The same caret shows where its own values go: each line that reads a value it writes is
-  highlighted in that value's colour with a tag such as `→Y`, each place the value leaves the
+  highlighted in that value's color with a tag such as `→Y`, each place the value leaves the
   routine gets a hollow `Y↱`, and the caret line's chip counts the readers, as `Y→3`. On a
   store with a `.patch`, the instruction it writes into is highlighted with what it can run as,
   such as `runs as dex or inx`, and on a patched instruction every store that writes into it is.
@@ -59,7 +59,7 @@ build tasks and a schema for the project file.
 - **Who uses which data.** The **Data** view in the nt65 activity bar lists every direct page
   the program reaches memory through, and then every other segment of data. Each `D` comes with
   its segments, the locations in it and the routines that use each one, down the calls that
-  reach them, and each segment with its locations in the same way. Colour says how a location is
+  reach them, and each segment with its locations in the same way. Color says how a location is
   shared, a glyph says what each routine does with it (`↓` in, `↑` out, `↕` both, `◦` temp),
   `⧉` marks pages that overlap and `⚠` a hazard, which the toolbar hides and shows. Selecting
   a row marks the lines it stands for, with a solid bar where they write and a dashed one where
@@ -89,14 +89,14 @@ build tasks and a schema for the project file.
   in ca65: the body with your arguments in place. **Show expansion** opens the rest beside the
   file, with the calls inside it left as calls and a lens on each to open that one too, one
   level at a time. **Inline `name!`**, under the light bulb, writes the expansion where the
-  call was; where that would change what the line means it is offered greyed, with the reason.
+  call was; where that would change what the line means it is offered grayed, with the reason.
 - **What a macro parameter takes.** Hovering a parameter, or anything in the kind after its
   `:`, says it in words: `a constant from 0 to 15`, `an operand in imm or zp mode`, and for a
   mode, how an operand in it is written. Completion offers the kinds and the enums in scope
   after the `:` and the modes inside `operand(...)`, and at a call, the members of the enum a
   parameter takes or the words its `one(...)` lists. A member passed by its bare name is the
-  member, for colour, hover, going to its definition and renaming it. In a condition,
-  `.mode(src) == imm` and `reg == x` complete, colour and hover their words the same way, and
+  member, for color, hover, going to its definition and renaming it. In a condition,
+  `.mode(src) == imm` and `reg == x` complete, color and hover their words the same way, and
   a hover says when the parameter can never be the word compared.
 - **Hints in the line, for what the line does not say.** A width, the mode, D or B changing on
   a line that does not spell it (`rep #$30` ` a16 i16`, `jsr widen` ` → a16`); `long` on a

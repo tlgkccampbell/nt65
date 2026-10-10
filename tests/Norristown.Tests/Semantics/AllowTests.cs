@@ -72,7 +72,7 @@ public sealed class AllowTests
 
     /// <summary>A misspelled name offers the nearest name, in quotes.</summary>
     [Fact]
-    public void AMisspeltNameOffersTheNearest()
+    public void AMisspelledNameOffersTheNearest()
     {
         var diagnostic = Analyze(".allow \"unused-symbl\"\n" + Unused).Diagnostics
             .Single(d => d.Id == "diagnostic-name-unknown");

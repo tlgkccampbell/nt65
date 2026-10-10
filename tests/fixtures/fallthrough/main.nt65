@@ -9,7 +9,7 @@
 
 .const FAST ?= 1
 
-.export set_one, set_two, store, prepare, draw, after_call, after_else, after_label, labelled
+.export set_one, set_two, store, prepare, draw, after_call, after_else, after_label, labeled
 .export skips, skipped, landing, wide
 
 .segment ZEROPAGE
@@ -67,10 +67,10 @@
     beq @done
     lda #3
 @done:
-    .fallthrough labelled
+    .fallthrough labeled
 }
 
-.proc labelled: a8 {
+.proc labeled: a8 {
     rts
 }
 

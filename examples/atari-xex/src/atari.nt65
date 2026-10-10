@@ -26,7 +26,7 @@
     .const NMI_DLI = %11000000      ; NMIEN: the display list interrupt and the vertical blank's
 }
 
-; GTIA's colour registers. A colour is a hue in the high nibble and a luminance in the low.
+; GTIA's color registers. A color is a hue in the high nibble and a luminance in the low.
 .export .scope gtia {
     .mmio COLBK: .byte = $D01A      ; the border, and blank lines
 }

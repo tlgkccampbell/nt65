@@ -21,7 +21,7 @@ public sealed class ModelReadingTests
     [
         ("defs.nt65", """
             .module defs
-            .export Point, Colour, SCREEN, plot
+            .export Point, Color, SCREEN, plot
 
             .const SCREEN = $0400
 
@@ -30,7 +30,7 @@ public sealed class ModelReadingTests
             y:      .word
             }
 
-            .enum Colour {
+            .enum Color {
                 black
                 white
             }
@@ -43,7 +43,7 @@ public sealed class ModelReadingTests
             """),
         ("main.nt65", """
             .module main
-            .use defs::{Point, Colour, SCREEN, plot}
+            .use defs::{Point, Color, SCREEN, plot}
 
             .struct Line {
             from:   .type Point
@@ -61,11 +61,11 @@ public sealed class ModelReadingTests
 
             .segment CODE
             .proc main {
-                lda #.countof(Colour)
+                lda #.countof(Color)
                 lda here + Line::to + Point::y
                 plot!(SCREEN)
-            .each c in Colour {
-                lda #Colour::c
+            .each c in Color {
+                lda #Color::c
             }
                 rts
             }

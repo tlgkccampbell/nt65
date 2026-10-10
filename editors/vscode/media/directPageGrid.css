@@ -1,5 +1,5 @@
-/* The grid panel of the direct page map. Colours come from the theme: the relations from the
-   colours the extension contributes, with fallbacks for each kind of theme, and the rest from
+/* The grid panel of the direct page map. Colors come from the theme: the relations from the
+   colors the extension contributes, with fallbacks for each kind of theme, and the rest from
    VS Code's own variables. */
 body {
   --shared: var(--vscode-nt65-directPages-shared, #89d185);
@@ -137,7 +137,7 @@ body.vscode-high-contrast-light {
 /* A striped cell shows its window onto one pattern laid over the whole grid, which is 16 columns
    of 24px by 16 rows of 22px, so the stripes run on from cell to cell. */
 .cell.other, .cell.otherused, .cell.twin, .cell.maybe { background-size: 384px 352px; background-position: calc(-1 * var(--x, 0px)) calc(-1 * var(--y, 0px)); }
-/* The marks are set large in the middle of the cell, so they read over any colour or stripes. */
+/* The marks are set large in the middle of the cell, so they read over any color or stripes. */
 .cell.clash::after, .cell.twin::after, .cell.alias::after, .cell.maybe::after {
   position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; line-height: 1; pointer-events: none;
 }
@@ -177,7 +177,7 @@ body.vscode-high-contrast-light {
 .syms .rg { font-family: var(--mono); font-size: 11.5px; color: var(--dim); white-space: nowrap; }
 .caption { margin: 0; max-width: 360px; font-size: 11.5px; line-height: 1.45; color: var(--dim); }
 .caption + .syms { margin-top: 8px; }
-/* The caret's marks recolour each block's own edge, so a location still reads as one shape. */
+/* The caret's marks recolor each block's own edge, so a location still reads as one shape. */
 .cell.caret { --edge: var(--caret) !important; }
 .caret-on .cell.sym:not(.caret):not(.caret-direct) { opacity: 0.35; }
 .cell.caret-direct { --edge: var(--caret) !important; }

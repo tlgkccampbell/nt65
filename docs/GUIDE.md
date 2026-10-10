@@ -688,7 +688,7 @@ message.
 In `&&` and `||`, the right side is evaluated only when the left does not decide the answer.
 
 Declarations inside an `.if` belong to the surrounding scope. The same name may be declared
-in several branches, and only the branch the configuration takes counts. The editor greys
+in several branches, and only the branch the configuration takes counts. The editor grays
 out the branches the current configuration does not take. Another `.if` cannot test a
 constant declared in a branch, so a value that differs between builds is one declaration with
 `.select`, as `TRACE_LEVEL` is above.
@@ -2101,9 +2101,9 @@ everything below works across modules.
 - **Where an instruction's inputs come from.** Rest the caret on an instruction, and every line
   that set a value it reads is highlighted. On a `jsr`, the values are the ones the routine
   called reads, so you see what is passed to it without reading back through the caller.
-  Each value has a colour: A, X and Y one each, the flags one between them, and on the 65816
+  Each value has a color: A, X and Y one each, the flags one between them, and on the 65816
   the two widths one. A width is named as a signature spells the one the routine called needs,
-  so `a8` or `a16` for the accumulator and `i8` or `i16` for the index registers. A line that set a value is tinted in its colour, with a solid bar at its
+  so `a8` or `a16` for the accumulator and `i8` or `i16` for the index registers. A line that set a value is tinted in its color, with a solid bar at its
   left edge, a tag naming the value after the code, and a mark in the scrollbar. A line the
   value only passed through unchanged, such as a call that keeps the register or the `pla`
   that restored a value pushed earlier, gets a dotted bar and a hollow tag. A value a macro set
@@ -2134,7 +2134,7 @@ everything below works across modules.
 
   The same caret shows where the instruction's own values go. Each line that reads a value the
   instruction writes, before anything writes it again, is tinted and barred in the value's
-  colour like a source, and its tag starts with an arrow, as `→Y`. A call is such a line where
+  color like a source, and its tag starts with an arrow, as `→Y`. A call is such a line where
   the routine it calls reads the value, and a store to a named location is read by the lines that
   load it, as a best guess drawn dashed. A line that might change the value before it is read,
   such as `sta (ptr),y`, is drawn as the same doubt it is for a source. Where the value leaves
@@ -2197,7 +2197,7 @@ everything below works across modules.
   program's data, on the zero page or each 65816 direct page and in every other segment. Each
   page is a value of D, with the segments
   reached through it, the locations on it and, under each location, the calls that lead to the
-  routines that use it. Colour says how a location is shared: by one routine, by several, by an
+  routines that use it. Color says how a location is shared: by one routine, by several, by an
   interrupt handler and the code it interrupts, or by a routine that relies on it across a call
   to another that uses it as a temporary of its own, which is marked `⚠`. A glyph says what each
   routine does with it: `↓` reads it first, `↑` only writes it, `↕` both, `◦` uses it as a

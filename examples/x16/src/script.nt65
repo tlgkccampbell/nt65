@@ -13,7 +13,7 @@
 ; The operations, with the bytes each takes after it.
 .enum Op {
     at                              ; the column and the row where the next box or text starts
-    colour                          ; the colours of what comes next
+    color                          ; the colors of what comes next
     box                             ; a box's width and height
     text                            ; screen codes up to a zero, and on to the next row
     end                             ; the end of the script
@@ -97,9 +97,9 @@
         rts
     }
 
-    .proc colour {
+    .proc color {
         jsr fetch
-        sta draw::colour
+        sta draw::color
         clc
         rts
     }

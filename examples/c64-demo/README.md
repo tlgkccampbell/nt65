@@ -1,14 +1,14 @@
 # A C64 demo
 
 A one-screen demo for the Commodore 64 in the manner of the ones its scene made, written for
-nt65 from the start: colour bars in the top border on a stable raster, sixteen sprites shown
-with the VIC-II's eight, a screen and its colours unpacked from LZ4, and a tune played on the
+nt65 from the start: color bars in the top border on a stable raster, sixteen sprites shown
+with the VIC-II's eight, a screen and its colors unpacked from LZ4, and a tune played on the
 SID. It is small, a little over two kilobytes, because it is there to try nt65 on code whose
 timing matters, rather than to show off.
 
 ![The demo after a hundred frames](demo.png)
 
-The screen is text, unpacked once at the start. In the top border, 24 lines each draw one colour
+The screen is text, unpacked once at the start. In the top border, 24 lines each draw one color
 of the bars, on the same cycle of every line. Three kinds of object move over the screen: four
 balls that bounce off its edges, six rings that go round in two circles, and six diamonds that
 swim to the left and bob as they go. An object that comes within a sprite's height of the one
@@ -29,7 +29,7 @@ With `nt65`, `ca65` and `ld65` on the path, in PowerShell:
 
 `build/demo.prg` is the program, with a debug file beside it that points at the `.nt65`
 sources and a label file for VICE's monitor. The script first runs `tools/pack.ps1`, which packs
-`screens/title.txt` and `screens/colours.txt` into `build/screens`, where `src/screens.nt65`
+`screens/title.txt` and `screens/colors.txt` into `build/screens`, where `src/screens.nt65`
 includes them, so nt65 can read their sizes. From a build of this repository, with the pinned
 cc65 in `.cache/cc65`, run from the repository's root:
 
@@ -51,7 +51,7 @@ passed, saves the whole of memory and a screenshot, `build/test/demo.png`, and l
 its debug cartridge. A run that never gets there stops after 20 million cycles, and fails. The
 autostart's random delay is turned off, so every run is the same run. The checks are:
 
-- **screen** and **colours**: screen memory and colour memory are what `tools/pack.ps1` packed,
+- **screen** and **colors**: screen memory and color memory are what `tools/pack.ps1` packed,
   which tests the decruncher against the packer.
 - **sorted**: `plex::order` holds every object once, from the top of the screen down.
 - **stable**: in every frame, the bars start on the same cycle of their line. A checkpoint with
@@ -73,7 +73,7 @@ then read and checked by hand. `-Vice` names `x64sc` when it is not on the path.
   the shapes.
 - `src/lz4.nt65`: the decruncher, most of which runs in the zero page.
 - `src/music.nt65`: the music driver and the tune.
-- `src/screens.nt65`: the packed screen and colours.
+- `src/screens.nt65`: the packed screen and colors.
 - `src/c64.nt65`: the registers of the VIC-II, the SID and the CIAs, the SID's voice as a
   record, and the KERNAL's interrupt entry.
 - `src/stub.nt65`: the load address and the BASIC line `10 SYS2061`.
@@ -99,7 +99,7 @@ is done before `stable` shows the first objects of the next frame.
 
 - **Code whose timing is checked.** The bars' loop takes 63 cycles a line, and an `.assert` on
   `.mincycles` and `.maxcycles` says so: if an instruction is added or taken out, the build
-  fails. The one cycle more that the loop could cost is a page crossed by the read of the colour
+  fails. The one cycle more that the loop could cost is a page crossed by the read of the color
   table, and an `.assert` on the table's address rules it out, as another does for the branch
   back. The code starts a page with `.align 256`, so that both hold as the code before it grows. The
   wait in `stable` before it reads the raster is checked the same way, against the cycle VICE
@@ -117,7 +117,7 @@ is done before `stable` shows the first objects of the next frame.
   and `move` reaches them through an `rts`, which `.next handlers` follows. The shapes are drawn
   by `.func`s, one for each kind.
 - **Self-modifying code.** `plex::show` writes the sprite's number into the operands of the two
-  stores that need it, the colour's and the pointer's, and `.patch` marks each store. The
+  stores that need it, the color's and the pointer's, and `.patch` marks each store. The
   decruncher keeps its pointers in the operands of its own instructions, and moves them on with
   `inc`, with a `.patch` after each.
 - **Code that runs where it was not loaded.** The decruncher's segment loads with the rest of

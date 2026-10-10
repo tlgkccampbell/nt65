@@ -1922,7 +1922,7 @@ public static class Catalogue
         "comparison-never-holds",
         Severity.Warning,
         "`{0}` is never `{1}`, so this comparison {2}: {3}",
-        "A word compared with `.mode(p)` or with a `one(...)` parameter is not looked up, so a misspelt word, or "
+        "A word compared with `.mode(p)` or with a `one(...)` parameter is not looked up, so a misspelled word, or "
             + "one the parameter can never be, is not an error by itself: the comparison just always gives the "
             + "same answer, and the branch is silently never or always taken. The words `.mode` can give are "
             + "listed in the message; for an `operand(...)` parameter that lists its modes, only those are "
@@ -2592,7 +2592,7 @@ public static class Catalogue
         "`{0}` has no {1} form of this operand on the {2}: remove the address-size prefix",
         "An address-size prefix (`z:`, `a:`, `f:`) asks for one particular form of the instruction, and on this "
             + "processor the instruction has no form of that width for this operand. nt65 does not silently drop a "
-            + "prefix it cannot honour. Remove the prefix, or give the operand a shape that has that form.");
+            + "prefix it cannot honor. Remove the prefix, or give the operand a shape that has that form.");
 
     internal static DiagnosticDescriptor AddressingModeTooNarrow { get; } = Entry(
         Area.Instructions,
@@ -3785,14 +3785,14 @@ public static class Catalogue
         "`{0}` is not a key of {1}{2}",
         "The project file accepts a fixed set of keys: `cpu`, `files`, `out`, `settings`, `diagnostics`, `spaces`, "
             + "`segments`, `ranges` and `configurations`, plus `$schema`, which is accepted and ignored. An "
-            + "unknown key is an error, so that a misspelt setting does not silently do nothing.");
+            + "unknown key is an error, so that a misspelled setting does not silently do nothing.");
 
     internal static DiagnosticDescriptor ProjectCpuUnknown { get; } = Entry(
         Area.TheProjectFile,
         "project-cpu-unknown",
         Severity.Error,
         "`{0}` is not a supported `cpu`: use {1}",
-        "`cpu` names the processor the program is built for, spelt exactly as one of the listed names.");
+        "`cpu` names the processor the program is built for, spelled exactly as one of the listed names.");
 
     internal static DiagnosticDescriptor ProjectNotAList { get; } = Entry(
         Area.TheProjectFile,
@@ -3912,7 +3912,7 @@ public static class Catalogue
         "{0} cannot set `{1}`: {2}",
         "A link sets its `config`, the `space` everything in it is in, and `memory`, which describes the "
             + "config's memory areas by name. A memory area sets its `mirrors` and its `space`. Any other key is an "
-            + "error, so that a misspelt one does not silently do nothing.");
+            + "error, so that a misspelled one does not silently do nothing.");
 
     internal static DiagnosticDescriptor LinkedConfigUnreadable { get; } = Entry(
         Area.TheProjectFile,
@@ -3955,7 +3955,7 @@ public static class Catalogue
         "segment `{0}` cannot set `{1}`: a segment may set only `size`, `dp`, `bank`, `mirrors` and `space`",
         "A segment's entry states how wide its addresses are (`size`), which direct page and banks its contents are "
             + "reached through (`dp`, `bank`, `mirrors`), and which address space it is in (`space`). Any other "
-            + "key is an error, so that a misspelt one does not silently do nothing.");
+            + "key is an error, so that a misspelled one does not silently do nothing.");
 
     internal static DiagnosticDescriptor DiagnosticNameUnknown { get; } = Entry(
         Area.TheProjectFile,

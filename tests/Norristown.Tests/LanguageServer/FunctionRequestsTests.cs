@@ -80,7 +80,7 @@ public sealed class FunctionRequestsTests
 
     /// <summary>A named argument is colored as the parameter it names.</summary>
     [Fact]
-    public async Task ANamedArgumentIsColouredAsAParameter()
+    public async Task ANamedArgumentIsColoredAsAParameter()
     {
         var timeout = TestTimeout.Token();
         await using var client = await TestClient.OpenedCleanlyAsync(timeout, (LibUri, Lib), (MainUri, Main));

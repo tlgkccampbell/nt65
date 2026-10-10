@@ -406,7 +406,7 @@ public sealed class BuildCommandTests : IDisposable
     /// caller's decision.
     /// </summary>
     [Fact]
-    public void ColourMarksWhatADiagnosticIs()
+    public void ColorMarksWhatADiagnosticIs()
     {
         Project("""{ "cpu": "6502", "files": ["*.nt65"], "out": "build" }""");
         root.Write("app/main.nt65", ".module main\n.export BORDER\n.const BORDER = $d020\n.const UNUSED = 1\n");

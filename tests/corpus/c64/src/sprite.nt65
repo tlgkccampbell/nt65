@@ -30,7 +30,7 @@
     .repeat 13 {
         0, 0, 0
     }
-    0                           ; multicolour/unused byte
+    0                           ; multicolor/unused byte
 }
 
 .segment CODE

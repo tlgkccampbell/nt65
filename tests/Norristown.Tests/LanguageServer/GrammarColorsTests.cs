@@ -13,7 +13,7 @@ namespace Norristown.Tests.LanguageServer;
 /// arrive. The grammar must also give every declaration such a scope, except the few declarations
 /// whose kind cannot be determined from their line.
 /// </summary>
-public sealed class GrammarColoursTests
+public sealed class GrammarColorsTests
 {
     /// <summary>
     /// The declarations whose kind cannot be determined from their line, as pairs of the grammar's
@@ -27,7 +27,7 @@ public sealed class GrammarColoursTests
     ];
 
     [Fact]
-    public void TheGrammarColoursNamesAsTheServerDoes()
+    public void TheGrammarColorsNamesAsTheServerDoes()
     {
         var failures = Repo.CollectFailures(Folders(), Check);
         Assert.True(failures.Count == 0, string.Join("\n", failures));

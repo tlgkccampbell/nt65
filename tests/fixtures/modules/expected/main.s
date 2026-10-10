@@ -55,7 +55,7 @@ main__main:
     lda #gfx__Color__white
     ldx #$01                        ; gfx::Sprite::y
     lda #$01                        ; gfx::screen('A')
-    ldy #$0f                        ; gfx::centred(10)
+    ldy #$0f                        ; gfx::centered(10)
     lda #gfx__palette__ink
     lda a:gfx__tables__lo
     lda #<hw__vic__BORDER

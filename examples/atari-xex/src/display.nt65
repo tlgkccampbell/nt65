@@ -10,7 +10,7 @@
 
 .export list, time, count, BANDS
 
-.const BANDS = 2                    ; the bands of colour bars, each drawn by a display list interrupt
+.const BANDS = 2                    ; the bands of color bars, each drawn by a display list interrupt
 
 .segment SCREEN
 

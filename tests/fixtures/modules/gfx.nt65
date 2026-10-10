@@ -29,7 +29,7 @@
     'A'..'Z' = $01
 }
 
-.export .func centred(width) = (40 - width) / 2
+.export .func centered(width) = (40 - width) / 2
 
 .export .list glyphs {
     $3c, $42, $3c

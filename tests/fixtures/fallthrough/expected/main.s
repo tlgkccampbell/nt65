@@ -16,7 +16,7 @@
 .export main__after_call
 .export main__after_else
 .export main__after_label
-.export main__labelled
+.export main__labeled
 .export main__skips
 .export main__skipped
 .export main__landing
@@ -73,10 +73,10 @@ main__after_label:
 after_label__done:
 ; end of after_label
 
-; .proc labelled: a8  main.nt65:73
-main__labelled:
+; .proc labeled: a8  main.nt65:73
+main__labeled:
     rts
-; end of labelled
+; end of labeled
 
 ; .proc skips: a8, i8, native  main.nt65:79
 main__skips:

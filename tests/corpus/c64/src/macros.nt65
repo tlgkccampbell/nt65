@@ -112,7 +112,7 @@
     pla
 }
 
-; In a DEBUG build, flash the border with the given colour.
+; In a DEBUG build, flash the border with the given color.
 .macro trace(color: const) {
     .if DEBUG {
         lda #color

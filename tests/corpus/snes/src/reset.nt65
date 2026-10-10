@@ -1,4 +1,4 @@
-; Power-on, interrupt entry and hardware initialisation.
+; Power-on, interrupt entry and hardware initialization.
 .module reset
 
 .cpu 65816

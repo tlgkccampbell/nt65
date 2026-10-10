@@ -42,7 +42,7 @@ public sealed class PlacementRequestsTests
 
     /// <summary>The path is colored as a module, which the grammar alone cannot tell from any other name.</summary>
     [Fact]
-    public void ThePathInAPlaceIsColouredAsAModule()
+    public void ThePathInAPlaceIsColoredAsAModule()
     {
         var (_, model) = Analyzed(Main, ".module part: placed\n");
         var data = NameHighlighting.In(model).Data;

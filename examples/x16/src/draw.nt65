@@ -7,7 +7,7 @@
 
 .use x16::{vera, text as screen}
 
-.export column, row, width, height, colour, style, line, box, text
+.export column, row, width, height, color, style, line, box, text
 
 ; Screen codes of the lowercase and uppercase characters for the lines of a box.
 .const HORIZONTAL   = $40
@@ -26,7 +26,7 @@
 .data row:    .byte
 .data width:  .byte                 ; the next box's size, in cells
 .data height: .byte
-.data colour: .byte                 ; the colours of what is drawn
+.data color:  .byte                 ; the colors of what is drawn
 .data style:  .byte                 ; bit 0 set draws text in reverse
 
 .segment BSS
@@ -37,7 +37,7 @@
 
 .segment DRAW
 
-; Draws a box `width` cells wide and `height` tall in `colour`, with its top left corner at
+; Draws a box `width` cells wide and `height` tall in `color`, with its top left corner at
 ; `column` and `row`. The inside of the box is left as it is.
 .proc box {
     ldx column
@@ -68,7 +68,7 @@
     jmp rule
 }
 
-; Writes `line` from the cell at `column` and `row` on, in `colour`, and in reverse when bit 0
+; Writes `line` from the cell at `column` and `row` on, in `color`, and in reverse when bit 0
 ; of `style` is set.
 .proc text {
     ldx column
@@ -90,7 +90,7 @@
 }
 
 ; Draws one side of a box, in column X, from the row below its top edge to the row above its
-; bottom edge. Port 0 writes each cell's screen code and port 1 its colours, both stepping down
+; bottom edge. Port 0 writes each cell's screen code and port 1 its colors, both stepping down
 ; a row at a time.
 .proc side: reads x {
     ldy row
@@ -101,7 +101,7 @@
     tsb vera::CTRL                  ; port 1's address
     lda #vera::STEP_256
     jsr locate
-    inc vera::ADDR_L                ; the cell's colours, after its screen code
+    inc vera::ADDR_L                ; the cell's colors, after its screen code
     lda #vera::ADDRSEL
     trb vera::CTRL                  ; port 0's again
     ldy height
@@ -110,7 +110,7 @@
 @down:
     lda #VERTICAL
     sta vera::DATA0
-    lda colour
+    lda color
     sta vera::DATA1
     dey
     bne @down
@@ -148,10 +148,10 @@
     .fallthrough put
 }
 
-; Writes the screen code in A and `colour` to the cell port 0 points at.
+; Writes the screen code in A and `color` to the cell port 0 points at.
 .proc put: reads a, keeps x, y {
     sta vera::DATA0
-    lda colour
+    lda color
     sta vera::DATA0
     rts
 }

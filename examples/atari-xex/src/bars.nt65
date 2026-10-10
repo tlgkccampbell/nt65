@@ -1,5 +1,5 @@
-; The colour bars, and the interrupts that draw and move them. A display list interrupt draws each
-; band, one colour a line, and the vertical blank moves the bars on a line each frame and counts
+; The color bars, and the interrupts that draw and move them. A display list interrupt draws each
+; band, one color a line, and the vertical blank moves the bars on a line each frame and counts
 ; the frames.
 ;
 ; The vertical blank's part is the deferred one, which the operating system runs after its own
@@ -14,8 +14,8 @@
 
 .export install, frames
 
-.const LINES    = 16                ; the lines of each band, all blank, one colour to a line
-.const PERIOD   = 16                ; the lines before a band's colours repeat
+.const LINES    = 16                ; the lines of each band, all blank, one color to a line
+.const PERIOD   = 16                ; the lines before a band's colors repeat
 .const DEFERRED = 7                 ; os::SETVBV's number for VVBLKD
 
 .segment ZEROPAGE
@@ -61,7 +61,7 @@
     pha
     tya
     pha
-    lda band                        ; this band's colours start at band * 2 * PERIOD + phase
+    lda band                        ; this band's colors start at band * 2 * PERIOD + phase
     .repeat 5 {
         asl a
     }
@@ -70,7 +70,7 @@
     tax
     ldy #LINES
 @line:
-    lda colours,x
+    lda colors,x
     sta antic::WSYNC
     sta gtia::COLBK
     inx
@@ -110,9 +110,9 @@
 ; Returns the luminance of a band's line i, which rises and falls over PERIOD lines.
 .func luminance(i) = .select(i .mod PERIOD < PERIOD / 2, i .mod PERIOD, PERIOD - 1 - i .mod PERIOD) * 2
 
-; Each band's colours, twice over, so that a band read from `phase` on never runs off the end.
+; Each band's colors, twice over, so that a band read from `phase` on never runs off the end.
 ; The top band is light blue and the bottom one orange.
-.data colours: .byte[BANDS * 2 * PERIOD] {
+.data colors: .byte[BANDS * 2 * PERIOD] {
     .repeat 2 * PERIOD, i {
         $90 | luminance(i)
     }
@@ -122,4 +122,4 @@
 }
 
 .assert 2 * PERIOD == 32, "`dli` multiplies the band by 32 with five shifts"
-.assert BANDS * 2 * PERIOD <= 256, "`dli` indexes `colours` with X"
+.assert BANDS * 2 * PERIOD <= 256, "`dli` indexes `colors` with X"

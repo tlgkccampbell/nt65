@@ -6,7 +6,7 @@
 
 .cpu 6502
 
-.use c64::{vic, kernal, Colour, POINTERS}
+.use c64::{vic, kernal, Color, POINTERS}
 
 .export init, update, sort, first, irq, order, objects
 
@@ -47,27 +47,27 @@
     xhigh                           ; X, the ninth bit
     ypos
     kind                            ; a `Kind`
-    colour
+    color
     dx                              ; how far X moves in a frame, or how fast the circle turns
     dy                              ; how far Y moves in a frame, or how fast the bobbing turns
     phase                           ; where the object is in its circle or its bobbing
-    cx                              ; the centre of an orbiter's circle
-    cy                              ; the centre of an orbiter's circle, or a swimmer's line
+    cx                              ; the center of an orbiter's circle
+    cy                              ; the center of an orbiter's circle, or a swimmer's line
 }
 
 ; An object as a record, with a field for each of `Field`'s members, for the table the objects
 ; start from.
 .struct Object {
-    xpos:   .byte
-    xhigh:  .byte
-    ypos:   .byte
-    kind:   .byte
-    colour: .byte
-    dx:     .byte
-    dy:     .byte
-    phase:  .byte
-    cx:     .byte
-    cy:     .byte
+    xpos:  .byte
+    xhigh: .byte
+    ypos:  .byte
+    kind:  .byte
+    color: .byte
+    dx:    .byte
+    dy:    .byte
+    phase: .byte
+    cx:    .byte
+    cy:    .byte
 }
 
 .assert .countof(Object) == .countof(Field), "`Object` and `Field` are out of step"
@@ -89,22 +89,22 @@
 
 .segment RODATA
 .data starts: .type Object[] {
-    { kind = Kind::bouncer, xpos = 40, ypos = 70, dx = 1, dy = 1, colour = Colour::yellow }
-    { kind = Kind::bouncer, xpos = 120, ypos = 90, dx = 2, dy = -1, colour = Colour::light_red }
-    { kind = Kind::bouncer, xpos = 200, ypos = 150, dx = -2, dy = 2, colour = Colour::cyan }
-    { kind = Kind::bouncer, xpos = 90, ypos = 190, dx = -1, dy = -2, colour = Colour::light_green }
-    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, colour = Colour::white }
-    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, phase = 64, colour = Colour::white }
-    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, phase = 128, colour = Colour::white }
-    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, phase = 192, colour = Colour::white }
-    { kind = Kind::orbiter, cx = 200, cy = 140, dx = -3, colour = Colour::orange }
-    { kind = Kind::orbiter, cx = 200, cy = 140, dx = -3, phase = 128, colour = Colour::orange }
-    { kind = Kind::swimmer, xpos = 64, xhigh = 1, cy = 100, dx = 1, dy = 3, colour = Colour::light_blue }
-    { kind = Kind::swimmer, xpos = 0, xhigh = 1, cy = 110, dx = 2, dy = 4, phase = 40, colour = Colour::purple }
-    { kind = Kind::swimmer, xpos = 200, cy = 140, dx = 1, dy = 2, phase = 80, colour = Colour::green }
-    { kind = Kind::swimmer, xpos = 120, cy = 170, dx = 3, dy = 5, phase = 120, colour = Colour::light_grey }
-    { kind = Kind::swimmer, xpos = 30, xhigh = 1, cy = 130, dx = 2, dy = 3, phase = 160, colour = Colour::yellow }
-    { kind = Kind::swimmer, xpos = 250, cy = 150, dx = 1, dy = 2, phase = 200, colour = Colour::red }
+    { kind = Kind::bouncer, xpos = 40, ypos = 70, dx = 1, dy = 1, color = Color::yellow }
+    { kind = Kind::bouncer, xpos = 120, ypos = 90, dx = 2, dy = -1, color = Color::light_red }
+    { kind = Kind::bouncer, xpos = 200, ypos = 150, dx = -2, dy = 2, color = Color::cyan }
+    { kind = Kind::bouncer, xpos = 90, ypos = 190, dx = -1, dy = -2, color = Color::light_green }
+    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, color = Color::white }
+    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, phase = 64, color = Color::white }
+    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, phase = 128, color = Color::white }
+    { kind = Kind::orbiter, cx = 100, cy = 120, dx = 2, phase = 192, color = Color::white }
+    { kind = Kind::orbiter, cx = 200, cy = 140, dx = -3, color = Color::orange }
+    { kind = Kind::orbiter, cx = 200, cy = 140, dx = -3, phase = 128, color = Color::orange }
+    { kind = Kind::swimmer, xpos = 64, xhigh = 1, cy = 100, dx = 1, dy = 3, color = Color::light_blue }
+    { kind = Kind::swimmer, xpos = 0, xhigh = 1, cy = 110, dx = 2, dy = 4, phase = 40, color = Color::purple }
+    { kind = Kind::swimmer, xpos = 200, cy = 140, dx = 1, dy = 2, phase = 80, color = Color::green }
+    { kind = Kind::swimmer, xpos = 120, cy = 170, dx = 3, dy = 5, phase = 120, color = Color::light_gray }
+    { kind = Kind::swimmer, xpos = 30, xhigh = 1, cy = 130, dx = 2, dy = 3, phase = 160, color = Color::yellow }
+    { kind = Kind::swimmer, xpos = 250, cy = 150, dx = 1, dy = 2, phase = 200, color = Color::red }
 }
 
 .assert .countof(starts) == OBJECTS, "an object without a start, or a start without an object"
@@ -151,18 +151,18 @@
 
 ; Returns 1 if the pixel `across` pixels from the left and `down` from the top of a kind's shape
 ; is set, and 0 if not. A bouncer is a ball, an orbiter a ring and a swimmer a diamond, each 21
-; pixels across, with their centre at 11, 10. The arithmetic is on doubled coordinates, whose
-; centre is 22, 20.
+; pixels across, with their center at 11, 10. The arithmetic is on doubled coordinates, whose
+; center is 22, 20.
 .func dot(shape, across, down) = .switch(shape,
     [Kind::bouncer], square(across, down) <= 400,
     [Kind::orbiter], square(across, down) <= 400 && square(across, down) >= 196,
     distance(across, 22) + distance(down, 20) <= 20)
 
-; Returns the square of a pixel's distance from the centre, in doubled coordinates.
+; Returns the square of a pixel's distance from the center, in doubled coordinates.
 .func square(across, down) = (distance(across, 22) * distance(across, 22)
     + distance(down, 20) * distance(down, 20))
 
-; Returns how far n doubled is from the centre c, which is already doubled.
+; Returns how far n doubled is from the center c, which is already doubled.
 .func distance(n, c) = .max(2 * n - c, c - 2 * n)
 
 ; Returns the byte of the eight pixels from `across` on row `down` of a shape, the leftmost in
@@ -411,8 +411,8 @@
 
 ; Shows the object at `next` in `order` on sprite `next` mod 8, and moves `next` on.
 ;
-; A sprite's colour and its shape pointer are one register to a sprite, and its X and Y two to a
-; sprite, and the 6502 has one Y. So the colour's and the pointer's stores have the sprite's
+; A sprite's color and its shape pointer are one register to a sprite, and its X and Y two to a
+; sprite, and the 6502 has one Y. So the color's and the pointer's stores have the sprite's
 ; number written into their operands, and the X and Y stores are indexed by twice that number.
 .proc show {
     ldy next
@@ -421,17 +421,17 @@
     and #SPRITES - 1
     tay                             ; the sprite
     clc
-    adc #<vic::SPRITE_COLOUR
-    sta colour + 1
-    .patch colour
+    adc #<vic::SPRITE_COLOR
+    sta color + 1
+    .patch color
     tya
     clc
     adc #<POINTERS
     sta pointer + 1
     .patch pointer
-    lda objects::colour,x
-    colour:
-    sta vic::SPRITE_COLOUR          ; the sprite's colour
+    lda objects::color,x
+    color:
+    sta vic::SPRITE_COLOR          ; the sprite's color
     lda objects::kind,x
     clc
     adc #SHAPE                      ; each kind has a shape of its own
@@ -458,7 +458,7 @@
     rts
 }
 
-; Adding a sprite's number to the low byte of its first colour register or pointer reaches the
+; Adding a sprite's number to the low byte of its first color register or pointer reaches the
 ; sprite's own without a carry into the high byte.
-.assert (vic::SPRITE_COLOUR & $FF) + SPRITES <= $100, "the colour registers cross a page"
+.assert (vic::SPRITE_COLOR & $FF) + SPRITES <= $100, "the color registers cross a page"
 .assert (POINTERS & $FF) + SPRITES <= $100, "the pointers cross a page"

@@ -31,7 +31,7 @@ public sealed class AnalysisApiTests
         y:      .word
         }
 
-        .enum Colour {
+        .enum Color {
             black
             white
         }
@@ -41,7 +41,7 @@ public sealed class AnalysisApiTests
         .data cells: .byte[4]
 
         .segment CODE
-        .macro plot(value: Colour) {
+        .macro plot(value: Color) {
             lda #value
             sta EDGE
         }
@@ -50,7 +50,7 @@ public sealed class AnalysisApiTests
             ldx #.sizeof(Point)
         @loop:
             lda cells,x
-            plot!(Colour::white)
+            plot!(Color::white)
             dex
             bne @loop
             rts
@@ -223,7 +223,7 @@ public sealed class AnalysisApiTests
 
         var invocation = model.InvocationAt(call)!;
         var value = plot.Parameters[0].Symbol;
-        Assert.Equal("Colour::white", invocation.For(value)!.Value!.GetText());
+        Assert.Equal("Color::white", invocation.For(value)!.Value!.GetText());
 
         // A line of a body is read under one expansion of the macro, and that expansion answers
         // what a name's value is there. The declaration a header makes is the one that expansion
@@ -233,7 +233,7 @@ public sealed class AnalysisApiTests
         Assert.Equal(on.Call, model.GivenAt(value, on)!.Value.Argument.Value!.Tree.Root.DescendantNodes()
             .OfType<MacroCallSyntax>().Single());
         Assert.Equal("white", model.BindingsOf(on)![value].Member!.Name);
-        Assert.Equal("Colour", model.EnumOf(plot.Parameters[0].Accepts)!.Name);
+        Assert.Equal("Color", model.EnumOf(plot.Parameters[0].Accepts)!.Name);
         Assert.Equal("white", model.MemberFor(invocation.For(value)!, null)!.Name);
         Assert.Equal("white", model.MemberOf(plot.Parameters[0].Accepts, invocation.For(value)!.Value, null)!.Name);
         Assert.Null(model.BindingsOf(null));
