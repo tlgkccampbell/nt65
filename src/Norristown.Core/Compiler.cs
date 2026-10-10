@@ -733,6 +733,7 @@ public static class Compiler
         }
         found.AddRange(layout.Diagnostics);
         found.AddRange(flow.Diagnostics);
+        found.AddRange(Flow.AddressConstants.BindingsUsedAsAddresses(model, layout));
 
         // A family's body is emitted once per instance, so a mistake in it is found once per
         // instance. A diagnostic that every instance reports is collapsed into one.

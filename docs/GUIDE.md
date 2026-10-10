@@ -871,6 +871,11 @@ lands on the `.multiproc` line. Nothing is built by pasting names together, so t
 knows every instance: renaming `play::noise` renames the enum member `Channel::noise`, and with
 it every instance named after it.
 
+Inside the body, `ch` alone is the member's value, a number, so `lda ch` would read the byte
+at address 0, 1 or 2 rather than `level::ch`. A build warns about a bare binding used as an
+address in a family's body (`constant-used-as-address`): write the path to the data, or `#ch`
+for the value itself.
+
 ## Macros
 
 Most of what ca65 code uses macros for is a language feature in nt65: constants and `.func`
@@ -2232,7 +2237,8 @@ everything below works across modules.
   reported by a build: a `jsr` followed by `rts` that can be a `jmp` (and `jsl` with `rtl` a
   `jml`), a `rep` or `sep` that sets a width the register already has, and a `.const` that an
   instruction uses as an address, with fixes that declare it as data with `.data`, or as a
-  hardware register with `.mmio`. The flags bring more: a `.next` the flags prove, a branch
+  hardware register with `.mmio` (in a family's body, a binding used that way is a build
+  warning instead, under the same name). The flags bring more: a `.next` the flags prove, a branch
   that is never taken, a `jmp` that can be a branch a byte shorter (`bra` on the 65C02 and
   the 65816), a branch over a `jmp` that can be the opposite branch, a `clc` or `sec` that
   sets C to what it already is, and a `clc` before `adc #n` where C is 1, which can be

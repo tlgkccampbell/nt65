@@ -4269,13 +4269,17 @@ public static class Catalogue
         Area.Suggestions,
         "constant-used-as-address",
         Severity.Info,
-        "`{0}` is used as an address: declare it as data, or with `.mmio` if it is a hardware register",
+        "`{0}` is used as an address: {1}",
         "A constant is a number to nt65, even where an instruction reaches memory through it, so what is at that "
             + "address has no element type, size or fields, and the editor cannot follow values stored there. Declared "
             + "as data found elsewhere, `.data name: .byte = address`, the same name has all of those, and with "
             + "`.mmio` in place of `.data` it is a hardware register, whose value the hardware sets. The output is the "
             + "same. A constant that a branch, a jump or a call names directly is the address of code, and is not "
-            + "suggested.");
+            + "suggested. In the body of a family, a `.multiproc` or an `.each` over a named enum, the binding is a "
+            + "member's value, and an instruction that reaches memory through it bare is a warning rather than a "
+            + "suggestion. There a reader expects the name to mean the member's data, such as `level::ch`, and "
+            + "`lda ch` reads the address that the value names instead. Write the path to the data, or `#ch` for "
+            + "the value itself.");
 
     internal static DiagnosticDescriptor WidthAlreadySet { get; } = Entry(
         Area.Suggestions,

@@ -3333,6 +3333,13 @@ The rules:
   these forms: the `.each` itself declares nothing, only the declarations in its body do.
 - A condition in the body may name the enum's members, `.if ch == Channel::noise`: the
   binding's own value is one of them, so they are known where a turn's conditions are answered.
+- The binding alone is the member's value, a number, so an instruction that reaches memory
+  through it, `lda ch` or `sta ch+1`, reads or writes the address that number names. That is
+  almost never meant where the member's data is one path away, `level::ch`, so in the body of an
+  `.each` over a named enum, and so of every family form, it is the warning
+  `constant-used-as-address`. Outside such a body that name is an editor suggestion about a
+  declared constant, since a constant used as an address there is usually meant. An
+  immediate, `#ch`, and a path, `level::ch`, are what the body should write.
 - What the body declares is the turn's, as a repetition's always is, and is named after the
   instance in the output (§13). An instance's name, kind and signature come from the headers,
   so a file's interface is still derived from headers alone (§14).
