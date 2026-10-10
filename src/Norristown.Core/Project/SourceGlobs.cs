@@ -30,14 +30,24 @@ public static class SourceGlobs
     /// which is relative to <paramref name="root"/> or rooted, whether or not the file exists on
     /// disk yet. An editor asks this of a file it has open that was never saved.
     /// </summary>
-    public static bool Matches(string root, string glob, string path)
+    public static bool Matches(string root, string glob, string path) =>
+        Matches(root, glob, path, FilePaths.IgnoresCase);
+
+    /// <summary>
+    /// Returns a value indicating whether <paramref name="glob"/> names <paramref name="path"/>
+    /// on a file system that ignores case, or on one that respects it. The glob's directories and
+    /// its file-name pattern follow the file system's rule, so a glob names the same files as the
+    /// file system would find for it, and <see cref="Matching"/> agrees with this method on
+    /// every platform. The public overload asks <see cref="FilePaths.IgnoresCase"/>.
+    /// </summary>
+    internal static bool Matches(string root, string glob, string path, bool ignoresCase)
     {
         var (from, pattern, search) = Split(root, glob);
         if (pattern.Contains('/'))
             return false;
         var full = Paths.Normalized(Path.GetFullPath(path, root));
         var directory = Paths.Normalized(from);
-        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var comparison = ignoresCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         var within = search == SearchOption.AllDirectories
             ? full.StartsWith(directory + "/", comparison)
             : string.Equals(Paths.Directory(full), directory, comparison);
@@ -47,8 +57,8 @@ public static class SourceGlobs
         var leaf = Paths.FileName(full);
         var expression = "^" + Regex.Escape(pattern).Replace(@"\*", ".*", StringComparison.Ordinal)
             .Replace(@"\?", ".", StringComparison.Ordinal) + "$";
-        return Regex.IsMatch(leaf, expression,
-            OperatingSystem.IsWindows() ? RegexOptions.IgnoreCase | RegexOptions.CultureInvariant : RegexOptions.CultureInvariant);
+        var options = ignoresCase ? RegexOptions.IgnoreCase | RegexOptions.CultureInvariant : RegexOptions.CultureInvariant;
+        return Regex.IsMatch(leaf, expression, options);
     }
 
     /// <summary>
