@@ -43,6 +43,10 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly Dictionary<StepKey, FlowState> leaving = [];
     private readonly Dictionary<StepKey, int> slots = [];
 
+    // The labels a jump, a `.next` or a call has been reported for entering with no `.state`.
+    // Any other label entered from outside with no `.state` is reported at the label itself.
+    private readonly HashSet<Symbol> entriesReported = [];
+
     // The state at the start of each expansion of a macro with a signature, and of each block
     // spliced into one. A spliced block's end is checked against it, and a macro's exit state
     // takes its unchanged parts from it.
@@ -119,7 +123,7 @@ public sealed class StateAnalysis : IProcessorStates
         analysis.checks.CheckOutsideRoutines();
         analysis.Exports = InferredExports.Of(layout, flow, analysis.signatures, analysis, analysis.EnteredWith);
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
-            analysis.checks.Found.Concat(analysis.UndeclaredExports()).DistinctBy(d => (d.Span, d.Id, d.Message)));
+            analysis.checks.Found.Concat(analysis.UndeclaredExports()).Concat(analysis.UndeclaredEntries()).DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
     }
 
@@ -547,6 +551,40 @@ public sealed class StateAnalysis : IProcessorStates
                 Fix = new DiagnosticFix(FixKind.State, At: label.DeclarationSpan),
             };
         }
+    }
+
+    /// <summary>
+    /// Reports each label inside a routine that can be entered from outside it, has no
+    /// <c>.state</c>, and has not been reported where it is entered. Another routine reaches such
+    /// a label by taking its address, or the address of a table that holds it, so no jump or
+    /// <c>.next</c> names it and the label itself is the one place to report it.
+    /// </summary>
+    private IEnumerable<Diagnostic> UndeclaredEntries()
+    {
+        foreach (var block in flow.Regions.SelectMany(region => region.Blocks))
+        {
+            if (block is not { Label: { Kind: SymbolKind.Label, IsExported: false, StateDeclaration: null, Routine: { } owner } label }
+                || entriesReported.Contains(label) || !outside.Reaches(block))
+            {
+                continue;
+            }
+            yield return Expansion.Problem(
+                model.Tree, label.Tree, label.NameSpan, block.On, Severity.Error,
+                Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+                new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+        }
+    }
+
+    /// <summary>
+    /// Reports that <paramref name="step"/> enters <paramref name="label"/>, a label inside
+    /// <paramref name="owner"/>, which no <c>.state</c> declares, and records that the label has
+    /// been reported.
+    /// </summary>
+    private void ReportEntry(Step step, Symbol label, Symbol owner, StateChecks report)
+    {
+        entriesReported.Add(label);
+        report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+            new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
     }
 
     /// <summary>
@@ -1036,8 +1074,8 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (target.StateDeclaration is null)
             {
-                report?.Report(step, Catalogue.EntryNotDeclared.Message(target.DisplayName, owner.DisplayName),
-                    new DiagnosticFix(FixKind.State, At: target.DeclarationSpan));
+                if (report is not null)
+                    ReportEntry(step, target, owner, report);
             }
             if (DeclaredElsewhere(target) is { } declared)
                 report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
@@ -1163,8 +1201,7 @@ public sealed class StateAnalysis : IProcessorStates
                 {
                     if (named.StateDeclaration is null)
                     {
-                        report.Report(step, Catalogue.EntryNotDeclared.Message(named.DisplayName, inside.DisplayName),
-                            new DiagnosticFix(FixKind.State, At: named.DeclarationSpan));
+                        ReportEntry(step, named, inside, report);
                     }
                     if (DeclaredElsewhere(named) is { } declared)
                         report.CheckEntry(step, $"`.next {named.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
@@ -1242,8 +1279,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (label.StateDeclaration is null)
             {
-                report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
-                    new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+                ReportEntry(step, label, owner, report);
             }
             var declared = DeclaredElsewhere(label) ?? ProcessorState.Unknown;
             var entry = new Signature(declared, declared, callee.IsFar) { Declared = StateParts.All, Written = StateParts.All };

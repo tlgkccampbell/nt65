@@ -71,7 +71,7 @@ public sealed class OutsideEntries
     /// <summary>
     /// Returns every label this file names from a routine other than the one the label is in,
     /// whether as the target of a jump into that routine or anywhere else in an operand, and every
-    /// label this file calls. A call enters the label with whatever state the caller has, so the
+    /// label this file calls by name. A call enters the label with whatever state the caller has, so the
     /// label is an entry point even when its own routine makes the call. It also returns every
     /// label that a <c>.next</c> reaches through a list or a table, unless only the label's own
     /// routine dispatches through it.
@@ -83,8 +83,12 @@ public sealed class OutsideEntries
         {
             if (step.Routine is not { } routine)
                 continue;
+            // An indirect call's operand names where the pointer is, not code the call enters, so
+            // only a call that names its target enters it. A call laid out with no mode is taken
+            // to name its target, which assumes the worst.
             var calls = step.Statement is InstructionStatementSyntax instruction
-                && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls;
+                && Instructions.Facts(instruction.MnemonicKind).Control == Control.Calls
+                && (layout.Of(step.Statement, step.On)?.Mode is not { } mode || Transfers.Of(step.Statement, mode) == Transfer.Call);
             foreach (var name in step.Statement.DescendantNodes().OfType<NameExpressionSyntax>())
             {
                 if (Targets.Of(model, name, step.On)?.Symbol is { Kind: SymbolKind.Label, Routine: { } owner } label

@@ -6,7 +6,10 @@
 
 .cpu 65816
 
-.export widens, jumps_wide, declares, jumps_declared, calls_own
+.export widens, jumps_wide, declares, jumps_declared, calls_own, takes_table, holds_taken
+
+.segment ZEROPAGE
+.data ptr: .word
 
 .segment CODE
 
@@ -57,7 +60,28 @@
     rts                     ;! error[keeps-broken]: `calls_own` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address, having pulled more than the routine pushed: declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
 
+; `takes_table` takes the address of `taken` and jumps through it with no `.next` naming the
+; table, so nothing at a jump names `inner`. The label is entered from outside all the same, and
+; it is reported where it is declared.
+.proc takes_table: a8, i8, native {
+    lda #<taken
+    sta ptr
+    lda #>taken
+    sta ptr+1
+    jmp (ptr)
+    .next ?
+}
+
+.proc holds_taken: a8, i8, native {
+    ldx #0
+    jmp (taken,x)
+    .next taken
+    inner:                  ;! error[entry-not-declared]: `inner` is inside routine `holds_taken`: mark it an entry point with a `.state` after the label
+    rts
+}
+
 .segment RODATA
 .data wide:      .addr widens::inside
 .data declared:  .addr declares::inside
 .data own_calls: .addr calls_own::helper
+.data taken:     .addr holds_taken::inner
