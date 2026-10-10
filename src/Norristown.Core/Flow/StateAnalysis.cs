@@ -43,6 +43,10 @@ public sealed class StateAnalysis : IProcessorStates
     private readonly Dictionary<StepKey, FlowState> leaving = [];
     private readonly Dictionary<StepKey, int> slots = [];
 
+    // The labels a jump, a `.next` or a call has been reported for entering with no `.state`.
+    // Any other label entered from outside with no `.state` is reported at the label itself.
+    private readonly HashSet<Symbol> entriesReported = [];
+
     // The state at the start of each expansion of a macro with a signature, and of each block
     // spliced into one. A spliced block's end is checked against it, and a macro's exit state
     // takes its unchanged parts from it.
@@ -119,7 +123,7 @@ public sealed class StateAnalysis : IProcessorStates
         analysis.checks.CheckOutsideRoutines();
         analysis.Exports = InferredExports.Of(layout, flow, analysis.signatures, analysis, analysis.EnteredWith);
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
-            analysis.checks.Found.Concat(analysis.UndeclaredExports()).DistinctBy(d => (d.Span, d.Id, d.Message)));
+            analysis.checks.Found.Concat(analysis.UndeclaredExports()).Concat(analysis.UndeclaredEntries()).DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
     }
 
@@ -550,6 +554,40 @@ public sealed class StateAnalysis : IProcessorStates
     }
 
     /// <summary>
+    /// Reports each label inside a routine that can be entered from outside it, has no
+    /// <c>.state</c>, and has not been reported where it is entered. Another routine reaches such
+    /// a label by taking its address, or the address of a table that holds it, so no jump or
+    /// <c>.next</c> names it and the label itself is the one place to report it.
+    /// </summary>
+    private IEnumerable<Diagnostic> UndeclaredEntries()
+    {
+        foreach (var block in flow.Regions.SelectMany(region => region.Blocks))
+        {
+            if (block is not { Label: { Kind: SymbolKind.Label, IsExported: false, StateDeclaration: null, Routine: { } owner } label }
+                || entriesReported.Contains(label) || !outside.Reaches(block))
+            {
+                continue;
+            }
+            yield return Expansion.Problem(
+                model.Tree, label.Tree, label.NameSpan, block.On, Severity.Error,
+                Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+                new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+        }
+    }
+
+    /// <summary>
+    /// Reports that <paramref name="step"/> enters <paramref name="label"/>, a label inside
+    /// <paramref name="owner"/>, which no <c>.state</c> declares, and records that the label has
+    /// been reported.
+    /// </summary>
+    private void ReportEntry(Step step, Symbol label, Symbol owner, StateChecks report)
+    {
+        entriesReported.Add(label);
+        report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
+            new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+    }
+
+    /// <summary>
     /// Runs one region to a fixed point, then once more to report.
     /// </summary>
     private void Analyze(FlowRegion region)
@@ -830,14 +868,27 @@ public sealed class StateAnalysis : IProcessorStates
         // A store into the bytes on the stack may change a P, D or B saved there, and nt65 does
         // not follow which byte it changes, so nothing saved on the stack is known afterwards.
         // The register walk forgets the flags and registers such a store may change the same way.
+        // A copy of the stack pointer is followed as the register walk follows it, except through
+        // the bytes of a hidden path, as there too.
         var pointing = StackWrites.Pointing(mnemonic, mode, executing.Immediate, state.Pointing);
+        var wideIndex = processor.Index switch
+        {
+            Width.Sixteen => true,
+            Width.Eight => false,
+            _ => (bool?)null,
+        };
+        var pointed = executing.Decoded is not null ? null
+            : StackPointerCopies.Copied(mnemonic, layout.Cpu, wideIndex, pointing, state.Pointed, state.Stack);
+        var movedBack = StackPointerCopies.MovedBack(
+            mnemonic, layout.Cpu, wideIndex, state.Pointing, executing.Decoded is null ? state.Pointed : null, state.Stack,
+            (now, copy) => now.Extends(copy));
         var intoStack = Instructions.Facts(mnemonic).Stores
             && (executing.Decoded is { } stored
                 ? StackWrites.Into(stored, state.Pointing)
                 : StackWrites.Into(model, step, mode, state.Pointing));
         state = intoStack
-            ? state with { Stack = null, WhyStack = Cause.StackWritten(Quoted(step, executing)), Pointing = pointing }
-            : state with { Pointing = pointing };
+            ? state with { Stack = null, WhyStack = Cause.StackWritten(Quoted(step, executing)), Pointing = pointing, Pointed = pointed }
+            : state with { Pointing = pointing, Pointed = pointed };
         var stack = state.Stack;
 
         switch (mnemonic)
@@ -952,10 +1003,16 @@ public sealed class StateAnalysis : IProcessorStates
             // or B, a constant, or the program bank. Any other pull leaves the register unknown.
             case MnemonicKind.Plb:
                 var savedBank = stack?.PulledPush(1);
-                return new FlowState(processor with { B = Pulled(savedBank, savedBank?.Held, StateParts.DataBank, step.On).B }, Pull(stack, 1));
+                return new FlowState(processor with { B = Pulled(savedBank, savedBank?.Held, StateParts.DataBank, step.On).B }, Pull(stack, 1))
+                {
+                    Pointing = state.Pointing,
+                };
             case MnemonicKind.Pld:
                 var savedPage = stack?.PulledPush(2);
-                return new FlowState(processor with { D = Pulled(savedPage, savedPage?.Held, StateParts.DirectPage, step.On).D }, Pull(stack, 2));
+                return new FlowState(processor with { D = Pulled(savedPage, savedPage?.Held, StateParts.DirectPage, step.On).D }, Pull(stack, 2))
+                {
+                    Pointing = state.Pointing,
+                };
 
             // A pull that finds the status register a `php` saved restores the widths saved
             // with it. Any other pull leaves them unknown. The emulation flag is not in it, and in
@@ -966,13 +1023,14 @@ public sealed class StateAnalysis : IProcessorStates
                     : stack?.Top is { IsStatus: true } saved
                         ? Restored(processor, Pulled(saved, null, StateParts.A | StateParts.Index, step.On))
                         : processor with { A = Width.Unknown, Index = Width.Unknown };
-                return new FlowState(restored, Pull(stack, 1));
+                return new FlowState(restored, Pull(stack, 1)) { Pointing = state.Pointing };
 
-            // The stack pointer now points somewhere unknown, and what is pushed from here on
-            // is tracked on top of that unknown base.
+            // Moving the stack pointer back to a copy taken with only pushes since drops those
+            // pushes. Any other move leaves it pointing somewhere unknown, and what is pushed from
+            // here on is tracked on top of that unknown base.
             case MnemonicKind.Txs:
             case MnemonicKind.Tcs:
-                return state with { Stack = AnalysisStack.Unanchored };
+                return state with { Stack = movedBack ?? AnalysisStack.Unanchored };
 
             // A return with a `.next` is a jump to the address the routine pushed, and pulls
             // it. Where the `.next` names routines it is a tail call to each of them, checked
@@ -1036,8 +1094,8 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (target.StateDeclaration is null)
             {
-                report?.Report(step, Catalogue.EntryNotDeclared.Message(target.DisplayName, owner.DisplayName),
-                    new DiagnosticFix(FixKind.State, At: target.DeclarationSpan));
+                if (report is not null)
+                    ReportEntry(step, target, owner, report);
             }
             if (DeclaredElsewhere(target) is { } declared)
                 report?.CheckEntry(step, $"`{SyntaxFacts.TextOf(mnemonic)} {target.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
@@ -1163,8 +1221,7 @@ public sealed class StateAnalysis : IProcessorStates
                 {
                     if (named.StateDeclaration is null)
                     {
-                        report.Report(step, Catalogue.EntryNotDeclared.Message(named.DisplayName, inside.DisplayName),
-                            new DiagnosticFix(FixKind.State, At: named.DeclarationSpan));
+                        ReportEntry(step, named, inside, report);
                     }
                     if (DeclaredElsewhere(named) is { } declared)
                         report.CheckEntry(step, $"`.next {named.DisplayName}`", new Signature(declared, declared, false), state.Processor, whyMode: state.WhyE);
@@ -1242,8 +1299,7 @@ public sealed class StateAnalysis : IProcessorStates
         {
             if (label.StateDeclaration is null)
             {
-                report.Report(step, Catalogue.EntryNotDeclared.Message(label.DisplayName, owner.DisplayName),
-                    new DiagnosticFix(FixKind.State, At: label.DeclarationSpan));
+                ReportEntry(step, label, owner, report);
             }
             var declared = DeclaredElsewhere(label) ?? ProcessorState.Unknown;
             var entry = new Signature(declared, declared, callee.IsFar) { Declared = StateParts.All, Written = StateParts.All };

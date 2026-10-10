@@ -758,57 +758,24 @@ internal sealed class RegisterWalk
 
     /// <summary>
     /// Returns the stack as it was where the registers that hold the stack pointer after
-    /// <paramref name="step"/> copied it, or null where that cannot be relied on. A <c>tsx</c>
-    /// or <c>tsc</c> copies the stack as it is. Any other instruction keeps the copy, unless it
-    /// pulls, or on the 65816 may change the index width, which can clear the high byte of X.
+    /// <paramref name="step"/> copied it, or null where that cannot be relied on, as
+    /// <see cref="StackPointerCopies.Copied"/> decides.
     /// </summary>
     /// <param name="step">The step the instruction is in.</param>
     /// <param name="mnemonic">The instruction.</param>
     /// <param name="before">The state before the instruction.</param>
     /// <param name="pointing">The registers that hold the stack pointer after it.</param>
     /// <returns>The stack the copy was taken from, or null.</returns>
-    private SavedStack? PointedAfter(Step step, MnemonicKind mnemonic, RegisterState before, Registers pointing)
-    {
-        if (mnemonic is MnemonicKind.Tsx or MnemonicKind.Tsc)
-        {
-            // A copy taken earlier, at another depth, is still held in another register, and one
-            // stack cannot describe both.
-            var copied = mnemonic == MnemonicKind.Tsx ? Registers.X : Registers.A;
-            if ((pointing & ~copied) != Registers.None && !Equals(before.Pointed, before.Stack))
-                return null;
-
-            // An 8-bit X holds only the low byte of the stack pointer on the 65816.
-            return mnemonic == MnemonicKind.Tsx && layout.Cpu == Cpu.Wdc65816 && Wide(step, index: true) != true
-                ? null
-                : before.Stack;
-        }
-        if (Instructions.Facts(mnemonic).Pulls is not null
-            || (layout.Cpu == Cpu.Wdc65816 && mnemonic is MnemonicKind.Sep or MnemonicKind.Rep or MnemonicKind.Xce))
-        {
-            return null;
-        }
-        return before.Pointed;
-    }
+    private SavedStack? PointedAfter(Step step, MnemonicKind mnemonic, RegisterState before, Registers pointing) =>
+        StackPointerCopies.Copied(mnemonic, layout.Cpu, Wide(step, index: true), pointing, before.Pointed, before.Stack);
 
     /// <summary>
     /// Returns the stack after a <c>txs</c> or <c>tcs</c> moves the stack pointer back to a copy
-    /// a <c>tsx</c> or <c>tsc</c> took, or null where nothing is known about it. Only pushes may
-    /// have happened since the copy, so moving back drops exactly those. Any other way of setting
-    /// the stack pointer leaves the stack unknown.
+    /// a <c>tsx</c> or <c>tsc</c> took, or null where nothing is known about it, as
+    /// <see cref="StackPointerCopies.MovedBack"/> decides.
     /// </summary>
-    private SavedStack? MovedBack(Step step, MnemonicKind mnemonic, RegisterState state)
-    {
-        var from = mnemonic switch
-        {
-            MnemonicKind.Txs => Registers.X,
-            MnemonicKind.Tcs => Registers.A,
-            _ => Registers.None,
-        };
-        if ((state.FromStackPointer & from) == Registers.None || state.Pointed is not { } pointed
-            || state.Stack is not { } stack || !stack.Extends(pointed))
-        {
-            return null;
-        }
-        return mnemonic == MnemonicKind.Txs && layout.Cpu == Cpu.Wdc65816 && Wide(step, index: true) != true ? null : pointed;
-    }
+    private SavedStack? MovedBack(Step step, MnemonicKind mnemonic, RegisterState state) =>
+        StackPointerCopies.MovedBack(
+            mnemonic, layout.Cpu, Wide(step, index: true), state.FromStackPointer, state.Pointed, state.Stack,
+            (stack, pointed) => stack.Extends(pointed));
 }

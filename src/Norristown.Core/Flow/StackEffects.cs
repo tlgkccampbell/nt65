@@ -280,16 +280,14 @@ public sealed class StackEffects
                 return height is { } h ? StackEffect.Leaving(h) : StackEffect.Unknown;
             if (walk.Model.ValueOf(count, step.On).AsNumber() is not { } promised)
             {
-                report?.Add(new Diagnostic(count.Tree.GetSpan(count.Span), Severity.Error, Catalogue.ReturnCountNotConstant.Message()));
+                report?.Add(Expansion.Problem(walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountNotConstant.Message()));
                 return StackEffect.Unknown;
             }
             if (height is { } counted && counted != promised)
             {
-                report?.Add(new Diagnostic(count.Tree.GetSpan(count.Span), Severity.Error,
-                    Catalogue.ReturnCountMismatch.Message(promised, counted))
-                {
-                    Fix = new DiagnosticFix(FixKind.Spelling, counted.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-                });
+                report?.Add(Expansion.Problem(
+                    walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountMismatch.Message(promised, counted),
+                    new DiagnosticFix(FixKind.Spelling, counted.ToString(System.Globalization.CultureInfo.InvariantCulture))));
             }
             return StackEffect.Leaving((int)promised);
         }
@@ -312,21 +310,25 @@ public sealed class StackEffects
                 return height;
 
             // The bytes from a position inside an instruction move nothing on the stack, but where
-            // they end in a return, it is checked as one written there would be.
-            if (walk.Layout.HiddenPathAt(step)?.Return is { } hidden)
+            // they end in a return, it is checked as one written there would be. A copy of the
+            // stack pointer is not followed through them.
+            if (walk.Layout.HiddenPathAt(step) is { } path)
             {
-                if (report is not null)
-                    CheckReturn(step.Statement, hidden.Mnemonic, height, entry, report);
+                height = height with { Pointing = Registers.None, Pointed = null };
+                if (path.Return is { } hidden && report is not null)
+                    CheckReturn(walk.Model.Tree, step, hidden.Mnemonic, height, entry, report);
                 continue;
             }
             if (step.Statement is not InstructionStatementSyntax statement)
                 continue;
+            var mnemonic = statement.MnemonicKind;
+            var before = height;
+            height = Copied(walk, step, mnemonic, height);
 
             // A call pushes the return address its routine's return pulls, which the routine's
             // effect accounts for, and a return or an interrupt is where the path leaves.
-            var mnemonic = statement.MnemonicKind;
             if (mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl && block.Next is null && report is not null)
-                CheckReturn(statement, mnemonic, height, entry, report);
+                CheckReturn(walk.Model.Tree, step, mnemonic, height, entry, report);
 
             // A return used as a jump pulls the address it jumps to before control arrives there,
             // whether that is a label of this routine or another routine.
@@ -341,7 +343,18 @@ public sealed class StackEffects
                 continue;
             }
             if (RegisterEffects.SetsStackPointer(mnemonic))
-                return Height.Unknown;
+            {
+                // Moving the stack pointer back to a copy taken with only pushes since drops those
+                // pushes, and any other move leaves the height unknown.
+                if (StackPointerCopies.MovedBack(
+                    mnemonic, walk.Cpu, walk.Wide(step, index: true), before.Pointing, before.Pointed, before,
+                    (now, copy) => now.IsKnown && copy.IsKnown) is not { } back)
+                {
+                    return Height.Unknown;
+                }
+                height = back with { Pointing = height.Pointing, Pointed = height.Pointed };
+                continue;
+            }
             var facts = Instructions.Facts(mnemonic);
             if (facts.Pushes is { } push)
                 height = height.Moved(push, walk.Width(step, push), 1);
@@ -355,7 +368,7 @@ public sealed class StackEffects
         // the routine's return pulls.
         var relative = block.Steps.Count > 0 ? walk.Flow.RelativeCallAt(block.Steps[^1]) : null;
         if (report is not null)
-            CheckPushed(block, relative, height, report);
+            CheckPushed(walk.Model.Tree, block, relative, height, report);
         if (relative is { } call)
             height = height with { Whole = height.Whole - call.Pushed };
         var effect = effects.OfCallIn(block);
@@ -363,6 +376,28 @@ public sealed class StackEffects
             : effect.Kind == StackEffectKind.Unknown ? Height.Unknown
             : effect.Bytes > 0 ? height with { Whole = height.Whole + effect.Bytes }
             : (height with { Whole = height.Whole + effect.Bytes }).Lowered();
+    }
+
+    /// <summary>
+    /// Returns <paramref name="height"/> with the registers that hold the stack pointer after
+    /// <paramref name="step"/>'s instruction, which runs as <paramref name="mnemonic"/>, and the
+    /// height their copy was taken at. <see cref="StackWrites.Pointing"/> and
+    /// <see cref="StackPointerCopies"/> work them out. An instruction a store may turn into another
+    /// drops the copy.
+    /// </summary>
+    private static Height Copied(RegisterWalk walk, Layout.Step step, MnemonicKind mnemonic, Height height)
+    {
+        var mode = walk.Layout.Of(step.Statement, step.On)?.Mode;
+        var immediate = StepOperands.Immediate(walk.Model, walk.Layout, step);
+        var pointing = StackWrites.Pointing(mnemonic, mode, immediate, height.Pointing);
+        var variants = walk.VariantsOf(step);
+        foreach (var variant in variants)
+            pointing &= StackWrites.Pointing(variant, mode, immediate, height.Pointing);
+        var pointed = variants.Count > 0 ? null
+            : StackPointerCopies.Copied(
+                mnemonic, walk.Cpu, walk.Wide(step, index: true), pointing, height.Pointed,
+                height with { Pointing = Registers.None, Pointed = null });
+        return height with { Pointing = pointing, Pointed = pointed };
     }
 
     /// <summary>
@@ -388,11 +423,12 @@ public sealed class StackEffects
     /// paths that hold different amounts meet, a return is reported if any of them returns through
     /// bytes, and the count says "up to" or "at least".
     /// <paramref name="entry"/> is the label the routine was entered at, or null for its own name.
-    /// <paramref name="statement"/> is where the return is reported, and <paramref name="mnemonic"/>
-    /// is the return, which a <c>.label</c> may name inside another instruction's bytes.
+    /// <paramref name="step"/> is where the return is reported, in <paramref name="file"/>'s
+    /// analysis, and <paramref name="mnemonic"/> is the return, which a <c>.label</c> may name
+    /// inside another instruction's bytes.
     /// </summary>
     private static void CheckReturn(
-        SyntaxNode statement, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
+        SyntaxTree file, Layout.Step step, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
     {
         if (height.Least is not { } least)
             return;
@@ -440,7 +476,7 @@ public sealed class StackEffects
             };
             message = Catalogue.ReturnBeneathEntry.Message(returned, Bytes(height.Floor - least), at, beyond, fix);
         }
-        report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error, message));
+        report.Add(Expansion.Problem(file, step.Statement, step.On, Severity.Error, message));
     }
 
     /// <summary>
@@ -449,11 +485,13 @@ public sealed class StackEffects
     /// pushed since it was entered and what it was handed and has not pulled. That holds only
     /// while the stack has never been lower than its return address, because after that its own
     /// bytes cannot be told apart from its caller's. A relative call's own pushes are not arguments.
+    /// The call is reported in <paramref name="file"/>'s analysis.
     /// </summary>
-    private static void CheckPushed(BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
+    private static void CheckPushed(
+        SyntaxTree file, BasicBlock block, RelativeCall? relative, Height height, List<Diagnostic> report)
     {
         if (height is not { Bytes: { } bytes, KeepsTheReturn: true, Floor: var floor } || block.Steps.Count == 0
-            || block.Steps[^1].Statement is not InstructionStatementSyntax statement)
+            || block.Steps[^1] is not { Statement: InstructionStatementSyntax statement } last)
         {
             return;
         }
@@ -464,8 +502,8 @@ public sealed class StackEffects
             if (callee.Signature is not { Pushed: > 0 and var needed } || have >= needed)
                 continue;
             var pushed = have <= 0 ? "nothing is pushed here" : $"only {(have == 1 ? "1 byte is" : $"{have} bytes are")} pushed here";
-            report.Add(new Diagnostic(statement.Tree.GetSpan(statement.Span), Severity.Error,
-                Catalogue.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
+            report.Add(Expansion.Problem(
+                file, statement, last.On, Severity.Error, Catalogue.PushedTooFew.Message(callee.DisplayName, needed, pushed)));
         }
     }
 
@@ -505,9 +543,17 @@ public sealed class StackEffects
     /// The highest the lowest point of any one path here may be, or null where that is not known.
     /// Where it is above the return address, a path may still hold bytes it was handed.
     /// </param>
+    /// <param name="Pointing">
+    /// The registers among A, X and Y that hold the stack pointer, as X does after <c>tsx</c>.
+    /// </param>
+    /// <param name="Pointed">
+    /// The height where the registers in <paramref name="Pointing"/> copied the stack pointer, or
+    /// null where that cannot be relied on. <see cref="StackPointerCopies"/> says when a
+    /// <c>txs</c> or <c>tcs</c> moves the stack back to it.
+    /// </param>
     private sealed record Height(
         int Whole, int Accumulator, int Index, bool IsKnown, int? Lowest, int Return, bool AtLeast = false, int Handed = 0,
-        int? Spread = 0, int? Highest = null)
+        int? Spread = 0, int? Highest = null, Registers Pointing = Registers.None, Height? Pointed = null)
     {
         // The most bytes one path may hold above another before the difference is taken to be
         // unknown. A loop that pushes on every pass would otherwise widen it without end, and no
@@ -557,14 +603,28 @@ public sealed class StackEffects
                 return arriving;
             var lowest = Lower(known.Lowest, arriving.Lowest);
             var highest = known.Highest is { } x && arriving.Highest is { } y ? Math.Max(x, y) : (int?)null;
-            if (known with { Lowest = arriving.Lowest, Highest = arriving.Highest } == arriving)
-                return arriving with { Lowest = lowest, Highest = highest };
+            var pointing = known.Pointing & arriving.Pointing;
+            var pointed = Equals(known.Pointed, arriving.Pointed) ? known.Pointed : null;
+            if (known with { Lowest = arriving.Lowest, Highest = arriving.Highest, Pointing = pointing, Pointed = pointed }
+                == arriving with { Pointing = pointing, Pointed = pointed })
+            {
+                return arriving with { Lowest = lowest, Highest = highest, Pointing = pointing, Pointed = pointed };
+            }
             if (known is { Least: { } before, KeepsTheReturn: true } && arriving is { Least: { } now, KeepsTheReturn: true })
             {
                 var whole = Math.Min(before, now);
                 var most = known.Most is { } a && arriving.Most is { } b ? Math.Max(a, b) : (int?)null;
                 var spread = most - whole <= MostSpread ? most - whole : null;
-                return arriving with { Whole = whole, Lowest = lowest, AtLeast = true, Spread = spread, Highest = highest };
+                return arriving with
+                {
+                    Whole = whole,
+                    Lowest = lowest,
+                    AtLeast = true,
+                    Spread = spread,
+                    Highest = highest,
+                    Pointing = pointing,
+                    Pointed = pointed,
+                };
             }
             return Unknown;
         }

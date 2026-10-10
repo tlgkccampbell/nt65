@@ -28,6 +28,34 @@ public sealed class BodyLineReportTests
     }
 
     /// <summary>
+    /// A return in a body that breaks the stack, a <c>keeps</c> promise or a flag promise of the
+    /// routine that calls the macro is reported at the call, with the return as a note, and offers
+    /// no fix.
+    /// </summary>
+    /// <param name="signature">The routine's signature, written after its name.</param>
+    /// <param name="body">The macro body's first line, which comes before its <c>rts</c>.</param>
+    /// <param name="id">The diagnostic expected.</param>
+    [Theory]
+    [InlineData("", "pla", "return-beneath-entry")]
+    [InlineData(": keeps a", "lda #0", "keeps-broken")]
+    [InlineData(": -> c", "nop", "return-flag-not-set")]
+    [InlineData(": -> c = 1", "clc", "return-flag-mismatch")]
+    public void AReturnProblemInABodyIsReportedAtTheCall(string signature, string body, string id)
+    {
+        var text = $".module main\n.cpu 6502\n.segment CODE\n.macro m() {{\n    {body}\n    rts\n}}\n"
+            + $".export .proc p{signature} {{\n    m!()\n}}\n";
+
+        var only = Assert.Single(Analysis.Program(("main.nt65", text)).Diagnostics);
+
+        Assert.Equal(id, only.Id);
+        Assert.Equal(9, only.Span.Line);
+        var note = Assert.Single(only.Related);
+        Assert.Equal(6, note.Span.Line);
+        Assert.Equal("in the macro body", note.Message);
+        Assert.Null(only.Fix);
+    }
+
+    /// <summary>
     /// A problem that evaluating a <c>.func</c> body meets with what a call gave it is reported at
     /// the call, with the body's text as a note.
     /// </summary>

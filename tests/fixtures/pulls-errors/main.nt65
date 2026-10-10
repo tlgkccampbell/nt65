@@ -7,6 +7,7 @@
 
 .export pulls_too_many, leaves_handed, pushes_more, called, called_inside, data_after
 .export varied, wide, twice, entered_only, one_path_leaves, one_path_pushes, every_path_pulls
+.export drops_pushes, keeps_a_push, pulls_between, calls_dropping, calls_pulling
 
 .segment CODE
 ; The routine pulls more than it was handed.
@@ -111,4 +112,49 @@
 .proc exit_side: pulls 1 -> pulls 1 { ;! error[item-belongs-at-entry]: `pulls 1` belongs before `->`
     pla
     rts
+}
+
+; A `txs` from the X a `tsx` copied, with only pushes between, moves the stack back to where it
+; was and drops those pushes, so the return finds its address and a call to the routine leaves
+; the stack as it found it.
+.proc drops_pushes {
+    tsx
+    pha
+    pha
+    txs
+    rts
+}
+
+; The stack moved back to still holds what was pushed before the copy.
+.proc keeps_a_push {
+    pha
+    tsx
+    pha
+    txs
+    rts                     ;! error[return-past-pushes]: `rts` returns through 1 byte this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+}
+
+; A pull between them leaves nothing known about the stack the `txs` sets, nor what a call to the
+; routine leaves.
+.proc pulls_between {
+    tsx
+    pha
+    pla
+    pha
+    txs
+    rts
+}
+
+.proc calls_dropping: keeps a {
+    pha
+    jsr drops_pushes
+    pla
+    rts
+}
+
+.proc calls_pulling: keeps a {
+    pha
+    jsr pulls_between
+    pla
+    rts                     ;! error[keeps-broken]: `calls_pulling` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
 }
