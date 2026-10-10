@@ -1266,14 +1266,28 @@ public sealed class Emitter
     private void WriteLinkerAssertion(LineSyntax line, AssertDirectiveSyntax statement)
     {
         var rewriter = new TokenRewriter();
-        expressions.Substitute(statement, rewriter);
+        expressions.Substitute(statement.Condition, rewriter);
 
         // A missing condition has no token to put the level after, and the line has already
         // been reported.
         if (TokenRewriter.Tokens(statement.Condition) is [.., var end])
             rewriter.After[end.Position] = rewriter.After.GetValueOrDefault(end.Position, "") + ", lderror";
+
+        // The message is written as the text it stands for, so a text constant or a call reaches
+        // ca65 as the string it names.
+        if (statement.Message is { } message && model.ValueOf(message, context.Expansion).Text is { } text)
+            rewriter.Replace(message, Ca65String(text), around: false);
         Code(line, rewriter.Render(statement), 0, located: true);
     }
+
+    /// <summary>
+    /// Returns <paramref name="text"/> as a ca65 string. The output turns off ca65's string
+    /// escapes, so a string cannot hold a double quote or a control character. A double quote is
+    /// written as a single quote and a control character as a space, which keeps a message
+    /// readable.
+    /// </summary>
+    private static string Ca65String(string text) =>
+        "\"" + string.Concat(text.Select(c => c == '"' ? '\'' : char.IsControl(c) ? ' ' : c)) + "\"";
 
     /// <summary>
     /// Writes an <c>.ensure</c> as the <c>rep</c> and <c>sep</c> the analysis found it needs, and

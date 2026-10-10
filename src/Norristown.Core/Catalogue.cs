@@ -344,7 +344,8 @@ public static class Catalogue
         "expected-text",
         Severity.Error,
         "expected {0}",
-        "A message, or a linker name, goes in double quotes. nt65 has no bare-word text.");
+        "A message, or a linker name, goes in double quotes. nt65 has no bare-word text. An `.assert` message "
+            + "may also be a text constant or a call that returns text.");
 
     internal static DiagnosticDescriptor ExpectedDataType { get; } = Entry(
         Area.ReadingALine,
@@ -585,12 +586,13 @@ public static class Catalogue
         Area.ReadingALine,
         "continuation-outside-expression",
         Severity.Error,
-        "a line can continue only inside brackets, a macro call's arguments or a parameter list",
+        "a line can continue only inside brackets, a macro call's arguments or a parameter list, or after an `.assert`'s comma",
         "A line whose `(` or `[` is still open at its end continues onto the next, so a long expression, macro "
             + "call or list of parameters can be written across lines. Only an expression's own brackets, a macro "
             + "call's arguments and a macro's or a function's parameters may hold a line break: a group's "
             + "parentheses, a call's or a macro call's arguments, a set, an index, and the parentheses after the "
-            + "name that `.macro` or `.func` declares. The parentheses of an operand such as `(ptr),y`, written in "
+            + "name that `.macro` or `.func` declares. An `.assert` line that ends with a comma continues too, so "
+            + "its message can go on the next line. The parentheses of an operand such as `(ptr),y`, written in "
             + "an instruction or in a braced argument like `{(ptr),y}`, and a data declaration's count stay on one "
             + "line.");
 
@@ -2630,6 +2632,15 @@ public static class Catalogue
         "{0}",
         "The `.assert` condition is false. nt65 checks an assertion as soon as it can evaluate the condition; one "
             + "that depends on final addresses is passed on for the linker to check.");
+
+    internal static DiagnosticDescriptor AssertMessageNotText { get; } = Entry(
+        Area.Instructions,
+        "assert-message-not-text",
+        Severity.Error,
+        "an `.assert` message is text: a string in quotes, a text constant, or a call that returns text",
+        "The message is what nt65 reports when the condition does not hold, and what ld65 reports when the "
+            + "linker checks it, so it has to be text nt65 can work out before writing the output. A long "
+            + "message can be declared once as a text constant, `.const MSG = \"...\"`, and named on the line.");
 
     internal static DiagnosticDescriptor ConfigRefused { get; } = Entry(
         Area.Instructions,

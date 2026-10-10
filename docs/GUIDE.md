@@ -668,8 +668,22 @@ declares are its own and cannot change which declarations exist.
 
 nt65 checks an `.assert` as you type when it can. When it depends on addresses only the
 linker knows, nt65 writes it into the output for ld65 to check. `.assert` takes no level: a
-failed assertion is always an error. `.error "text"` inside an `.if` refuses a configuration,
-and `.warning "text"` builds it with a message.
+failed assertion is always an error. The message may be a text constant or a call that
+returns text as well as a string, and a line that ends with the comma continues onto the
+next, so a long message gets a line of its own:
+
+```nt65
+.const PAST_ZERO_PAGE = "main must be past the zero page, where the direct-page variables live"
+
+.func outgrown(what) = .strcat(what, " has outgrown the page it must fit in")
+
+.assert .sizeof(table) <= 256, outgrown("the table")
+.assert .sizeof(table) == 3,
+    "the table holds one byte for each of the three commands, in the order they are numbered"
+```
+
+`.error "text"` inside an `.if` refuses a configuration, and `.warning "text"` builds it with a
+message.
 
 In `&&` and `||`, the right side is evaluated only when the left does not decide the answer.
 

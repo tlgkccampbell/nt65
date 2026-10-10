@@ -215,11 +215,13 @@
       </PropertyComment>
       <Kind Name="Comma"/>
     </Field>
-    <Field Name="Message" Type="SyntaxToken" Optional="true">
+    <Field Name="Message" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>Gets the quoted message, or null.</summary>
+        <summary>
+          Gets the message, which is text in quotes, a text constant or a call that returns text,
+          or null.
+        </summary>
       </PropertyComment>
-      <Kind Name="StringLiteral"/>
     </Field>
   </Node>
 

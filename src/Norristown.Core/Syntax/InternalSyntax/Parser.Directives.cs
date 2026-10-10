@@ -164,8 +164,9 @@ internal sealed partial class Parser
     }
 
     /// <summary>
-    /// Parses <c>.assert expr, "message"</c>, whose message may be left out. There is no level,
-    /// because a failed assertion is an error, and nt65 decides when it can be checked.
+    /// Parses <c>.assert expr, message</c>, whose message may be left out. The message is an
+    /// expression, which the semantic checks require to be text. There is no level, because a
+    /// failed assertion is an error, and nt65 decides when it can be checked.
     /// </summary>
     private GreenNode ParseAssert()
     {
@@ -188,11 +189,11 @@ internal sealed partial class Parser
             levelComma = Advance();
         }
 
-        GreenToken? message = null;
-        if (Kind == SyntaxKind.StringLiteral)
-            message = Advance();
+        ExpressionSyntax? message = null;
+        if (AtEnd)
+            Report(Catalogue.ExpectedText.Message("the message: text in quotes, a text constant or a call that returns text"));
         else
-            Report(Catalogue.ExpectedText.Message("the message, in quotes"));
+            message = ParseExpression();
         return new AssertDirectiveSyntax(keyword, condition, comma, level, levelComma, message);
     }
 

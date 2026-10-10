@@ -1,0 +1,39 @@
+; An `.assert` message may be a text constant or a call that returns text, and an `.assert` line
+; that ends with a comma continues onto the next, so a long message has a line of its own.
+.module main
+
+.cpu 6502
+
+.export main, table
+
+.const PAST_ZERO_PAGE = "main must be past the zero page, where the direct-page variables live"
+
+.func outgrown(what) = .strcat(what, " has outgrown the page it must fit in")
+
+.segment RODATA
+.data table: .byte[] {
+    1
+    2
+    3
+}
+
+.assert .sizeof(table) <= 256, outgrown("the table")
+.assert .sizeof(table) == 3,
+    "the table holds one byte for each of the three commands, in the order they are numbered"
+.assert .sizeof(table) == 3,
+    ; a comment may stand between the comma and the message
+    PAST_ZERO_PAGE
+
+.segment CODE
+.proc main {
+    rts
+}
+
+; Where main lands is decided by the linker, so these assertions are written out for ld65 with
+; the text each message stands for.
+.assert main >= $0200, PAST_ZERO_PAGE
+.assert main < $8000,
+    outgrown("the code")
+.assert (main
+    >= $0200),
+    "a condition continued in its brackets may continue after its comma too"

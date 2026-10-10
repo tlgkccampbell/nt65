@@ -656,7 +656,9 @@ public sealed partial class CodeLayout
         /// </summary>
         private void Assertion(AssertDirectiveSyntax directive)
         {
-            var assertion = Constructs.AssertionOf(directive);
+            var assertion = Constructs.AssertionOf(directive, message => model.ValueOf(message, expansion).Text);
+            if (directive.Message is { } message && model.ValueOf(message, expansion) is not { IsString: true })
+                Report(message, Catalogue.AssertMessageNotText);
             if (assertion.Condition is not { } condition)
                 return;
             if (model.ValueOf(condition, expansion, SpanOf, CyclesOf).AsNumber() is not { } value)

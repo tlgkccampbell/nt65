@@ -19,12 +19,20 @@ public static class Constructs
     /// Returns the condition and the message of an <c>.assert</c> or an <c>.error</c>. The
     /// condition is the expression that has to hold, and it is null for an <c>.error</c>.
     /// </summary>
-    public static Assertion AssertionOf(StatementSyntax directive) => directive switch
-    {
-        AssertDirectiveSyntax assert => new Assertion(assert.Condition, MessageOf(assert.Message)),
-        ErrorDirectiveSyntax error => new Assertion(null, MessageOf(error.Message)),
-        _ => default,
-    };
+    /// <param name="directive">The <c>.assert</c> or <c>.error</c> line.</param>
+    /// <param name="text">
+    /// A function that returns the text an <c>.assert</c>'s message stands for, or null when it
+    /// stands for no text. The message is an expression, so only the caller can evaluate it. When
+    /// the function is null, an <c>.assert</c> has no message.
+    /// </param>
+    public static Assertion AssertionOf(StatementSyntax directive, Func<ExpressionSyntax, string?>? text = null) =>
+        directive switch
+        {
+            AssertDirectiveSyntax assert =>
+                new Assertion(assert.Condition, assert.Message is { } message ? text?.Invoke(message) : null),
+            ErrorDirectiveSyntax error => new Assertion(null, MessageOf(error.Message)),
+            _ => default,
+        };
 
     /// <summary>
     /// Returns the segment that a segment block or a region line names, or null when the line is

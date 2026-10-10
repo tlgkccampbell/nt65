@@ -23,9 +23,9 @@ loop:                               ;! error[label-outside-a-routine]: `loop` is
 
 .segment CODE
 .export .proc main {
-    lda (ptr                        ;! error[continuation-outside-expression]: a line can continue only inside brackets, a macro call's arguments or a parameter list
+    lda (ptr                        ;! error[continuation-outside-expression]: a line can continue only inside brackets, a macro call's arguments or a parameter list, or after an `.assert`'s comma
     ),y
-    load!({(ptr                     ;! error[continuation-outside-expression]: a line can continue only inside brackets, a macro call's arguments or a parameter list
+    load!({(ptr                     ;! error[continuation-outside-expression]: a line can continue only inside brackets, a macro call's arguments or a parameter list, or after an `.assert`'s comma
     ),y})
     rts
     .next ?

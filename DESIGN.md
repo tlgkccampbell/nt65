@@ -226,6 +226,10 @@ Expressions are the exception: they follow C's precedence, not ca65's (§9).
   }
   ```
 
+  An `.assert` line that ends with a comma continues onto the next as well, so that its message
+  can stand on a line of its own (§10). The same rules decide what may continue it, and how the
+  continued line is laid out: one step in, as if the comma were a bracket left open.
+
   The parentheses of an operand such as `(ptr),y`, in an instruction or inside a braced argument
   such as `{(ptr),y}`, and a data declaration's count stay on one line, and a break in them is an
   error. Joining is decided above the lexer, from the brackets on each line, and the parser then
@@ -3083,7 +3087,21 @@ nt65 has said why it has none.
 `.assert cond, "message"` takes no level. ca65's `error`, `warning`, `lderror` and
 `ldwarning` choose when a check runs, which nt65 decides itself: at edit time when it can,
 and otherwise at link time, which the output writes as ca65's `lderror`. A failed assertion
-is always an error, and the message may be left out. `.error "text"` is a configuration the
+is always an error, and the message may be left out. The message is text: a string in quotes,
+a text constant or a call that returns text, and nt65 writes what it stands for into the
+output. An `.assert` line that ends with its comma continues onto the next (§4), so a long
+message has a line of its own:
+
+```nt65
+.const PAST_ZERO_PAGE = "main must be past the zero page, where the direct-page variables live"
+
+.assert .sizeof(table) == 3,
+    "the table holds one byte for each of the three commands, in the order they are numbered"
+
+.assert main >= $0200, PAST_ZERO_PAGE
+```
+
+`.error "text"` is a configuration the
 file refuses to be built in, and `.warning "text"` one it builds in and has something to say
 about.
 
@@ -5715,7 +5733,7 @@ item        := const | data-decl | padding | proc | multiproc | extern-proc | sc
 place       := '.place' module-path                    ; at file level, in no block but a region
 allow       := '.allow' string (',' string)?           ; a warning's name, then a reason; applies
                                                       ; to the next statement, or block, below
-assert      := '.assert' expr (',' string)?
+assert      := '.assert' expr (',' expr)?                ; the message is text; a line break may follow the ','
 warning     := '.warning' string
 error       := '.error' string
 cpu         := '.cpu' ('6502' | '6502x' | '65sc02' | 'r65c02' | '65c02' | '65816')
