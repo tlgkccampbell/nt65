@@ -1,0 +1,24 @@
+; A label in a segment whose declared `bank` is $7e is $7e0000 or more, so it is refused in a
+; two-byte slot where it may not fit. A segment that also declares mirrors may be placed in any
+; of those banks, so a value worked out from it is bounded only by all of them.
+.module main
+
+.export start, offsets
+
+.segment WRAM
+.data buffer: .byte[16]
+
+.segment LORAM
+.data shadow: .byte[16]
+
+.segment RODATA
+.data offsets {
+    .word buffer                            ;! error[linked-value-may-not-fit]: `buffer` is worked out by the linker from an address, and `.word` holds 16 bits, which nt65 cannot show it fits: use `.loword(buffer)` for its low 16 bits
+    .word shadow - $7e0000                  ;! error[linked-value-may-not-fit]: `shadow - $7e0000` is worked out by the linker from an address, and `.word` holds 16 bits, which nt65 cannot show it fits: use `.loword(shadow - $7e0000)` for its low 16 bits
+}
+
+.segment CODE
+.proc start: a16, i16, native {
+    ldx #buffer                             ;! error[linked-value-may-not-fit]: `buffer` is worked out by the linker from an address, and this immediate is two bytes, which nt65 cannot show it fits: use `.loword(buffer)` for its low 16 bits
+    rts
+}
