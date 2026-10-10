@@ -10,6 +10,9 @@
 
 .export main__offsets
 .export main__start
+.export main__dispatch
+.export main__dispatch_indexed
+.export main__dispatch_far
 
 .import __FARDATA_LOAD__: abs
 
@@ -29,7 +32,7 @@ main__offsets:
     .addr buffer
 
 .segment "CODE": absolute
-; .proc start: a16, i16, native  main.nt65:26
+; .proc start: a16, i16, native  main.nt65:28
 main__start:
     .i16
     ldx #.loword(buffer - $7e0000)
@@ -38,3 +41,24 @@ main__start:
     ldy #.loword(far_table)
     rts
 ; end of start
+
+vectors:    .addr main__start
+far_vector: .faraddr main__start
+
+; .proc dispatch: a16, i16, native  main.nt65:38
+main__dispatch:
+    ldx #0
+    jsr (vectors,x)
+    jmp (.loword(vectors))
+; end of dispatch
+
+; .proc dispatch_indexed: a16, i16, native  main.nt65:46
+main__dispatch_indexed:
+    ldx #0
+    jmp (vectors,x)
+; end of dispatch_indexed
+
+; .proc dispatch_far: a16, i16, native  main.nt65:52
+main__dispatch_far:
+    jml [.loword(far_vector)]
+; end of dispatch_far

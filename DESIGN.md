@@ -559,6 +559,14 @@ state and models no memory behaviour, and the rule is the same on every processo
   a start or size depends on the command line or the project has no `links`, is never reported.
 - **Another home bank is not seen by a near transfer** on the 65816 (§7.5). A long one reaches
   it, so the fix there is `jsl` or `jml`.
+- **Another bank is not seen by a jump, call or branch** on the 6502 and the 65C02, which keep
+  only the address within the bank. A target that every linked config places wholly in one bank
+  other than `$00`, where no area the code runs in reaches that bank, is an error. A target in
+  bank `$00` is at the address the processor uses, so it is always reached, and one whose
+  placement nt65 cannot bound is never reported, since only the linker decides where it lands.
+  The fix is code that maps the bank and jumps to `.loword(target)`. The 65816 decides this by
+  declared home banks instead, because its configs often link code in one bank and run it
+  through a mirror in another.
 
 As with spaces, a name that cannot be seen may still be used as a value: an immediate such as
 `#<name` or `#>name` and data such as `.addr name` are never reported, since a trampoline is
@@ -639,7 +647,9 @@ sides use.
   `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page zero, far for
   a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the image in
   another bank therefore writes `f:`, as it would for a label there. ld65 exports all three as
-  absolute, so the output imports a far one as absolute, which changes nothing it assembles to.
+  absolute, so the output imports every one as absolute. That changes nothing a far one
+  assembles to, and a zero-page one is written inside `.lobyte()` wherever it fills a one-byte
+  slot, operands included, which gives ca65 a zero-page value and loses nothing.
   Each is also bounded by the memory areas the linked configs put `S` in, and `.runof(S)` by
   the banks `S` declares where no linked config places it, so in a one-byte slot it follows
   the rule for any value that names an address (§8): `.loadof(CODE) / 256` is written inside
@@ -2408,6 +2418,8 @@ where the copy was taken and drops exactly those pushes, so `pha`, `tsx`, `pha`,
 the stack unknown, as any other `txs` does. So does an X on the 65816 that is not 16 bits
 throughout, since an 8-bit X holds only the low byte of S, unless the mode is known to be
 emulation, where the high byte of S is always $01 and an 8-bit copy is exact, as on the 6502.
+An `xce` between them may change the width of X, and so may a `rep` or `sep`, unless the mode
+is known to be emulation or its mask is known and leaves the X bit alone.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
@@ -2734,7 +2746,10 @@ absolute one placed past $FFFF, which ld65 would refuse, is written inside
 `.loword()` where it always fits and is otherwise an error that asks for `.loword`. An `.addr`
 holds the address within its bank, as ca65 keeps it on the 65816, so only a far address counts
 there. ca65 range-checks an `.addr` and an absolute operand on the other CPUs, so the output
-writes `.loword()` around one that names an address placed past $FFFF. The bound
+writes `.loword()` around one that names an address placed past $FFFF. It range-checks the
+pointer of `jmp (abs)` and `jml [abs]` on every CPU, the 65816 included, and of `jmp (abs,x)`
+and `jsr (abs,x)` everywhere but the 65816, so the output writes `.loword()` around those in
+the same way. The bound
 respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
 bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
 is an error, since the shift can leave 32 bits before the `.mod` brings it back.

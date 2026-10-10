@@ -460,8 +460,8 @@ public sealed class Emitter
         }
 
         // The symbols the linker defines for each segment this file, or a macro it calls, asks about.
-        foreach (var (name, size) in SegmentImports())
-            directives.Add(LinkageDirective(".import", size, name));
+        foreach (var name in SegmentImports())
+            directives.Add(LinkageDirective(".import", AddressSize.Absolute, name));
 
         // The end of what this file measures in another file comes from that file, which
         // exports it beside the declaration.
@@ -485,18 +485,18 @@ public sealed class Emitter
         unit.Contains(symbol.Tree.Path) && symbol.Kind is not (SymbolKind.ImportedAddress or SymbolKind.ImportedConstant);
 
     /// <summary>
-    /// Returns, with their sizes, the names ld65 defines for the segments that this file's
-    /// <c>.loadof</c>, <c>.runof</c> and <c>.spanof</c> calls ask about, including the calls in
-    /// every macro the file may expand.
+    /// Returns the names ld65 defines for the segments that this file's <c>.loadof</c>,
+    /// <c>.runof</c> and <c>.spanof</c> calls ask about, including the calls in every macro the
+    /// file may expand.
     /// </summary>
     /// <remarks>
     /// ld65 exports every one of these names as absolute, and warns about an import of another
-    /// size. A far one is therefore imported as absolute. That changes nothing ca65 writes,
-    /// because nt65 writes the <c>f:</c> of each operand that needs it, and the analysis still
-    /// takes the name as far. A zero-page one stays zero page, since ca65 would refuse an
-    /// absolute name in a one-byte slot or a zero-page-only operand.
+    /// size, so each is imported as absolute. The analysis still takes a name as wide as its
+    /// segment's placement. A far one changes nothing ca65 writes, because nt65 writes the
+    /// <c>f:</c> of each operand that needs it. A zero-page one is written inside
+    /// <c>.lobyte()</c> wherever it fills a one-byte slot, which gives ca65 a zero-page value.
     /// </remarks>
-    private IEnumerable<(string Name, AddressSize Size)> SegmentImports()
+    private IEnumerable<string> SegmentImports()
     {
         var calls = model.Tree.Root.DescendantNodes().OfType<MacroCallSyntax>()
             .Select(model.MacroAt).OfType<Symbol>();
@@ -505,12 +505,9 @@ public sealed class Emitter
             .SelectMany(node => node.DescendantNodes().OfType<CallExpressionSyntax>())
             .Select(call => SegmentFunctions.Of(call, model))
             .OfType<(BuiltinKind Function, Segment Segment)>()
-            .Select(about => (SegmentFunctions.LinkerName(about.Function, about.Segment),
-                SegmentFunctions.SizeOf(about.Function, about.Segment) is var size && size == AddressSize.Far
-                    ? AddressSize.Absolute
-                    : size))
+            .Select(about => SegmentFunctions.LinkerName(about.Function, about.Segment))
             .Distinct()
-            .OrderBy(import => import.Item1, StringComparer.Ordinal);
+            .OrderBy(name => name, StringComparer.Ordinal);
     }
 
     /// <summary>Returns the line that brings one symbol in, or null for a symbol that needs no line at all.</summary>

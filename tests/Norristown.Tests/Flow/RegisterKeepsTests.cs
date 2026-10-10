@@ -317,15 +317,39 @@ public sealed class RegisterKeepsTests
     /// <summary>
     /// An 8-bit <c>tsx</c> on the 65816 copies the whole stack pointer in emulation mode, where
     /// its high byte is always $01, so the <c>txs</c> back to it drops the push and the pull
-    /// restores A. Where the mode is not known, the copy holds only the low byte.
+    /// restores A. A <c>rep</c> or <c>sep</c> between them cannot change the width of X in
+    /// emulation mode, so the copy survives it. Where the mode is not known, the copy holds only
+    /// the low byte.
     /// </summary>
     [Theory]
-    [InlineData("emu", true)]
-    [InlineData("e?", false)]
-    public void AnEightBitCopyOfTheStackPointerIsExactInEmulationMode(string mode, bool kept)
+    [InlineData("emu", "", true)]
+    [InlineData("emu", "sep #$30", true)]
+    [InlineData("emu", "rep #$30", true)]
+    [InlineData("e?", "", false)]
+    [InlineData("e?", "sep #$01", false)]
+    public void AnEightBitCopyOfTheStackPointerIsExactInEmulationMode(string mode, string between, bool kept)
     {
         var analysis = FlowFragment.Analyze(
-            "65816", $".proc p: a8, i8, {mode} {{\n    pha\n    tsx\n    pha\n    txs\n    pla\n    rts\n}}\n");
+            "65816", $".proc p: a8, i8, {mode} {{\n    pha\n    tsx\n    pha\n    {between}\n    txs\n    pla\n    rts\n}}\n");
+        var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
+
+        Assert.Equal(kept, p.Registers.Kept.HasFlag(Registers.A));
+    }
+
+    /// <summary>
+    /// A <c>rep</c> or <c>sep</c> in native mode keeps a 16-bit copy of the stack pointer when
+    /// its mask is known and leaves the X bit alone. A <c>sep</c> that makes X 8 bits clears the
+    /// high byte of the copy, so a <c>rep</c> back to 16 bits before the <c>txs</c> does not
+    /// make it exact again.
+    /// </summary>
+    [Theory]
+    [InlineData("sep #$21", true)]
+    [InlineData("rep #$01", true)]
+    [InlineData("sep #$10\n    rep #$10", false)]
+    public void AWidthChangeInNativeModeDropsACopyOfTheStackPointerOnlyWhereItMayChangeX(string between, bool kept)
+    {
+        var analysis = FlowFragment.Analyze(
+            "65816", $".proc p: a8, i16, native {{\n    pha\n    tsx\n    pha\n    {between}\n    txs\n    pla\n    rts\n}}\n");
         var p = analysis.FlowFor("main.nt65")!.Regions.Single(region => region.Routine.DisplayName == "p");
 
         Assert.Equal(kept, p.Registers.Kept.HasFlag(Registers.A));

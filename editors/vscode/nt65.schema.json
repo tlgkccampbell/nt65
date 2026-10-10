@@ -548,6 +548,7 @@
         "tail-call-distance-mismatch",
         "tail-call-to-handler",
         "target-argument",
+        "target-in-another-bank",
         "target-too-far",
         "target-too-near",
         "text-not-ascii",

@@ -2281,6 +2281,22 @@ public static class Catalogue
             + "configuration places segments. Areas that only partly overlap are not taken to be alternatives, and "
             + "nothing is reported where nt65 cannot tell where a segment runs.");
 
+    internal static DiagnosticDescriptor TargetInAnotherBank { get; } = Entry(
+        Area.Placement,
+        "target-in-another-bank",
+        Severity.Error,
+        "{1} is placed in bank {2}, which `{0}` cannot reach from the bank this code is placed in",
+        "The 6502 and the 65C02 have 16-bit addresses. A linked configuration that places code past $ffff, as "
+            + "it may place a cartridge's switchable banks, gives each label there a bank the processor never "
+            + "sees. A `jsr`, `jmp` or branch keeps only the address within the bank, so from code placed in "
+            + "another bank it goes to whatever is mapped at that address, not to the target. nt65 reports a "
+            + "target that every linked configuration places wholly in one bank other than $00, when no area the "
+            + "code runs in reaches that bank. A target in bank $00 is at the address the processor uses, so it "
+            + "is never reported. Place the code and the target in the same bank, or reach the target through "
+            + "code that maps its bank and jumps to `.loword(target)`. Nothing is reported where nt65 cannot tell "
+            + "where the target or the code is placed. The 65816 checks the same reach by the banks segments "
+            + "declare, as `jump-leaves-bank` describes.");
+
     internal static DiagnosticDescriptor SpaceUndeclared { get; } = Entry(
         Area.Placement,
         "space-undeclared",

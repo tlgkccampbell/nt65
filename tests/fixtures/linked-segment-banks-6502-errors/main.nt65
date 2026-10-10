@@ -1,0 +1,32 @@
+; The 6502 keeps only the address within the bank, so a jump, call or branch to a target that
+; the linked config places in another bank goes to whatever is mapped there. A target in bank
+; $00, or in the bank the code is placed in, is reached.
+.module main
+
+.export start
+
+.segment BANK2
+.proc other_side {
+    rts
+}
+
+.segment BANK1
+.proc far_side {
+    jsr far_helper                          ; the same bank
+    jsr start                               ; bank $00
+    jsr other_side                          ;! error[target-in-another-bank]: `other_side` is placed in bank $02, which `jsr` cannot reach from the bank this code is placed in
+    rts
+}
+
+.proc far_helper {
+    rts
+}
+
+.segment CODE
+.proc start {
+    jsr far_side                            ;! error[target-in-another-bank]: `far_side` is placed in bank $01, which `jsr` cannot reach from the bank this code is placed in
+    lda $10
+    beq far_helper                          ;! error[target-in-another-bank]: `far_helper` is placed in bank $01, which `beq` cannot reach from the bank this code is placed in
+    jcc far_helper                          ;! error[target-in-another-bank]: `far_helper` is placed in bank $01, which `jcc` cannot reach from the bank this code is placed in
+    jmp far_side                            ;! error[target-in-another-bank]: `far_side` is placed in bank $01, which `jmp` cannot reach from the bank this code is placed in
+}

@@ -13,7 +13,7 @@
 
 .import __CODE_LOAD__: abs
 .import __FAST_LOAD__: abs
-.importzp __FAST_RUN__
+.import __FAST_RUN__: abs
 .import __FAST_SIZE__: abs
 .import __TABLES_LOAD__: abs
 .import __TABLES_RUN__: abs
@@ -22,7 +22,7 @@
 squares: .byte 0, 1, 4, 9
 
 .segment "FAST": zeropage
-; .proc fast  main.nt65:13
+; .proc fast  main.nt65:14
 fast:
     inc a:squares
     rts
@@ -33,17 +33,23 @@ main__pages:
     .byte .lobyte(__CODE_LOAD__ / 256)
     .byte .lobyte(__TABLES_RUN__ >> 8)
     .byte .lobyte(__FAST_SIZE__)
-    .byte __FAST_RUN__
+    .byte .lobyte(__FAST_RUN__)
 
-; .proc main  main.nt65:26
+; .proc main  main.nt65:27
 main__main:
     ldx #.lobyte(__FAST_SIZE__)
 main__copy:
     lda a:__FAST_LOAD__ - 1,x
-    sta z:__FAST_RUN__ - 1,x
+    sta z:.lobyte(__FAST_RUN__ - 1),x
     dex
     bne main__copy
     lda #.lobyte(__TABLES_LOAD__ / 256)
     jsr fast
+    lda z:.lobyte(__FAST_RUN__)
+    ldy #0
+    lda (.lobyte(__FAST_RUN__)),y
+    lda (.lobyte(__FAST_RUN__),x)
+    stx .lobyte(__FAST_RUN__),y
+    sty .lobyte(__FAST_RUN__),x
     rts
 ; end of main

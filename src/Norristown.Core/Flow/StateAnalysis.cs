@@ -872,7 +872,8 @@ public sealed class StateAnalysis : IProcessorStates
         // the bytes of a hidden path, as there too.
         var pointing = StackWrites.Pointing(mnemonic, mode, executing.Immediate, state.Pointing);
         var pointed = executing.Decoded is not null ? null
-            : StackPointerCopies.Copied(mnemonic, layout.Cpu, processor, pointing, state.Pointed, state.Stack);
+            : StackPointerCopies.Copied(
+                mnemonic, executing.Immediate, layout.Cpu, processor, pointing, state.Pointed, state.Stack);
         var movedBack = StackPointerCopies.MovedBack(
             mnemonic, layout.Cpu, processor, state.Pointing, executing.Decoded is null ? state.Pointed : null, state.Stack,
             (now, copy) => now.Extends(copy));
@@ -1464,10 +1465,14 @@ public sealed class StateAnalysis : IProcessorStates
 
     /// <summary>
     /// Returns the instruction written at <paramref name="step"/> as the analysis runs it, or null
-    /// where the step holds no instruction.
+    /// where the step holds no instruction. An immediate that a store the program acknowledges
+    /// with <c>.patch</c> may rewrite is not known, because what is written says only what the
+    /// program starts from.
     /// </summary>
     private Executing? ExecutingAt(Step step) => step.Statement is InstructionStatementSyntax statement
-        ? new Executing(statement.MnemonicKind, layout.Of(statement, step.On)?.Mode, StepOperands.Immediate(model, layout, step), null)
+        ? new Executing(
+            statement.MnemonicKind, layout.Of(statement, step.On)?.Mode,
+            flow.RewrittenOperands.Contains(step.Key) ? null : StepOperands.Immediate(model, layout, step), null)
         : null;
 
     /// <summary>

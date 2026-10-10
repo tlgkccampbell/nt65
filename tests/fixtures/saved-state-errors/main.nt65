@@ -261,3 +261,39 @@
     pld
     rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_back_mode_unknown` declares `dp*`, so D must be what it was on entry, but here it may not be
 }
+
+; A `rep` or `sep` cannot change the width of X in emulation mode, so the copy survives one
+; between the `tsx` and the `txs`.
+.proc moved_back_emulation_sep: a8, i8, emu, dp* {
+    phd
+    tsx
+    pha
+    sep #$30
+    txs
+    pld
+    rts
+}
+
+; In native mode a `sep` that makes X 8 bits clears the high byte of the copy, and a `rep` back
+; to 16 bits does not bring it back, so nothing is known about the stack after the `txs`. A mask
+; that leaves the X bit alone keeps the copy.
+.proc moved_back_index_narrowed: a8, i16, native, dp* {
+    phd
+    tsx
+    pha
+    sep #$10
+    rep #$10
+    txs
+    pld
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_back_index_narrowed` declares `dp*`, so D must be what it was on entry, but here it may not be
+}
+
+.proc moved_back_carry_set: a8, i16, native, dp* {
+    phd
+    tsx
+    pha
+    sep #$01
+    txs
+    pld
+    rts
+}

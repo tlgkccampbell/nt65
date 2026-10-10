@@ -67,7 +67,7 @@ internal sealed class RegisterWalk
             return (Registers.All, Registers.None);
         var mnemonic = instruction.MnemonicKind;
         var mode = layout.Of(instruction, step.On)?.Mode;
-        var constant = StepOperands.Immediate(model, layout, step);
+        var constant = Immediate(step);
         var written = mnemonic is MnemonicKind.Rep or MnemonicKind.Sep && constant is null
             ? Registers.None
             : RegisterEffects.Written(mnemonic, mode, constant);
@@ -271,7 +271,7 @@ internal sealed class RegisterWalk
         // A store may turn the instruction into another, and then the registers hold what either
         // leaves, and either may use them.
         var mode = layout.Of(statement, step.On)?.Mode;
-        var immediate = StepOperands.Immediate(model, layout, step);
+        var immediate = Immediate(step);
         var after = Instruction(step, statement.MnemonicKind, mode, immediate, state, use, saved, next);
         var pointing = StackWrites.Pointing(statement.MnemonicKind, mode, immediate, state.FromStackPointer);
         var variants = VariantsOf(step);
@@ -478,6 +478,15 @@ internal sealed class RegisterWalk
     public ProcessorState? Processor(Step step) => states?.Before(step.Statement, step.On)?.Processor;
 
     /// <summary>
+    /// Returns the value of the immediate operand of the instruction at a step, or null where the
+    /// instruction has none that is known. An operand that a store the program acknowledges with
+    /// <c>.patch</c> may rewrite has no known value, because what is written says only what the
+    /// program starts from.
+    /// </summary>
+    public long? Immediate(Step step) =>
+        flow.RewrittenOperands.Contains(step.Key) ? null : StepOperands.Immediate(model, layout, step);
+
+    /// <summary>
     /// Determines whether a statement may make the index registers 8 bits wide when they may
     /// have been 16, which zeroes the high bytes of X and Y. A routine entered with 8-bit
     /// index registers found those bytes zero, so zeroing them again changes nothing it was
@@ -487,7 +496,7 @@ internal sealed class RegisterWalk
     {
         var sets = mnemonic switch
         {
-            MnemonicKind.Sep => StepOperands.Immediate(model, layout, step) is not { } flags
+            MnemonicKind.Sep => Immediate(step) is not { } flags
                 || (flags & (long)StatusFlags.X) != 0,
             MnemonicKind.Plp or MnemonicKind.Xce => true,
             _ => false,
@@ -773,7 +782,9 @@ internal sealed class RegisterWalk
     /// <param name="pointing">The registers that hold the stack pointer after it.</param>
     /// <returns>The stack the copy was taken from, or null.</returns>
     private SavedStack? PointedAfter(Step step, MnemonicKind mnemonic, RegisterState before, Registers pointing) =>
-        StackPointerCopies.Copied(mnemonic, layout.Cpu, Processor(step), pointing, before.Pointed, before.Stack);
+        StackPointerCopies.Copied(
+            mnemonic, Immediate(step), layout.Cpu, Processor(step), pointing, before.Pointed,
+            before.Stack);
 
     /// <summary>
     /// Returns the stack after a <c>txs</c> or <c>tcs</c> moves the stack pointer back to a copy
