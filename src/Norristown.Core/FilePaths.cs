@@ -4,9 +4,10 @@ namespace Norristown;
 
 /// <summary>
 /// Provides the comparison the file system uses for two paths, which differs from how nt65
-/// compares two names, and the spelling it stores a path with. Two paths that differ only in case are one file on Windows and on macOS,
-/// and two files everywhere else. Any set or dictionary keyed by file paths, and any test of
-/// whether two paths are the same file, should use this rule.
+/// compares two names, and the spelling it stores a path with. Two paths that differ only in
+/// case are one file on Windows and on macOS, and two files everywhere else. Any set or
+/// dictionary keyed by file paths, and any test of whether two paths are the same file, should
+/// use this rule.
 /// </summary>
 public static class FilePaths
 {

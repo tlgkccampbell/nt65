@@ -16,7 +16,7 @@ namespace Norristown;
 public static class Catalogue
 {
     /// <summary>Gets every area, in the order the areas are declared here and printed.</summary>
-    public static IReadOnlyList<DiagnosticArea> Areas =>
+    public static IReadOnlyList<DiagnosticArea> Areas { get; } =
     [
         Area.ReadingALine, Area.Names, Area.Values, Area.Macros, Area.Data, Area.Placement,
         Area.Instructions, Area.ControlFlow, Area.ProcessorState, Area.Output, Area.TheProjectFile, Area.Signatures,
@@ -4460,6 +4460,9 @@ public static class Catalogue
             + "does. Each sets N and Z from the result as the load does, takes the same 2 cycles, and leaves C and V "
             + "alone. The 65816 is left out, because there the registers' widths decide what a transfer copies.");
 
+    // These fields follow the entries rather than leading the class, because the compiler's
+    // nullability analysis takes an entry named before its declaration for one that may be null.
+    //
     // The list is found by reflecting over the class rather than listed by hand, so that a new
     // entry above is included automatically. It is built on first use rather than alongside the
     // entries, because reflecting on a type while its own static initializer is still running can

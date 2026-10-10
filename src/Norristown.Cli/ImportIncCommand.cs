@@ -40,39 +40,34 @@ public static class ImportIncCommand
             {
                 case "-o" or "--out":
                     if (value is null)
-                        return Wrong(error, $"`{argument}` needs a file to write");
+                        return Commands.Wrong(error, $"`{argument}` needs a file to write");
                     destination = Path.GetFullPath(value, directory);
                     i++;
                     break;
                 case "--module":
                     if (value is null)
-                        return Wrong(error, "`--module` needs the module's name");
+                        return Commands.Wrong(error, "`--module` needs the module's name");
                     module = value;
                     i++;
                     break;
                 default:
                     if (argument.StartsWith('-'))
-                        return Wrong(error, $"`{argument}` is not an option");
+                        return Commands.Wrong(error, $"`{argument}` is not an option");
                     if (source is not null)
-                        return Wrong(error, "`import-inc` converts one file at a time, and was given more than one");
+                        return Commands.Wrong(error, "`import-inc` converts one file at a time, and was given more than one");
                     source = Path.GetFullPath(argument, directory);
                     break;
             }
         }
         if (source is null)
-            return Wrong(error, "import-inc needs the `.inc` file to convert");
+            return Commands.Wrong(error, "import-inc needs the `.inc` file to convert");
 
         string text;
         try
         {
             text = File.ReadAllText(source);
         }
-        catch (IOException problem)
-        {
-            error.WriteLine($"nt65: cannot read {ProjectRoot.Shown(directory, source)}: {problem.Message}");
-            return ExitCode.InputError;
-        }
-        catch (UnauthorizedAccessException problem)
+        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
         {
             error.WriteLine($"nt65: cannot read {ProjectRoot.Shown(directory, source)}: {problem.Message}");
             return ExitCode.InputError;
@@ -99,12 +94,7 @@ public static class ImportIncCommand
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllText(destination, converted.Text);
         }
-        catch (IOException problem)
-        {
-            error.WriteLine($"nt65: cannot write {ProjectRoot.Shown(directory, destination)}: {problem.Message}");
-            return ExitCode.InputError;
-        }
-        catch (UnauthorizedAccessException problem)
+        catch (Exception problem) when (problem is IOException or UnauthorizedAccessException)
         {
             error.WriteLine($"nt65: cannot write {ProjectRoot.Shown(directory, destination)}: {problem.Message}");
             return ExitCode.InputError;
@@ -269,13 +259,5 @@ public static class ImportIncCommand
         foreach (var c in stem)
             name.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
         return name.Length == 0 || char.IsDigit(name[0]) ? "_" + name : name.ToString();
-    }
-
-    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns <see cref="ExitCode.UsageError"/>.</summary>
-    private static ExitCode Wrong(TextWriter error, string problem)
-    {
-        error.WriteLine($"nt65: {problem}");
-        error.WriteLine(CommandLine.SeeHelp);
-        return ExitCode.UsageError;
     }
 }

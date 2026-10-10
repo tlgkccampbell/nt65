@@ -23,8 +23,8 @@ public static class BuildCommand
     /// <see cref="ExitCode.InputError"/> when the program has errors, and
     /// <see cref="ExitCode.UsageError"/> when the command line is wrong.
     /// </summary>
-    public static ExitCode Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool colour) =>
-        Run(command, directory, output, error, colour).Code;
+    public static ExitCode Build(CommandLine command, string directory, TextWriter output, TextWriter error, bool color) =>
+        Run(command, directory, output, error, color).Code;
 
     /// <summary>
     /// Runs one build and returns its exit code with the files it read, so that a watch knows
@@ -33,11 +33,11 @@ public static class BuildCommand
     /// any <c>.nt65</c> file under the root, so a source that appears is noticed anyway.
     /// </summary>
     internal static BuildResult Run(
-        CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
+        CommandLine command, string directory, TextWriter output, TextWriter error, bool color)
     {
         try
         {
-            return Built(command, directory, output, error, colour);
+            return Built(command, directory, output, error, color);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -54,7 +54,7 @@ public static class BuildCommand
     /// propagate to it.
     /// </summary>
     private static BuildResult Built(
-        CommandLine command, string directory, TextWriter output, TextWriter error, bool colour)
+        CommandLine command, string directory, TextWriter output, TextWriter error, bool color)
     {
         // The project file is the one named, or the nearest one at or above where nt65 runs.
         var projectFile = ProjectRoot.Chosen(command.Project, directory);
@@ -77,15 +77,14 @@ public static class BuildCommand
             return new BuildResult(ExitCode.UsageError, directory, [], []);
         }
         var run = new Context(
-            command, directory, projectFile is null ? directory : Path.GetDirectoryName(projectFile)!, output, error, colour);
+            command, directory, projectFile is null ? directory : Path.GetDirectoryName(projectFile)!, output, error, color);
         string[] watched = projectFile is null ? [] : [projectFile];
 
         // `--stdout` prints the output of one file, so it needs exactly one file named.
         if (command.Stdout && command.Files.Count != 1)
         {
-            error.WriteLine("nt65: `--stdout` prints one file's output, so name exactly one file");
-            error.WriteLine(CommandLine.SeeHelp);
-            return new BuildResult(ExitCode.UsageError, run.Root, watched, []);
+            var code = Commands.Wrong(error, "`--stdout` prints one file's output, so name exactly one file");
+            return new BuildResult(code, run.Root, watched, []);
         }
         var project = ResolveProject(run, projectFile);
         watched = [.. watched, .. project.Links.Select(link => Path.GetFullPath(link.ConfigPath, run.Root))];
@@ -235,7 +234,7 @@ public static class BuildCommand
         // Recorded so that, if nt65 crashes, its report says which program it was building.
         Building.Started(paths.Count == 1 ? paths[0] : $"{paths[0]} and {paths.Count - 1} more");
         var analysis = Compiler.Analyze(
-            [.. sources.Select(SyntaxTree.Parse)], project, path => Length(Path.Combine(run.Root, path)));
+            [.. sources.Select(SyntaxTree.Parse)], project, path => Compiler.BinaryLengthOnDisk(Path.Combine(run.Root, path)));
         var compilation = Compiler.Emit(analysis, project, header);
         Building.Nothing();
         return (analysis, compilation);
@@ -252,7 +251,7 @@ public static class BuildCommand
             if (run.Command.Json)
                 run.Output.WriteLine(Reported.Object(d, span => Named(run.Directory, run.Root, span)));
             else
-                run.Error.WriteLine(Reported.Line(d, Named(run.Directory, run.Root, d.Span), run.Colour));
+                run.Error.WriteLine(Reported.Line(d, Named(run.Directory, run.Root, d.Span), run.Color));
         }
     }
 
@@ -305,7 +304,7 @@ public static class BuildCommand
         {
             // Each deleted file is reported as a note, in the same `nt65: note:` form as the other
             // notes on standard error, so a script that reads standard error does not have to
-            // recognise it separately. An output is deleted when its module has been removed or
+            // recognize it separately. An output is deleted when its module has been removed or
             // is now placed in another module's output.
             foreach (var deleted in OutputManifest.Update(root, project.Out ?? ".", [.. compilation.Outputs.Select(o => o.Path)]))
                 run.Error.WriteLine($"nt65: note: deleted {ProjectRoot.Shown(directory, Path.Combine(root, deleted))}, which the program no longer writes");
@@ -362,21 +361,6 @@ public static class BuildCommand
     }
 
     /// <summary>
-    /// Returns the length of a file an <c>.incbin</c> names, or null when it cannot be read.
-    /// </summary>
-    private static long? Length(string path)
-    {
-        try
-        {
-            return File.Exists(path) ? new FileInfo(path).Length : null;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Represents one run of the build, which is what it was asked for and where it prints.
     /// </summary>
     /// <param name="Command">What the command line asked for.</param>
@@ -384,7 +368,7 @@ public static class BuildCommand
     /// <param name="Root">The project root, or where nt65 ran when there is no project.</param>
     /// <param name="Output">The writer for standard output.</param>
     /// <param name="Error">The writer for standard error.</param>
-    /// <param name="Colour">Whether diagnostics on standard error are coloured.</param>
+    /// <param name="Color">Whether diagnostics on standard error are colored.</param>
     private sealed record Context(
-        CommandLine Command, string Directory, string Root, TextWriter Output, TextWriter Error, bool Colour);
+        CommandLine Command, string Directory, string Root, TextWriter Output, TextWriter Error, bool Color);
 }

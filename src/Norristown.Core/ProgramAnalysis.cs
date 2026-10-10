@@ -126,12 +126,6 @@ public sealed record ProgramAnalysis(
     public RoutineContexts Contexts() => Asked().Contexts.Value;
 
     /// <summary>
-    /// Returns whether a routine depends on the depth of the stack it was entered with, which a
-    /// tail call to it would change.
-    /// </summary>
-    private bool ReadsCallerStack(Symbol routine) => CallerStackReaders.Contains(RoutineKey.Of(routine));
-
-    /// <summary>
     /// Returns what analyzing <paramref name="path"/> on its own found, or null when the program
     /// has no such file.
     /// </summary>
@@ -159,6 +153,12 @@ public sealed record ProgramAnalysis(
     /// track.
     /// </summary>
     public StateAnalysis? StatesFor(string path) => FileFor(path)?.State;
+
+    /// <summary>
+    /// Returns whether a routine depends on the depth of the stack it was entered with, which a
+    /// tail call to it would change.
+    /// </summary>
+    private bool ReadsCallerStack(Symbol routine) => CallerStackReaders.Contains(RoutineKey.Of(routine));
 
     /// <summary>Returns <paramref name="files"/> by their logical paths, keeping the first of each.</summary>
     private static Dictionary<string, FileAnalysis> ByPath(IReadOnlyList<FileAnalysis> files)

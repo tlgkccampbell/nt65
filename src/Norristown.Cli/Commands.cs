@@ -15,7 +15,7 @@ public static class Commands
     /// </summary>
     public static ExitCode Run(
         string[] arguments, string directory, TextWriter output, TextWriter error,
-        bool colour = false, CancellationToken cancellation = default)
+        bool color = false, CancellationToken cancellation = default)
     {
         switch (arguments)
         {
@@ -32,8 +32,8 @@ public static class Commands
                 if (CommandLine.Parse(rest, out var problem) is not { } command)
                     return Wrong(error, problem!);
                 return command.Watch
-                    ? WatchCommand.Run(command, Path.GetFullPath(directory), output, error, colour, cancellation)
-                    : BuildCommand.Build(command, Path.GetFullPath(directory), output, error, colour);
+                    ? WatchCommand.Run(command, Path.GetFullPath(directory), output, error, color, cancellation)
+                    : BuildCommand.Build(command, Path.GetFullPath(directory), output, error, color);
             case ["init", .. var chosen]:
                 return InitCommand.Run(chosen, Path.GetFullPath(directory), output, error);
             case ["fmt", .. var asked]:
@@ -53,7 +53,7 @@ public static class Commands
             case ["import-inc", .. var converted]:
                 return ImportIncCommand.Run(converted, Path.GetFullPath(directory), output, error);
 
-            // An unrecognised first argument prints a one-line error and a pointer to --help,
+            // An unrecognized first argument prints a one-line error and a pointer to --help,
             // rather than the whole usage text, which nobody asked for and which buries the error.
             case [var word, ..]:
                 return Wrong(error, word.StartsWith('-')
@@ -66,8 +66,11 @@ public static class Commands
         return ExitCode.UsageError;
     }
 
-    /// <summary>Reports what is wrong with the command line and how to see the usage text, and returns <see cref="ExitCode.UsageError"/>.</summary>
-    private static ExitCode Wrong(TextWriter error, string problem)
+    /// <summary>
+    /// Reports what is wrong with the command line and how to see the usage text, and returns
+    /// <see cref="ExitCode.UsageError"/>. Every command reports a wrong command line this way.
+    /// </summary>
+    internal static ExitCode Wrong(TextWriter error, string problem)
     {
         error.WriteLine($"nt65: {problem}");
         error.WriteLine(CommandLine.SeeHelp);

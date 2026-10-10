@@ -350,7 +350,7 @@ public static class Compiler
         if (previous.Reused is not { } reuse || reuse.Project != project)
             return WholeProgramReason.ProjectChanged;
         var sources = Sources(files);
-        var earlier = Earlier(previous, reuse);
+        var earlier = Earlier(reuse);
         if (sources.Count != earlier.Count || earlier.Any(tree => !sources.ContainsKey(tree.Path)))
             return WholeProgramReason.FilesAddedOrRemoved;
 
@@ -406,7 +406,7 @@ public static class Compiler
     {
         var reuse = previous.Reused!;
         var sources = Sources(files);
-        var changed = Earlier(previous, reuse).Where(tree => sources[tree.Path] != tree).ToList();
+        var changed = Earlier(reuse).Where(tree => sources[tree.Path] != tree).ToList();
         if (changed.Count == 0)
             return previous;
         var lengths = new ConcurrentDictionary<string, long?>(reuse.Lengths, StringComparer.Ordinal);
@@ -488,10 +488,10 @@ public static class Compiler
         files.Where(tree => !StandardModules.IsStandard(tree.Path)).ToDictionary(tree => tree.Path, StringComparer.Ordinal);
 
     /// <summary>
-    /// Returns the files that <paramref name="previous"/> analyzed as the caller gave them,
-    /// without the modules that come with nt65.
+    /// Returns the files that the analysis <paramref name="reuse"/> was kept from analyzed, as the
+    /// caller gave them, without the modules that come with nt65.
     /// </summary>
-    private static List<SyntaxTree> Earlier(ProgramAnalysis previous, ProgramAnalysis.Reuse reuse) =>
+    private static List<SyntaxTree> Earlier(ProgramAnalysis.Reuse reuse) =>
         [.. reuse.Trees.Where(tree => !StandardModules.IsStandard(tree.Path))];
 
     /// <summary>
@@ -516,6 +516,14 @@ public static class Compiler
         ProgramAnalysis? previous, IReadOnlySet<string>? dirty, Flow.InferredSignatures? signatures,
         CancellationToken cancellation)
     {
+        // A file analyzed again starts from the stack effects and flag exits the earlier analysis
+        // found, which are what an edit to one file usually leaves them, and from its signatures
+        // where the caller gives none. Every file of an analysis holds the same answers.
+        var earlier = previous is { Files: [var first, ..] } ? first.Flow : null;
+        var effects = earlier?.Effects ?? Flow.StackEffects.None;
+        var exits = earlier?.FlagExits ?? Flow.FlagExits.None;
+        signatures ??= earlier?.Signatures ?? Flow.InferredSignatures.None;
+
         // Each file is analyzed on its own, so the files are analyzed at once, and what they
         // found is gathered in the program's order.
         var models = program.Files;
@@ -532,28 +540,32 @@ public static class Compiler
                 files[i] = kept with { Model = model, Flow = kept.Flow.ForComposing() };
                 return;
             }
-
-            // A file analyzed again starts from the stack effects the earlier analysis found, which
-            // are what an edit to one file usually leaves them.
-            var (layout, flow, state, diagnostics) = AnalyzeFile(
-                model, target, project,
-                previous is { Files: [var any, ..] } ? any.Flow.Effects : Flow.StackEffects.None,
-                previous is { Files: [var some, ..] } ? some.Flow.FlagExits : Flow.FlagExits.None,
-                signatures ?? (previous is { Files: [var first, ..] } ? first.Flow.Signatures : Flow.InferredSignatures.None));
+            var (layout, flow, state, diagnostics) = AnalyzeFile(model, target, project, effects, exits, signatures);
             files[i] = new FileAnalysis(model, layout, flow, state);
             found[i] = diagnostics;
         }, cancellation);
-        for (var i = 0; i < models.Count; i++)
-        {
-            if (found[i] is { } diagnostics)
-                analyzed[models[i].Tree.Path] = diagnostics;
-        }
+        Record(files, found, analyzed);
 
         // Composing the program sets its answers on this analysis's regions, which for a file kept
         // from before are the copies made above, so the previous analysis keeps its own answers.
         // Composing cannot be cancelled once it starts, so a cancelled analysis stops here.
         cancellation.ThrowIfCancellationRequested();
         return [.. files];
+    }
+
+    /// <summary>
+    /// Records in <paramref name="analyzed"/>, under each file's path, the diagnostics in
+    /// <paramref name="found"/> for the files that were analyzed, which are the entries that are
+    /// not null.
+    /// </summary>
+    private static void Record(
+        IReadOnlyList<FileAnalysis> files, IReadOnlyList<Diagnostic>?[] found, Dictionary<string, IReadOnlyList<Diagnostic>> analyzed)
+    {
+        for (var i = 0; i < files.Count; i++)
+        {
+            if (found[i] is { } diagnostics)
+                analyzed[files[i].Path] = diagnostics;
+        }
     }
 
     /// <summary>
@@ -632,11 +644,7 @@ public static class Compiler
                 files[i] = new FileAnalysis(files[i].Model, layout, flow, state);
                 found[i] = diagnostics;
             }, cancellation);
-            for (var i = 0; i < files.Length; i++)
-            {
-                if (found[i] is { } diagnostics)
-                    analyzed[files[i].Path] = diagnostics;
-            }
+            Record(files, found, analyzed);
             analysis = new ProgramAnalysis(program, analysis.Cpu, files, analysis.Configuration, [])
             {
                 Reanalyzed = analysis.Reanalyzed + stale.Count,
@@ -716,23 +724,9 @@ public static class Compiler
             flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
         }
 
-        // An `.ensure` that names a flag emits nothing where the flags already hold, which the
-        // flag analysis of the layout so far tells. On the 65C02 that analysis also settles
-        // whether arithmetic pays the decimal-mode cycle, and on the 65816 how many bytes a block
-        // move moves. What any of these changes moves no edge and no flag, so one more layout
-        // settles it. Only a file with such a line pays for it.
-        if (layout.Steps.Any(step => step.Statement is EnsureDirectiveSyntax ensure
-            && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag))
-            || (target is Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02
-                && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
-                {
-                    MnemonicKind: MnemonicKind.Adc or MnemonicKind.Sbc,
-                } || layout.HiddenPathAt(step)?.Instructions.Any(hidden => hidden.Mnemonic is MnemonicKind.Adc or MnemonicKind.Sbc) == true))
-            || (target == Cpu.Wdc65816
-                && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
-                {
-                    MnemonicKind: MnemonicKind.Mvn or MnemonicKind.Mvp,
-                })))
+        // What the flag analysis settles moves no edge and no flag, so one more layout settles
+        // it. Only a file with a line that depends on it pays for that layout.
+        if (DependsOnFlags(layout, target))
         {
             layout = CodeLayout.Create(model, target, state, flow.Flags);
             flow = Flow.ControlFlow.Of(model, layout, exits, signatures);
@@ -749,6 +743,33 @@ public static class Compiler
             .Select(block => block.Label!);
         collapsed.AddRange(UnusedSymbols.Of(model, collapsed, entries).ToList());
         return (layout, flow, state, collapsed);
+    }
+
+    /// <summary>
+    /// Returns a value indicating whether some line of <paramref name="layout"/> depends on what
+    /// the flag analysis finds. An <c>.ensure</c> that names a flag emits nothing where the flags
+    /// already hold. On the 65C02 variants the analysis also settles whether arithmetic pays the
+    /// decimal-mode cycle, and on the 65816 how many bytes a block move moves.
+    /// </summary>
+    private static bool DependsOnFlags(CodeLayout layout, Cpu target)
+    {
+        if (layout.Steps.Any(step => step.Statement is EnsureDirectiveSyntax ensure
+            && StateItem.Read(ensure).Any(item => item.Part == StatePart.Flag)))
+        {
+            return true;
+        }
+        if (target is Cpu.Cmos65SC02 or Cpu.Rockwell65C02 or Cpu.Wdc65C02)
+        {
+            return layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
+            {
+                MnemonicKind: MnemonicKind.Adc or MnemonicKind.Sbc,
+            } || layout.HiddenPathAt(step)?.Instructions.Any(hidden => hidden.Mnemonic is MnemonicKind.Adc or MnemonicKind.Sbc) == true);
+        }
+        return target == Cpu.Wdc65816
+            && layout.Steps.Any(step => step.Statement is InstructionStatementSyntax
+            {
+                MnemonicKind: MnemonicKind.Mvn or MnemonicKind.Mvp,
+            });
     }
 
     /// <summary>
@@ -869,9 +890,11 @@ public static class Compiler
     }
 
     /// <summary>
-    /// Returns the length of the file at <paramref name="path"/>, or null when it cannot be read.
+    /// Returns the length of the file at <paramref name="path"/>, or null when there is no such
+    /// file or it cannot be read. A compilation measures each <c>.incbin</c> file with this when
+    /// the caller passes no function of its own.
     /// </summary>
-    private static long? BinaryLengthOnDisk(string path)
+    public static long? BinaryLengthOnDisk(string path)
     {
         try
         {

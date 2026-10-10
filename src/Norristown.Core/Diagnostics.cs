@@ -26,12 +26,18 @@ public static class Diagnostics
     {
         if (severities.Count == 0)
             return diagnostics;
-        return diagnostics
-            .Where(d => d.Severity == Severity.Error || !severities.TryGetValue(d.Id, out var off) || off is not null)
-            .Select(d => d.Severity != Severity.Error
-                && severities.TryGetValue(d.Id, out var configured) && configured is { } level
-                ? d with { Severity = level }
-                : d);
+        return Applied();
+
+        IEnumerable<Diagnostic> Applied()
+        {
+            foreach (var diagnostic in diagnostics)
+            {
+                if (diagnostic.Severity == Severity.Error || !severities.TryGetValue(diagnostic.Id, out var configured))
+                    yield return diagnostic;
+                else if (configured is { } level)
+                    yield return diagnostic with { Severity = level };
+            }
+        }
     }
 
     /// <summary>
