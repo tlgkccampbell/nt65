@@ -152,7 +152,8 @@ internal static class Lookup
     /// <summary>
     /// Returns the place that one more part of a path, <paramref name="name"/>, reaches after
     /// <paramref name="before"/>, or null when it reaches nothing. A module leads to what it
-    /// declares, and a symbol to what the scope <paramref name="bodyOf"/> gives for it declares.
+    /// declares, and a symbol to what is declared in the scope that <paramref name="bodyOf"/>
+    /// returns for it.
     /// </summary>
     public static Resolution? Step(
         Resolution before, string name, ProgramSymbols program, Func<Symbol, Scope?> bodyOf, Action<string?, string>? touched) =>

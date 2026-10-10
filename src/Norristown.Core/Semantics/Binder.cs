@@ -810,9 +810,8 @@ internal sealed partial class Binder
 
     /// <summary>
     /// Opens the scope that a declaration's body is read in, named <paramref name="name"/> and
-    /// owned by <paramref name="symbol"/>, which is null when the declaration declared nothing.
-    /// The scope keeps the declared name even then, so that what the body declares is still
-    /// named after it in the output.
+    /// owned by <paramref name="symbol"/>. The symbol is null when the declaration declared
+    /// nothing, and the scope still takes the name the source gives.
     /// </summary>
     private Scope OpenBody(ScopeKind kind, string? name, Symbol? symbol)
     {

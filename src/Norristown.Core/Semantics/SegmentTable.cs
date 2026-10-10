@@ -80,7 +80,6 @@ public sealed class SegmentTable
     {
         var segments = Predeclared();
         var table = new SegmentTable(segments) { IsLinked = linked };
-        var ordered = trees.ToList();
 
         // The spaces come first, because a segment names the space it is in. Only the project
         // declares spaces, because a program that links another processor's image has a project.
@@ -108,7 +107,7 @@ public sealed class SegmentTable
 
         // A declaration under an `.if` branch the build does not take is not a declaration, so
         // two branches may declare the same segment differently.
-        var declarations = ordered
+        var declarations = trees
             .SelectMany(Declarations)
             .Where(d => configuration.Includes(d.Node))
             .OrderBy(d => d.Node.Tree.Path, StringComparer.Ordinal)
