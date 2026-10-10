@@ -35,4 +35,20 @@ internal static class StepLines
             return node.Tree == tree ? (node.Span, false) : null;
         return call.Tree == tree ? (call.Span, true) : null;
     }
+
+    /// <summary>
+    /// Returns the span of each line of <paramref name="tree"/> that one of <paramref name="steps"/>
+    /// is shown on, each line once, in the order of the lines.
+    /// </summary>
+    public static List<TextSpan> Lines(SyntaxTree tree, IEnumerable<Step> steps) =>
+        [.. steps.Select(step => Of(tree, step)?.Span).OfType<TextSpan>().Distinct().OrderBy(span => span.Start)];
+
+    /// <summary>
+    /// Returns the phrase that names <paramref name="lines"/> of <paramref name="tree"/> as what
+    /// might also have changed a value in memory, such as <c>or possibly `sta (ptr),y` on line
+    /// 12</c>, or null where there are no such lines.
+    /// </summary>
+    public static string? OrPossibly(SyntaxTree tree, IReadOnlyList<TextSpan> lines) =>
+        lines.Count == 0 ? null : "or possibly " + string.Join(", ", lines.Select(span =>
+            $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}"));
 }

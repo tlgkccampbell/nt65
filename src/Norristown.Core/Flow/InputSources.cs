@@ -222,10 +222,13 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
     private static Registers ReadBy(SourceWalk walk, Step step, InstructionStatementSyntax statement) =>
         RegisterEffects.Read(statement.MnemonicKind, walk.ModeOf(step));
 
+    /// <summary>Returns the category a register or a flag is reported under.</summary>
+    internal static InputCategory CategoryOf(Registers register) =>
+        (register & Registers.Flags) != Registers.None ? InputCategory.Flag : InputCategory.Register;
+
     /// <summary>Returns an input for one register, with the order key and name it is reported under.</summary>
     private static (int Order, string Name, InputCategory Category, SourceValue Value) Register(Registers register, SourceValue value) =>
-        ((int)SourceState.Track(register), RegisterEffects.Format(register),
-            (register & Registers.Flags) != Registers.None ? InputCategory.Flag : InputCategory.Register, value);
+        ((int)SourceState.Track(register), RegisterEffects.Format(register), CategoryOf(register), value);
 
     /// <summary>
     /// Maps the steps a walk names to spans in the caret's file. A step from a macro expansion maps to
@@ -263,14 +266,8 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
                 if (Source(origin) is { } source && !sources.Any(known => known.Kind == source.Kind && known.Line == source.Line))
                     sources.Add(source);
             }
-            var through = value.Through
-                .Select(key => steps.TryGetValue(key, out var at) ? Span(at.Step)?.Span : null)
-                .OfType<TextSpan>()
-                .Distinct()
-                .OrderBy(span => span.Start)
-                .ToList();
             return new SourcedInput(
-                name, null, category, [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], through, []);
+                name, null, category, [.. sources.OrderBy(source => source.Line.Start).ThenBy(source => source.Kind)], Lines(value.Through), []);
         }
 
         /// <summary>
@@ -279,14 +276,8 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         /// </summary>
         public SourcedInput Memory(Location location, MemoryWalk.Value value)
         {
-            var possibly = value.Doubts
-                .Select(key => steps.TryGetValue(key, out var at) ? Span(at.Step)?.Span : null)
-                .OfType<TextSpan>()
-                .Distinct()
-                .OrderBy(span => span.Start)
-                .ToList();
-            var reason = possibly.Count == 0 ? null : "or possibly " + string.Join(", ", possibly.Select(span =>
-                $"`{tree.Text[span.Start..span.End].Trim()}` on line {tree.GetLineIndex(span.Start) + 1}"));
+            var possibly = Lines(value.Doubts);
+            var reason = StepLines.OrPossibly(tree, possibly);
             var sources = new List<InputSource>();
             foreach (var origin in value.Origins)
             {
@@ -317,6 +308,13 @@ public sealed record InputSources(TextSpan Routine, IReadOnlyList<SourcedInput> 
         /// Returns the span a step is shown at in the caret's file, as <see cref="StepLines.Of"/> finds it.
         /// </summary>
         private (TextSpan Span, bool InMacro)? Span(Step step) => StepLines.Of(tree, step);
+
+        /// <summary>
+        /// Returns the span of each line of the caret's file that one of the steps
+        /// <paramref name="keys"/> name is shown on, each line once, in the order of the lines.
+        /// </summary>
+        private List<TextSpan> Lines(IEnumerable<StepKey> keys) =>
+            StepLines.Lines(tree, keys.Where(steps.ContainsKey).Select(key => steps[key].Step));
 
         /// <summary>Returns a short phrase saying why the analysis lost track of a value at <paramref name="step"/>.</summary>
         private string Why(Step step, BasicBlock block)

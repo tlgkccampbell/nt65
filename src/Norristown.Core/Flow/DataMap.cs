@@ -249,9 +249,7 @@ public sealed class DataMap
                 foreach (var (symbol, offset, type) in symbols)
                 {
                     // The last build says where ld65 put the symbol, which no prediction can better.
-                    var (address, layout) = built is not null && (built.TryGetValue(symbol, out var at) || built.TryGetValue(Current(symbol), out at))
-                        ? (at, DataLayout.Built)
-                        : (start.Address + offset, start.Layout);
+                    var (address, layout) = Built(symbol) is { } at ? (at, DataLayout.Built) : (start.Address + offset, start.Layout);
                     predicted |= layout != DataLayout.Built;
 
                     // A symbol the page cannot reach has no offset from D to show.
@@ -347,9 +345,17 @@ public sealed class DataMap
         /// build gave it, or else not known, because the map predicts addresses only on a page.
         /// </summary>
         private Home OffThePages(Symbol symbol, string type) =>
-            built is not null && (built.TryGetValue(symbol, out var at) || built.TryGetValue(Current(symbol), out at))
+            Built(symbol) is { } at
                 ? new Home(null, null, symbol.Size, DataLayout.Built, type, false, at)
                 : new Home(null, null, symbol.Size, DataLayout.Unknown, type, false, null);
+
+        /// <summary>
+        /// Returns the absolute address the last build gave <paramref name="symbol"/>, looked up by
+        /// the symbol itself and then by its canonical symbol, or null where there is no build or
+        /// the build did not place it.
+        /// </summary>
+        private long? Built(Symbol symbol) =>
+            built is not null && (built.TryGetValue(symbol, out var at) || built.TryGetValue(Current(symbol), out at)) ? at : null;
 
         /// <summary>Returns the page a zero-page segment's symbols are reached through.</summary>
         private long BaseOf(Segment segment) => HasDirectPage ? segment.DirectPage ?? 0 : 0;
@@ -1127,11 +1133,18 @@ public sealed class DataMap
                 .ToLookup(BaseOf, segment => segment.Name);
             var reached = found.ToLookup(access => access.Location);
             var pages = new List<DirectPage>();
-            foreach (var page in homes.Where(home => home.Value.Page is not null).GroupBy(home => home.Value.Page!.Value).OrderBy(page => page.All(home => home.Value.IsMmio)).ThenBy(page => page.Key))
+            var based = homes
+                .Where(home => home.Value.Page is not null)
+                .GroupBy(home => home.Value.Page!.Value)
+                .OrderBy(page => page.All(home => home.Value.IsMmio))
+                .ThenBy(page => page.Key);
+            foreach (var page in based)
             {
-                var locations = new List<DataLocation>();
-                foreach (var (key, home) in page.OrderBy(home => home.Value.Offset ?? long.MaxValue).ThenBy(home => home.Key.DisplayName, StringComparer.Ordinal))
-                    locations.Add(Location(key, home, uses, reached));
+                var locations = page
+                    .OrderBy(home => home.Value.Offset ?? long.MaxValue)
+                    .ThenBy(home => home.Key.DisplayName, StringComparer.Ordinal)
+                    .Select(home => Location(home.Key, home.Value, uses, reached))
+                    .ToList();
                 var hardware = locations.Count > 0 && locations.All(location => location.Relation == DataRelation.Hardware);
                 var named = segments[page.Key].Where(name => locations.Any(location => location.Symbol?.Segment == name)).ToList();
                 List<DataNote> pageNotes = [.. notes.GetValueOrDefault(page.Key) ?? []];
@@ -1198,7 +1211,9 @@ public sealed class DataMap
                 .ToDictionary(item => item.Name, item => item.index, StringComparer.Ordinal);
             var groups = homes.Where(home => home.Value.Page is null)
                 .GroupBy(home => (Name: home.Value.Layout == DataLayout.Fixed ? null : home.Key.Symbol?.Segment, home.Value.IsMmio))
-                .OrderBy(group => group.Key.Name is { } name ? order.GetValueOrDefault(name, int.MaxValue - 2) : group.Key.IsMmio ? int.MaxValue : int.MaxValue - 1)
+                .OrderBy(group => group.Key.Name is { } name ? order.GetValueOrDefault(name, int.MaxValue - 2)
+                    : group.Key.IsMmio ? int.MaxValue
+                    : int.MaxValue - 1)
                 .ThenBy(group => group.Key.Name, StringComparer.Ordinal);
             var segments = new List<DataSegment>();
             foreach (var group in groups)
@@ -1215,9 +1230,13 @@ public sealed class DataMap
             return segments;
         }
 
-        /// <summary>Returns the location that <paramref name="key"/> names, with what each routine that reaches it does with it.</summary>
+        /// <summary>
+        /// Returns the location that <paramref name="key"/> names, with what each routine that
+        /// reaches it does with it.
+        /// </summary>
         private DataLocation Location(
-            LocationKey key, Home home, Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> uses, ILookup<LocationKey, Found> reached)
+            LocationKey key, Home home, Dictionary<(Symbol Routine, LocationKey Location, bool Unknown), DataUse> uses,
+            ILookup<LocationKey, Found> reached)
         {
             var routineUses = reached[key].Select(access => (access.Routine, access.Unknown)).Distinct()
                 .Select(use => uses.GetValueOrDefault((use.Routine!, key, use.Unknown))).OfType<DataUse>().ToList();
@@ -1460,14 +1479,19 @@ public sealed class DataMap
             LocationKey Location, long? Page, bool Unknown, SyntaxNode Line, Step Step, bool Reads, bool Writes, bool Indexed, long Offset, long Width,
             bool Wider)
         {
+            /// <summary>Gets the canonical symbol of the routine the instruction is in, once the access is attributed.</summary>
             public Symbol? Routine { get; init; }
 
+            /// <summary>Gets the block the instruction is in, once the access is attributed.</summary>
             public BasicBlock? Block { get; init; }
 
+            /// <summary>Gets the region of the routine the instruction is in, once the access is attributed.</summary>
             public FlowRegion? Region { get; init; }
 
+            /// <summary>Gets how many times one pass through the routine runs the instruction, as <see cref="DataAccess.Times"/> counts it.</summary>
             public long Times { get; init; } = 1;
 
+            /// <summary>Gets a value indicating whether the instruction is inside a loop whose iteration count nt65 does not know.</summary>
             public bool InUncountedLoop { get; init; }
         }
 
@@ -1492,17 +1516,25 @@ public sealed class DataMap
             ImmutableHashSet<(LocationKey Location, long Byte)> Must, ImmutableHashSet<LocationKey> May, ImmutableHashSet<LocationKey> Read,
             ImmutableDictionary<LocationKey, (Symbol Callee, Symbol Temp, SyntaxNode At, bool Written)> Clobbered)
         {
+            /// <summary>Gets what a routine has stored when it is entered, which is nothing.</summary>
             public static Held Nothing { get; } = new([], [], [], ImmutableDictionary<LocationKey, (Symbol, Symbol, SyntaxNode, bool)>.Empty);
 
+            /// <summary>
+            /// Returns what two paths that meet have stored. Every path has written only what both
+            /// have, some path has written or read what either has, and a location the paths
+            /// disagree about keeps the call the first path knew.
+            /// </summary>
             public static Held Merge(Held? known, Held arriving) =>
                 known is null ? arriving : new Held(
                     known.Must.Intersect(arriving.Must), known.May.Union(arriving.May), known.Read.Union(arriving.Read),
                     known.Clobbered.SetItems(arriving.Clobbered.Where(item => !known.Clobbered.ContainsKey(item.Key))));
 
+            /// <inheritdoc/>
             public bool Equals(Held? other) =>
                 other is not null && Must.SetEquals(other.Must) && May.SetEquals(other.May) && Read.SetEquals(other.Read)
                 && Clobbered.Count == other.Clobbered.Count && Clobbered.Keys.All(other.Clobbered.ContainsKey);
 
+            /// <inheritdoc/>
             public override int GetHashCode() => HashCode.Combine(Must.Count, May.Count, Read.Count, Clobbered.Count);
         }
     }
