@@ -411,6 +411,40 @@ public sealed class CodeLensTests
     }
 
     /// <summary>
+    /// The bytes of <c>lda f:$7E0054</c> run as <c>mvn</c> from the second of them. A block move
+    /// that the bytes from a <c>.label</c> decode as leaves the routine without a count for the
+    /// same reason a written one does, and the lens gives that reason.
+    /// </summary>
+    [Fact]
+    public async Task ALensGivesTheReasonForAHiddenBlockMove()
+    {
+        var timeout = TestTimeout.Token();
+        const string Source = """
+            .module main
+            .cpu 65816
+            .segment CODE
+            .proc copy: a16, i16 {
+                bra move
+            @top:
+                lda f:$7E0054
+                .label move = @top + 1
+                rts
+            }
+            """;
+        await using var client = await TestClient.OpenedAsync(timeout, (MainUri, Source.ReplaceLineEndings("\n")));
+
+        var lenses = await client.RequestAsync<IReadOnlyList<CodeLens>>("textDocument/codeLens",
+            new CodeLensParams(new TextDocumentIdentifier(MainUri)), timeout);
+
+        Assert.Equal(
+            [
+                "not counted: a block move takes 7 cycles per byte, and moves one byte more than the 16-bit "
+                    + "accumulator holds, which nt65 does not know here",
+            ],
+            Costs(lenses).Select(lens => lens.Command.Title));
+    }
+
+    /// <summary>
     /// The text after a call to a routine that returns past it is never run, so it costs nothing
     /// and the routine still has a count, rather than none and no reason for it.
     /// </summary>
