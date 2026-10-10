@@ -773,7 +773,9 @@ internal sealed class RegisterWalk
     /// <param name="pointing">The registers that hold the stack pointer after it.</param>
     /// <returns>The stack the copy was taken from, or null.</returns>
     private SavedStack? PointedAfter(Step step, MnemonicKind mnemonic, RegisterState before, Registers pointing) =>
-        StackPointerCopies.Copied(mnemonic, layout.Cpu, Processor(step), pointing, before.Pointed, before.Stack);
+        StackPointerCopies.Copied(
+            mnemonic, StepOperands.Immediate(model, layout, step), layout.Cpu, Processor(step), pointing, before.Pointed,
+            before.Stack);
 
     /// <summary>
     /// Returns the stack after a <c>txs</c> or <c>tcs</c> moves the stack pointer back to a copy

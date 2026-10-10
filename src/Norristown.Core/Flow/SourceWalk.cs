@@ -249,7 +249,7 @@ internal sealed class SourceWalk
             pointing &= StackWrites.Pointing(variant, mode, immediate, before.Pointing);
         var pointed = variants.Count > 0 ? null
             : StackPointerCopies.Copied(
-                statement.MnemonicKind, layout.Cpu, registers.Processor(step), pointing, before.Pointed, before.Stack);
+                statement.MnemonicKind, immediate, layout.Cpu, registers.Processor(step), pointing, before.Pointed, before.Stack);
         return after.WithCopy(pointing, pointed);
     }
 

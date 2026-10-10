@@ -2408,6 +2408,8 @@ where the copy was taken and drops exactly those pushes, so `pha`, `tsx`, `pha`,
 the stack unknown, as any other `txs` does. So does an X on the 65816 that is not 16 bits
 throughout, since an 8-bit X holds only the low byte of S, unless the mode is known to be
 emulation, where the high byte of S is always $01 and an 8-bit copy is exact, as on the 6502.
+An `xce` between them may change the width of X, and so may a `rep` or `sep`, unless the mode
+is known to be emulation or its mask is known and leaves the X bit alone.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
