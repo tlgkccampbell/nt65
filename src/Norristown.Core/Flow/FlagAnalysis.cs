@@ -747,10 +747,10 @@ internal sealed class FlagAnalysis : IKnownFlags
     /// <c>.next</c>, so the flags the dispatching statement leaves flow into it as a branch's do.
     /// <para>
     /// A list or a table counts only where every item names a label or a routine, so the flow
-    /// graph spreads all of it. It must not be exported, and every other name of it in the file
-    /// must be one of <paramref name="edges"/> or one that only reads its bytes, as
-    /// <c>lda table,x</c> does. Anything else, such as another routine's <c>.next</c> naming it,
-    /// may hand control to its labels from elsewhere.
+    /// graph spreads all of it. It must not be exported. Every other name of it in the file must
+    /// be in one of <paramref name="dispatches"/>, in a jump of this routine, or in an instruction
+    /// that only reads its bytes, as <c>lda table,x</c> does. Anything else, such as a call's
+    /// <c>.next</c> or another routine's, may hand control to its labels with other flags.
     /// </para>
     /// </summary>
     private List<TextSpan> Dispatched(
@@ -762,8 +762,9 @@ internal sealed class FlagAnalysis : IKnownFlags
             foreach (var name in next.Targets)
             {
                 if (Targets.Of(model, name, on) is not { Symbol: var table } || table.IsExported
-                    || model.ReferencesTo(table).Any(reference =>
-                        !reference.IsDeclaration && !edges.Contains(reference.Span) && !Touches(reference.Span)))
+                    || model.ReferencesTo(table).Any(reference => !reference.IsDeclaration && !Touches(reference.Span)
+                        && !(edges.Contains(reference.Span) && (InJump(reference.Span)
+                            || dispatches.Any(each => each.Next.Tree == model.Tree && each.Next.Span.Contains(reference.Span))))))
                 {
                     continue;
                 }
@@ -775,6 +776,15 @@ internal sealed class FlagAnalysis : IKnownFlags
         }
         return spans;
     }
+
+    /// <summary>
+    /// Returns a value indicating whether the name at <paramref name="span"/> is in the operand of
+    /// an instruction that transfers control without calling, such as <c>jmp (table,x)</c>.
+    /// </summary>
+    private bool InJump(TextSpan span) =>
+        model.Tree.Root.FindToken(span.Start).Parent?.AncestorsAndSelf().OfType<InstructionStatementSyntax>().FirstOrDefault()
+            is { } instruction
+        && Instructions.IsControlTransfer(instruction.MnemonicKind) && !Instructions.IsCall(instruction.MnemonicKind);
 
     /// <summary>
     /// Returns a value indicating whether the name at <paramref name="span"/> names code only to

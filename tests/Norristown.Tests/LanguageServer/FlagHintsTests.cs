@@ -162,11 +162,14 @@ public sealed class FlagHintsTests
     /// <summary>
     /// Where something other than this routine's <c>.next</c> may hand control to a table's
     /// labels, nothing says which jump reaches them, so each is entered with every flag unknown.
-    /// An exported table may be jumped through from another module, and data that names a label
-    /// with no <c>.next</c> naming the data says nothing about who jumps there.
+    /// An exported table may be jumped through from another module, a table another routine's
+    /// <c>.next</c> names may be jumped through from there, and data that names a label with no
+    /// <c>.next</c> naming the data says nothing about who jumps there.
     /// </summary>
     [Theory]
     [InlineData(".segment RODATA\n.export .data table: .addr main::add - 1, main::sub - 1\n")]
+    [InlineData(".export .proc other {\n    jmp ($12)\n    .next table\n}\n"
+        + ".segment RODATA\n.data table: .addr main::add - 1, main::sub - 1\n")]
     [InlineData(".segment RODATA\n.data table: .addr main::add - 1, main::sub - 1\n.data other: .addr main::add - 1\n")]
     public void ACarryDoesNotFlowIntoATableEntryOthersMayReach(string tables)
     {

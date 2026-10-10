@@ -1929,7 +1929,8 @@ names no targets.
 Data that names a label says nothing about which jump reaches it, so the flag analysis enters a
 label that data names with every flag unknown. A table that only this routine's `.next`
 annotations name is the exception, where every item names a label or a routine, the table is not
-exported, and the rest of the file only reads its bytes, as `lda table,x` does. Then only the
+exported, and every other name of it is in a jump of this routine, as `jmp (table,x)` is, or in an
+instruction that only reads its bytes, as `lda table,x` is. Then only the
 jumps those annotations are under reach its labels, and the flags each jump leaves flow in as
 they do along a branch, so `sec` before an RTS dispatch leaves C known to be 1 in every entry. A
 `.next` under a call is not such a jump, since the call comes back with other flags. The register
