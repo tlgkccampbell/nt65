@@ -17,8 +17,10 @@ main__table:
     .byte 2
     .byte 3
 
+COMMANDS = 3
+
 .segment "CODE": absolute
-; .proc main  main.nt65:28
+; .proc main  main.nt65:36
 main__main:
     rts
 ; end of main

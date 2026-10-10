@@ -189,23 +189,32 @@ internal sealed partial class Parser
             levelComma = Advance();
         }
 
-        ExpressionSyntax? message = null;
-        if (AtEnd)
-            Report(Catalogue.ExpectedText.Message("the message: text in quotes, a text constant or a call that returns text"));
-        else
-            message = ParseExpression();
-        return new AssertDirectiveSyntax(keyword, condition, comma, level, levelComma, message);
+        return new AssertDirectiveSyntax(keyword, condition, comma, level, levelComma, ParseMessage());
     }
 
     /// <summary>
-    /// Parses <c>.error "message"</c>, which refuses to build the file in the current configuration,
-    /// or <c>.warning "message"</c>, which builds it but reports the message.
+    /// Parses <c>.error message</c>, which refuses to build the file in the current configuration,
+    /// or <c>.warning message</c>, which builds it but reports the message. The message is read as
+    /// an <c>.assert</c>'s is.
     /// </summary>
     private GreenNode ParseError()
     {
         var keyword = Advance();
-        return new ErrorDirectiveSyntax(keyword, Expect(SyntaxKind.StringLiteral, Catalogue.ExpectedText.Message(
-            "the message, in quotes")));
+        return new ErrorDirectiveSyntax(keyword, ParseMessage());
+    }
+
+    /// <summary>
+    /// Parses the message of an <c>.assert</c>, an <c>.error</c> or a <c>.warning</c>, and reports
+    /// a line that ends where it belongs. The message is an expression, which the semantic checks
+    /// require to be text.
+    /// </summary>
+    /// <returns>The message, or null where the line has none.</returns>
+    private ExpressionSyntax? ParseMessage()
+    {
+        if (!AtEnd)
+            return ParseExpression();
+        Report(Catalogue.ExpectedText.Message("the message: text in quotes, a text constant or a call that returns text"));
+        return null;
     }
 
     /// <summary>

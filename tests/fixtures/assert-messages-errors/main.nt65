@@ -1,5 +1,6 @@
 ; An `.assert` message is text, and only a line that does not start a statement of its own
-; continues an `.assert` after its comma.
+; continues an `.assert` after its comma. An `.error` or a `.warning` message is text by the same
+; rule.
 .module main
 
 .cpu 6502
@@ -12,12 +13,18 @@
 .assert LIMIT == 2, TOO_MANY        ;! error[assertion-failed]: there are more than three of them
 .assert LIMIT == 2,                 ;! error[assertion-failed]: the limit is two
     .strcat("the limit ", "is two")
-.assert LIMIT == 3, LIMIT           ;! error[assert-message-not-text]: an `.assert` message is text: a string in quotes, a text constant, or a call that returns text
+.assert LIMIT == 3, LIMIT           ;! error[message-not-text]: an `.assert` message is text: a string in quotes, a text constant, or a call that returns text
 .assert LIMIT == 3,                 ;! error[expected-text]: expected the message: text in quotes, a text constant or a call that returns text
+
+.error TOO_MANY ;! error[config-refused]: there are more than three of them
+.error .strcat("the limit ", "is three") ;! error[config-refused]: the limit is three
+.error LIMIT ;! error[message-not-text]: an `.error` message is text: a string in quotes, a text constant, or a call that returns text ;! error[config-refused]: this configuration is not supported
+.warning main ;! error[message-not-text]: a `.warning` message is text: a string in quotes, a text constant, or a call that returns text ;! warning[config-warned]: this configuration is not supported
+.warning ;! error[expected-text]: expected the message: text in quotes, a text constant or a call that returns text ;! warning[config-warned]: this configuration is not supported
 
 .segment CODE
 .proc main {
-    .assert LIMIT == 3, main        ;! error[assert-message-not-text]: an `.assert` message is text: a string in quotes, a text constant, or a call that returns text
+    .assert LIMIT == 3, main        ;! error[message-not-text]: an `.assert` message is text: a string in quotes, a text constant, or a call that returns text
     .assert LIMIT == 3,             ;! error[expected-text]: expected the message: text in quotes, a text constant or a call that returns text
     rts
 }

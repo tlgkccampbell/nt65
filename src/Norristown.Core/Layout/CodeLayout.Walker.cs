@@ -670,9 +670,7 @@ public sealed partial class CodeLayout
         /// </summary>
         private void Assertion(AssertDirectiveSyntax directive)
         {
-            var assertion = Constructs.AssertionOf(directive, message => model.ValueOf(message, expansion).Text);
-            if (directive.Message is { } message && model.ValueOf(message, expansion) is not { IsString: true })
-                Report(message, Catalogue.AssertMessageNotText);
+            var assertion = AssertionOf(directive);
             if (assertion.Condition is not { } condition)
                 return;
             if (model.ValueOf(condition, expansion, SpanOf, CyclesOf).AsNumber() is not { } value)
@@ -718,8 +716,28 @@ public sealed partial class CodeLayout
         private void Refuse(ErrorDirectiveSyntax directive)
         {
             var warns = directive.Keyword.DirectiveKind == DirectiveKind.Warning;
-            var message = Constructs.AssertionOf(directive).Message ?? "this configuration is not supported";
+            var message = AssertionOf(directive).Message ?? "this configuration is not supported";
             Report(directive, warns ? Catalogue.ConfigWarned.Message(message) : Catalogue.ConfigRefused.Message(message));
+        }
+
+        /// <summary>
+        /// Returns what an <c>.assert</c>, an <c>.error</c> or a <c>.warning</c> requires, with the
+        /// text its message stands for, and reports a message that is not text. The three take a
+        /// message by the same rule.
+        /// </summary>
+        private Constructs.Assertion AssertionOf(StatementSyntax directive)
+        {
+            if (Constructs.MessageOf(directive) is { } message && model.ValueOf(message, expansion) is not { IsString: true })
+            {
+                var named = directive switch
+                {
+                    AssertDirectiveSyntax => "an `.assert`",
+                    ErrorDirectiveSyntax { Keyword.DirectiveKind: DirectiveKind.Warning } => "a `.warning`",
+                    _ => "an `.error`",
+                };
+                Report(message, Catalogue.MessageNotText.Message(named));
+            }
+            return Constructs.AssertionOf(directive, message => model.ValueOf(message, expansion).Text);
         }
 
         private void Data(StatementSyntax directive)
