@@ -559,6 +559,14 @@ state and models no memory behaviour, and the rule is the same on every processo
   a start or size depends on the command line or the project has no `links`, is never reported.
 - **Another home bank is not seen by a near transfer** on the 65816 (§7.5). A long one reaches
   it, so the fix there is `jsl` or `jml`.
+- **Another bank is not seen by a jump, call or branch** on the 6502 and the 65C02, which keep
+  only the address within the bank. A target that every linked config places wholly in one bank
+  other than `$00`, where no area the code runs in reaches that bank, is an error. A target in
+  bank `$00` is at the address the processor uses, so it is always reached, and one whose
+  placement nt65 cannot bound is never reported, since only the linker decides where it lands.
+  The fix is code that maps the bank and jumps to `.loword(target)`. The 65816 decides this by
+  declared home banks instead, because its configs often link code in one bank and run it
+  through a mirror in another.
 
 As with spaces, a name that cannot be seen may still be used as a value: an immediate such as
 `#<name` or `#>name` and data such as `.addr name` are never reported, since a trampoline is

@@ -102,7 +102,7 @@ public sealed class CatalogueAreaTests
             "segment-attribute-twice", "segment-block-redundant", "segment-declared-twice", "segment-dp-not-zp",
             "segment-mirror-invalid", "segment-mirrors-need-a-bank", "segment-not-defined", "segment-not-linked",
             "segment-not-visible", "segment-standard-size", "segment-undeclared", "space-not-a-name",
-            "space-undeclared", "transfer-to-another-space",
+            "space-undeclared", "target-in-another-bank", "transfer-to-another-space",
         ]),
         ("Instructions",
         [
