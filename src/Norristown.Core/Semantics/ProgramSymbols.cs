@@ -221,7 +221,10 @@ public sealed class ProgramSymbols
     /// re-exports, as in <c>.export .use hw::vic::border</c>, are the names its exported
     /// <c>.use</c> items bring in.
     /// </summary>
-    /// <param name="Name">The name under which the symbol is brought in, and under which a re-exported symbol becomes part of the module.</param>
+    /// <param name="Name">
+    /// The name under which the symbol is brought in, and under which a re-exported symbol
+    /// becomes part of the module.
+    /// </param>
     /// <param name="Path">The path the symbol was brought in from, starting at the root of the modules.</param>
     public sealed record Reexport(string Name, IReadOnlyList<string> Path);
 }

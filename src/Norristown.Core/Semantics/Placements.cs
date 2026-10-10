@@ -26,7 +26,7 @@ public sealed class Placements
 
     private Placements(
         Dictionary<string, SyntaxTree> modules, Dictionary<string, ModulePlacement> declared,
-        Dictionary<string, (SyntaxTree, PlaceDirectiveSyntax)> placedBy, Dictionary<PlaceDirectiveSyntax, SyntaxTree> placing,
+        Dictionary<string, (SyntaxTree Placer, PlaceDirectiveSyntax At)> placedBy, Dictionary<PlaceDirectiveSyntax, SyntaxTree> placing,
         Dictionary<string, TranslationUnit> units, IReadOnlyList<Diagnostic> diagnostics)
     {
         this.modules = modules;
@@ -63,7 +63,7 @@ public sealed class Placements
             declared[tree.Path] = MarkerOf(module);
         }
 
-        var placedBy = new Dictionary<string, (SyntaxTree, PlaceDirectiveSyntax)>(StringComparer.Ordinal);
+        var placedBy = new Dictionary<string, (SyntaxTree Placer, PlaceDirectiveSyntax At)>(StringComparer.Ordinal);
         var placing = new Dictionary<PlaceDirectiveSyntax, SyntaxTree>();
         var children = new Dictionary<string, List<SyntaxTree>>(StringComparer.Ordinal);
         var named = new HashSet<string>(StringComparer.Ordinal);
@@ -100,8 +100,8 @@ public sealed class Placements
                 if (placedBy.TryGetValue(target.Path, out var already))
                 {
                     diagnostics.Add(new Diagnostic(
-                        at, Catalogue.PlacedTwice.Message(path, ModuleOf(already.Item1, declarations)),
-                        [new RelatedSpan(already.Item1.GetSpan(already.Item2.Name.Span), "placed here")]));
+                        at, Catalogue.PlacedTwice.Message(path, ModuleOf(already.Placer, declarations)),
+                        [new RelatedSpan(already.Placer.GetSpan(already.At.Name.Span), "placed here")]));
                     continue;
                 }
                 if (Cycle(tree, target, placedBy, declarations) is { } cycle)

@@ -91,8 +91,9 @@ public sealed class Family
         for (var i = 0; i < found.Count; i++)
         {
             general[i] = Generalized(families, found[i].Message);
+            var key = (found[i].Span, found[i].Severity, general[i]);
             if (general[i] != found[i].Message)
-                counted[(found[i].Span, found[i].Severity, general[i])] = counted.GetValueOrDefault((found[i].Span, found[i].Severity, general[i])) + 1;
+                counted[key] = counted.GetValueOrDefault(key) + 1;
         }
 
         var reported = new HashSet<(Span, Severity, string)>();

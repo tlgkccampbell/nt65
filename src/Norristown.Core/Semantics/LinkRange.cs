@@ -7,9 +7,10 @@ namespace Norristown.Semantics;
 /// Works out the range of values an expression that only the linker can finish may take. A
 /// label, like a segment's linker symbol, is inside the memory areas the linked configurations
 /// place its segment in, or else in the banks the segment's declared <c>bank</c> names. Where
-/// nothing says, an address is somewhere in the space its address size reaches. Each operator narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c>
-/// is always a digit wherever <c>main</c> lands. A call to a <c>.func</c> takes the range of its
-/// body, with each parameter taking the range of what it is given.
+/// nothing says, an address is somewhere in the space its address size reaches. Each operator
+/// narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
+/// <c>main</c> lands. A call to a <c>.func</c> takes the range of its body, with each parameter
+/// taking the range of what it is given.
 /// </summary>
 /// <remarks>
 /// ca65 refuses an expression that names an address wider than its slot, whatever its value,
@@ -273,10 +274,7 @@ internal static class LinkRange
         SemanticModel model, SyntaxNode node, Expansion? on,
         IReadOnlyDictionary<Symbol, (Value Value, (long Low, long High)? Range)>? parameters, HashSet<Symbol> visiting)
     {
-        var value = parameters is null
-            ? model.ValueOf(node, on)
-            : model.ValueOf(node, parameters.ToDictionary(pair => pair.Key, pair => pair.Value.Value), on);
-        if (value.AsNumber() is { } number)
+        if (ValueOf(model, node, on, parameters).AsNumber() is { } number)
             return Within(number, number);
 
         switch (node)
@@ -332,10 +330,8 @@ internal static class LinkRange
                     var bound = new Dictionary<Symbol, (Value Value, (long Low, long High)? Range)>();
                     for (var i = 0; i < arguments.Count; i++)
                     {
-                        var argument = parameters is null
-                            ? model.ValueOf(arguments[i], on)
-                            : model.ValueOf(arguments[i], parameters.ToDictionary(pair => pair.Key, pair => pair.Value.Value), on);
-                        bound[function.ParameterSymbols[i]] = (argument, Range(model, arguments[i], on, parameters, visiting));
+                        bound[function.ParameterSymbols[i]] = (
+                            ValueOf(model, arguments[i], on, parameters), Range(model, arguments[i], on, parameters, visiting));
                     }
                     return Range(model, body, on, bound, visiting);
                 }
@@ -348,6 +344,18 @@ internal static class LinkRange
                 return null;
         }
     }
+
+    /// <summary>
+    /// Returns the value of a part of an expression, with each parameter in
+    /// <paramref name="parameters"/> taking the value it is given, or the value as the model
+    /// gives it when there are no parameters.
+    /// </summary>
+    private static Value ValueOf(
+        SemanticModel model, SyntaxNode node, Expansion? on,
+        IReadOnlyDictionary<Symbol, (Value Value, (long Low, long High)? Range)>? parameters) =>
+        parameters is null
+            ? model.ValueOf(node, on)
+            : model.ValueOf(node, parameters.ToDictionary(pair => pair.Key, pair => pair.Value.Value), on);
 
     /// <summary>
     /// Returns the range of a binary operation on operands with the ranges

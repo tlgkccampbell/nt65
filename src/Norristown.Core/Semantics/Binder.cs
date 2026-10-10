@@ -20,8 +20,9 @@ namespace Norristown.Semantics;
 /// A file is a module, and a name that another module declares is reached only by its path,
 /// such as <c>hw::init</c>, or by bringing it in with <c>.use</c>. A name is looked for in the
 /// scopes around it, then among the names the file's <c>.use</c> items bring in, then as the
-/// start of a module's path, and last among what a <c>.use module::*</c> brings in. This order ensures that a module adding an export can never
-/// change what a name in another module already means.
+/// start of a module's path, and last among what a <c>.use module::*</c> brings in. This order
+/// ensures that a module adding an export can never change what a name in another module
+/// already means.
 /// </para>
 /// <para>
 /// An <c>.if</c> opens no scope. Its conditions were evaluated before binding runs, so a branch
@@ -318,7 +319,6 @@ internal sealed partial class Binder
     /// </summary>
     public IReadOnlyList<Symbol> CalledMacros() => called;
 
-
     /// <summary>
     /// Declares the instances of each family in the file, one declaration per member of the enum
     /// it walks, named after the member, in the scope around the repetition. This runs once every
@@ -352,9 +352,7 @@ internal sealed partial class Binder
     public void Export()
     {
         if (moduleName is null)
-        {
             Report(new TextSpan(0, 0), Catalogue.ModuleMissing);
-        }
         foreach (var (symbol, at) in exportedDeclarations)
             Export(symbol, at, linkerName: null, size: null);
         foreach (var (item, around) in exportItems)
@@ -395,7 +393,7 @@ internal sealed partial class Binder
         static IEnumerable<Symbol> WithMembers(Symbol symbol)
         {
             yield return symbol;
-            if (symbol.Kind is not (SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
+            if (!ExportsMembers(symbol))
                 yield break;
             foreach (var member in symbol.Body?.Symbols ?? [])
             {
@@ -427,7 +425,7 @@ internal sealed partial class Binder
             : $"{moduleName.Replace("::", "__", StringComparison.Ordinal)}__{symbol.FlatName}";
         if (size is not null)
             symbol.ExportSize = size;
-        if (symbol.Kind is not (SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union))
+        if (!ExportsMembers(symbol))
             return;
         foreach (var member in symbol.Body?.Symbols ?? [])
         {
@@ -435,6 +433,13 @@ internal sealed partial class Binder
                 Export(member, at, linkerName: null, size: null);
         }
     }
+
+    /// <summary>
+    /// Returns a value indicating whether exporting <paramref name="symbol"/> exports what its
+    /// body declares, which is so for a named scope, mixed data and a type.
+    /// </summary>
+    private static bool ExportsMembers(Symbol symbol) =>
+        symbol.Kind is SymbolKind.Scope or SymbolKind.Data or SymbolKind.Enum or SymbolKind.Struct or SymbolKind.Union;
 
     /// <summary>Returns the first token of a statement that could be a declared name.</summary>
     private static SyntaxToken? NameToken(StatementSyntax statement)
@@ -474,7 +479,6 @@ internal sealed partial class Binder
         ScopeKind.Data => "a `.data` block",
         _ => "a type",
     };
-
 
     /// <summary>
     /// Returns the repetition around <paramref name="opener"/> when the declaration is named
@@ -801,7 +805,18 @@ internal sealed partial class Binder
             CheckWidthsExist(routine);
             symbol.Signature = ReadSignature(routine);
         }
-        var body = new Scope(kind, symbol?.Name ?? name.Text, scope, symbol);
+        return OpenBody(kind, name.Text, symbol);
+    }
+
+    /// <summary>
+    /// Opens the scope that a declaration's body is read in, named <paramref name="name"/> and
+    /// owned by <paramref name="symbol"/>, which is null when the declaration declared nothing.
+    /// The scope keeps the declared name even then, so that what the body declares is still
+    /// named after it in the output.
+    /// </summary>
+    private Scope OpenBody(ScopeKind kind, string? name, Symbol? symbol)
+    {
+        var body = new Scope(kind, symbol?.Name ?? name, scope, symbol);
         if (symbol is not null)
             symbol.Body = body;
         return body;
@@ -858,13 +873,9 @@ internal sealed partial class Binder
         if (opener is not DataDeclarationSyntax { Name: { IsMissing: false } name })
             return new Scope(ScopeKind.Data, null, scope, null);
         var symbol = Declare(name, SymbolKind.Data);
-        var body = new Scope(ScopeKind.Data, symbol?.Name ?? name.Text, scope, symbol);
         if (symbol is not null)
-        {
-            symbol.Body = body;
             symbol.Definition = block;
-        }
-        return body;
+        return OpenBody(ScopeKind.Data, name.Text, symbol);
     }
 
     /// <summary>
@@ -876,11 +887,7 @@ internal sealed partial class Binder
     {
         if (NameToken(opener) is not { } name)
             return scope;
-        var symbol = Declare(name, kind);
-        var body = new Scope(ScopeKind.Type, symbol?.Name ?? name.Text, scope, symbol);
-        if (symbol is not null)
-            symbol.Body = body;
-        return body;
+        return OpenBody(ScopeKind.Type, name.Text, Declare(name, kind));
     }
 
     /// <summary>
@@ -925,10 +932,7 @@ internal sealed partial class Binder
 
         // The declarations in a body are named after the macro, so a macro without a name in
         // the source opens a nameless scope, as a routine with no name does.
-        var body = new Scope(
-            ScopeKind.Macro, symbol?.Name ?? (macroName.IsMissing ? null : macroName.Text), scope, symbol);
-        if (symbol is not null)
-            symbol.Body = body;
+        var body = OpenBody(ScopeKind.Macro, macroName.IsMissing ? null : macroName.Text, symbol);
         if (symbol is not null && declaration.Signature is { } signature)
         {
             CheckWidthsExist(signature);
@@ -1037,7 +1041,7 @@ internal sealed partial class Binder
                 Report(at, Catalogue.ParameterAfterList.Message(parameter.Name, list.Name));
             }
             if (parameter.Kind == ParameterKind.List)
-                list = list is null ? parameter : list;
+                list ??= parameter;
         }
     }
 
@@ -1118,13 +1122,9 @@ internal sealed partial class Binder
         if (NameToken(opener) is not { } name)
             return;
         if (kind == SymbolKind.List)
-        {
             Declare(name, kind, value: null, items: [.. bodies.SelectMany(line => line.ChildNodes)]);
-            foreach (var line in bodies)
-                CollectUses(line);
-            return;
-        }
-        Declare(name, kind, value: null, entries: [.. bodies.OfType<CharmapEntrySyntax>()]);
+        else
+            Declare(name, kind, value: null, entries: [.. bodies.OfType<CharmapEntrySyntax>()]);
         foreach (var line in bodies)
             CollectUses(line);
     }

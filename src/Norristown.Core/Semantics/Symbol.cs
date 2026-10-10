@@ -360,7 +360,6 @@ public sealed class Symbol
         SymbolKind.MacroParameter => "macro parameter",
         SymbolKind.Frame => "stack frame",
         SymbolKind.SignatureSet => "signature set",
-
         _ => "function",
     };
 
