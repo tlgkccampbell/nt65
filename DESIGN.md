@@ -1497,7 +1497,8 @@ known and differs, error; if it is unknown, this sets it. An item with `?` (`a?`
 pins them at. Placed directly after a label, a `.state` is that label's declaration.
 
 Where such a label can also be entered from outside its routine — it is exported, a path
-from another routine names it, or a call from anywhere names it — the declaration is everything
+from another routine names it, a call from anywhere names it, or it is an item of a table that
+anything but its routine's own jumps dispatches through (§7.4) — the declaration is everything
 the label assumes: a part it does
 not give is unknown there, whatever the routine's own paths leave, except a part the routine's
 signature says `*`, which stays unchanged there as it does at a label nothing reaches. The two
@@ -1953,8 +1954,11 @@ instruction that only reads its bytes, as `lda table,x` is. Then only the
 jumps those annotations are under reach its labels, and the flags each jump leaves flow in as
 they do along a branch, so `sec` before an RTS dispatch leaves C known to be 1 in every entry. A
 `.next` under a call is not such a jump, since the call comes back with other flags. The register
-and processor-state analyses enter such a label only along the flow graph's edges, as they do
-any label that data outside every routine, or in the label's own routine, names.
+and processor-state analyses use the same rule: a label in such a table is entered only along the
+flow graph's edges, and a label in any other table a `.next` spreads, such as one another routine's
+`.next` or a call's names, is entered from outside its routine. On the 65816, a label that
+another routine's `.next` or a call's reaches this way needs a `.state`, as a jump into the
+routine does.
 
 An interrupt handler, and a `plp` that restores a status byte saved elsewhere, so the
 analysis stack holds no saved P for it:
