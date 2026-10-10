@@ -110,6 +110,12 @@ public sealed class DataMap
         // The notes about each page's layout, by the page's base.
         private readonly Dictionary<long, List<DataNote>> notes = [];
 
+        /// <summary>
+        /// Gets a value indicating whether the program is built for the 65816, whose D register
+        /// moves the direct page. A file's <c>.cpu</c> decides that, as it does for the layout.
+        /// </summary>
+        private bool HasDirectPage => analysis.Files.Any(file => file.Layout.Cpu == Cpu.Wdc65816);
+
         /// <summary>Returns the map.</summary>
         public DataMap Build()
         {
@@ -359,12 +365,6 @@ public sealed class DataMap
 
         /// <summary>Returns the page a zero-page segment's symbols are reached through.</summary>
         private long BaseOf(Segment segment) => HasDirectPage ? segment.DirectPage ?? 0 : 0;
-
-        /// <summary>
-        /// Gets a value indicating whether the program is built for the 65816, whose D register
-        /// moves the direct page. A file's <c>.cpu</c> decides that, as it does for the layout.
-        /// </summary>
-        private bool HasDirectPage => analysis.Files.Any(file => file.Layout.Cpu == Cpu.Wdc65816);
 
         /// <summary>
         /// Collects every instruction that reaches a location, with the page it reaches it through,

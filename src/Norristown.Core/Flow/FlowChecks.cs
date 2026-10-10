@@ -32,6 +32,10 @@ internal sealed class FlowChecks
     // the claim is left for the translation unit to check.
     private readonly bool placing;
 
+    /// <summary>
+    /// Initializes the checks for the file that <paramref name="layout"/> laid out, as
+    /// <paramref name="model"/> bound it, whose blocks <paramref name="flow"/> is building.
+    /// </summary>
     public FlowChecks(SemanticModel model, CodeLayout layout, ControlFlow flow)
     {
         this.model = model;
