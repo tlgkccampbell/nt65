@@ -1,0 +1,8 @@
+{
+  "cpu": "65816",
+  "files": ["*.nt65"],
+  "links": { "rom": { "config": "link.cfg" } },
+  "segments": {
+    "FARDATA": { "size": "far" }
+  }
+}

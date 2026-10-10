@@ -89,34 +89,47 @@ public static class DataLengths
     /// <summary>
     /// Returns why an operand whose value only the linker knows does not fit a slot of
     /// <paramref name="bytes"/> bytes, or null when it fits. ca65 refuses the fragment with a
-    /// range error, so nt65 reports it first, with the fix. An address, or an address plus or
-    /// minus a constant, is reported as an address wider than the slot. Any other operand in a
-    /// one-byte slot that names an absolute or far address is reported unless
-    /// <see cref="LinkRange"/> shows its value always fits a byte, which the output then keeps
-    /// the low byte of.
+    /// range error, or ld65 refuses the value, so nt65 reports it first, with the fix. An
+    /// address, or an address plus or minus a constant, that is wider than the slot is reported
+    /// as such. Any other operand in a one-byte or two-byte slot that names an address wider than
+    /// the slot, or placed past its reach, is reported unless <see cref="LinkRange"/> shows its
+    /// value always fits the slot. The output then keeps the low part of the value.
     /// </summary>
+    /// <param name="operand">The value of the slot.</param>
+    /// <param name="bytes">The width of the slot.</param>
+    /// <param name="slot">The words that say how wide the slot is, as the message shows them.</param>
+    /// <param name="model">The model the operand is read in.</param>
+    /// <param name="on">The expansion the operand is in.</param>
+    /// <param name="inBank">
+    /// A value indicating whether the slot holds the address within its bank, as an <c>.addr</c>
+    /// does, so that an address placed past the slot's reach is not refused.
+    /// </param>
     public static DiagnosticMessage? TooWide(
-        SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on)
+        SyntaxNode operand, int bytes, string slot, SemanticModel model, Expansion? on, bool inBank = false)
     {
         if (model.ValueOf(operand, on).AsNumber() is not null)
             return null;
 
-        if (AddressIn(operand, model, on) is { } address && model.AddressSizeOf(address, null, on) is { } size)
+        if (AddressIn(operand, model, on) is { } address && model.AddressSizeOf(address, null, on) is { } size
+            && (int)size > bytes)
         {
-            if ((int)size <= bytes)
-                return null;
             var text = address.GetText().Trim();
             var fix = bytes == 1 ? $"use `<{text}` for its low byte" : $"use `.loword({text})` for its low 16 bits";
             return Catalogue.AddressDoesNotFit.Message(
                 text, size == AddressSize.Far ? "a far" : "an absolute", slot, fix);
         }
 
-        // ca65 refuses an absolute or far address in a byte whatever the value comes to. The
-        // output keeps the low byte of a value that always fits one, and anything else is
-        // refused here.
-        if (bytes != 1 || !LinkRange.NamesWideAddress(model, operand, on) || LinkRange.FitsByte(LinkRange.Of(model, operand, on)))
+        // ca65 refuses an address wider than the slot whatever the value comes to, and ld65
+        // refuses a value that does not fit it. The output keeps the low part of a value that
+        // always fits the slot, and anything else is refused here.
+        if (bytes is not (1 or 2) || !LinkRange.NamesWideAddress(model, operand, on, bytes, placed: !inBank)
+            || LinkRange.Fits(LinkRange.Of(model, operand, on), bytes))
+        {
             return null;
-        return Catalogue.LinkedValueMayNotFit.Message(operand.GetText().Trim(), slot);
+        }
+        var value = operand.GetText().Trim();
+        return Catalogue.LinkedValueMayNotFit.Message(value, slot,
+            bytes == 1 ? $"use `<({value})` for its low byte" : $"use `.loword({value})` for its low 16 bits");
     }
 
     /// <summary>Reports what the assembler would refuse about a directive's values.</summary>
@@ -180,7 +193,7 @@ public static class DataLengths
             case DirectiveKind.BeWord:
             case DirectiveKind.Addr:
                 Values(operands, model, diagnostics, kind, on);
-                NoFarAddresses(name, operands, model, diagnostics, on);
+                Words(name, kind, operands, model, diagnostics, on);
                 break;
             case DirectiveKind.Long:
             case DirectiveKind.BeLong:
@@ -472,8 +485,14 @@ public static class DataLengths
         {
             CheckRange(given, model, diagnostics, range, on, $"`{name}`, a `{SyntaxFacts.TextOf(element)}`");
         }
-        if (bytes is null && element == DirectiveKind.Byte
-            && TooWide(given, 1, $"`{name}` holds 8 bits", model, on) is { } message)
+        var width = element switch
+        {
+            DirectiveKind.Byte => 1,
+            DirectiveKind.Word or DirectiveKind.BeWord or DirectiveKind.Addr => 2,
+            _ => 0,
+        };
+        if (bytes is null && width > 0
+            && TooWide(given, width, $"`{name}` holds {8 * width} bits", model, on, inBank: element == DirectiveKind.Addr) is { } message)
         {
             Report(given, model, diagnostics, on, message);
         }
@@ -496,15 +515,16 @@ public static class DataLengths
     }
 
     /// <summary>
-    /// Reports a far address in a 16-bit slot. ca65 keeps the low 16 bits of a far address in an
+    /// Reports a value of a 16-bit slot that may not fit it. A far address, or a far address plus
+    /// or minus a constant, is reported as such. ca65 keeps the low 16 bits of a far address in an
     /// <c>.addr</c> and refuses it in a <c>.word</c>, so in either case the source does not say
-    /// what is meant. Only an address, or an address plus or minus a constant, is checked.
-    /// Anything else, such as <c>.loword(far)</c> or the difference of two addresses, already
-    /// states explicitly which bits it keeps.
+    /// what is meant. Any other value that names an address is checked as
+    /// <see cref="TooWide"/> checks it. An <c>.addr</c> holds the address within its bank, so an
+    /// absolute address placed past <c>$ffff</c> is not reported there.
     /// </summary>
-    private static void NoFarAddresses(
-        string directive, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model, List<Diagnostic>? diagnostics,
-        Expansion? on)
+    private static void Words(
+        string directive, DirectiveKind kind, SeparatedSyntaxList<SyntaxNode> operands, SemanticModel model,
+        List<Diagnostic>? diagnostics, Expansion? on)
     {
         foreach (var operand in operands)
         {
@@ -513,6 +533,10 @@ public static class DataLengths
                 var text = address.GetText().Trim();
                 Report(operand, model, diagnostics, on,
                     Catalogue.FarAddressInWord.Message(text, directive, text));
+            }
+            else if (TooWide(operand, 2, $"`{directive}` holds 16 bits", model, on, inBank: kind == DirectiveKind.Addr) is { } message)
+            {
+                Report(operand, model, diagnostics, on, message);
             }
         }
     }

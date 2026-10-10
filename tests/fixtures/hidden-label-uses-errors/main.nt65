@@ -1,0 +1,59 @@
+; A `.label` inside an instruction stands on code, as the label of a written instruction does, so
+; naming it anywhere but as a branch, jump or call target needs the same annotations.
+.module main
+
+.cpu 6502
+
+.export skips, pokes, patched, pushes, named
+
+.segment CODE
+
+; `lda $EA` runs `nop` from its second byte.
+.proc skips {
+@top:
+    lda $EA
+    .label pass = @top + 1
+    lsr a
+    bcc pass
+    rts
+}
+
+; A table that holds the address hands it out, so something may jump there unseen.
+.data table: .addr skips::pass      ;! error[code-label-as-data]: taking the address of `pass` lets code jump to it unseen: name it in a `.next` in `skips`
+
+; A store into the bytes changes what the path runs as.
+.proc pokes {
+    lda #$60
+    sta skips::pass ;! error[self-modifying-unchecked]: `sta skips::pass` modifies the instruction at `pass`: add `.patch pass` after it to mark the self-modifying code
+    rts
+}
+
+; A `.patch` acknowledges the store.
+.proc patched {
+    lda #$60
+    sta skips::pass
+    .patch skips::pass
+    rts
+}
+
+; Pushing the address and returning jumps there, and each immediate hands the address out.
+.proc pushes {
+    lda #>(skips::pass - 1) ;! error[code-label-as-data]: taking the address of `pass` lets code jump to it unseen: name it in a `.next` in `skips`
+    pha
+    lda #<(skips::pass - 1) ;! error[code-label-as-data]: taking the address of `pass` lets code jump to it unseen: name it in a `.next` in `skips`
+    pha
+    rts ;! error[pushed-return-unchecked]: `rts` returns to an address pushed in this block, so it is really a jump: add a `.next` naming where it goes ;! error[return-past-pushes]: `rts` returns through 2 bytes this routine pushed rather than through its return address: pull them first, or add a `.next` naming where it goes
+}
+
+; A `.next` in the label's own routine names where the jump goes, so the table needs nothing more.
+.proc named {
+    jmp (vector)
+    .next pass
+@top:
+    lda $EA
+    .label pass = @top + 1
+    rts
+}
+
+.data vector: .addr named::pass
+

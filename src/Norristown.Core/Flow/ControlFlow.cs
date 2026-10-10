@@ -632,11 +632,29 @@ public sealed class ControlFlow
 
     /// <summary>
     /// Returns why a statement nt65 recognises has no count, for the editor's code lens. Without
-    /// it the lens would show the routine without a count and give no reason. It returns null for
-    /// a line nt65 could not lay out, which has already been reported where it appears.
+    /// it the lens would show the routine without a count and give no reason. The step of a
+    /// <c>.label</c> inside an instruction gives the reason of the first instruction its bytes
+    /// decode as that has no count. It returns null for a line nt65 could not lay out, which has
+    /// already been reported where it appears.
     /// </summary>
-    private static string? Uncounted(Step step) =>
-        (step.Statement as InstructionStatementSyntax)?.MnemonicKind switch
+    private string? Uncounted(Step step)
+    {
+        if (layout.HiddenPathAt(step) is { } hidden)
+        {
+            return hidden.Instructions
+                .Where(instruction => instruction.Cycles is null)
+                .Select(instruction => Uncounted(instruction.Mnemonic))
+                .FirstOrDefault(reason => reason is not null);
+        }
+        return step.Statement is InstructionStatementSyntax instruction ? Uncounted(instruction.MnemonicKind) : null;
+    }
+
+    /// <summary>
+    /// Returns why an instruction with <paramref name="mnemonic"/> has no count, or null where
+    /// nt65 gives no reason for it.
+    /// </summary>
+    private static string? Uncounted(MnemonicKind mnemonic) =>
+        mnemonic switch
         {
             MnemonicKind.Mvn or MnemonicKind.Mvp => "a block move takes 7 cycles per byte, and moves one byte more than the 16-bit accumulator holds, which nt65 does not know here",
             MnemonicKind.Jam => "`jam` stops the processor, and nothing after it runs until a reset",

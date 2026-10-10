@@ -156,7 +156,7 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
                     continue;
                 }
                 var (width, bigEndian) = ElementFormat(element);
-                var texts = items.Select(item => output.ValueText(item, width, bigEndian)).ToList();
+                var texts = items.Select(item => output.ValueText(item, width, bigEndian, element.Directive.DirectiveKind == DirectiveKind.Addr)).ToList();
                 Field(line,
                     $"{ForCa65(element.Directive.DirectiveKind, DataSyntax.NameOf(element))} {string.Join(", ", texts)}",
                     named, size, ByteValue(element.Directive.DirectiveKind, texts, size));
@@ -220,7 +220,7 @@ internal sealed class RecordWriter(SemanticModel model, Expansion? expansion, IR
             yield break;
         }
         var (width, bigEndian) = ElementFormat(element!);
-        var value = given is null ? Constant(0) : output.ValueText(given, width, bigEndian);
+        var value = given is null ? Constant(0) : output.ValueText(given, width, bigEndian, directive == DirectiveKind.Addr);
         yield return ($"{ForCa65(directive, SyntaxFacts.TextOf(directive))} {(given is null && bigEndian && width > 2 ? string.Join(", ", Enumerable.Repeat(Hex(0, 2), width)) : value)}",
             size, ByteValue(directive, [value], size));
     }

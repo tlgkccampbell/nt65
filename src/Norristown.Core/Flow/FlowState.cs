@@ -40,6 +40,13 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
     /// </summary>
     public Registers Pointing { get; init; }
 
+    /// <summary>
+    /// Gets the stack as it was where the registers in <see cref="Pointing"/> copied the stack
+    /// pointer, or null where that cannot be relied on. <see cref="StackPointerCopies"/> says when
+    /// a <c>txs</c> or <c>tcs</c> moves the stack back to it.
+    /// </summary>
+    public AnalysisStack? Pointed { get; init; }
+
     /// <summary>Gets a value indicating whether this is <see cref="Dead"/>, which no path goes on from.</summary>
     public bool IsDead { get; private init; }
 
@@ -80,6 +87,7 @@ public sealed record FlowState(ProcessorState Processor, AnalysisStack? Stack)
                 : known.Stack is null || arriving.Stack is null ? known.WhyStack ?? arriving.WhyStack
                 : Cause.StacksDiffer(known.Stack.Depth != arriving.Stack.Depth),
             Pointing = known.Pointing & arriving.Pointing,
+            Pointed = Equals(known.Pointed, arriving.Pointed) ? known.Pointed : null,
         };
     }
 

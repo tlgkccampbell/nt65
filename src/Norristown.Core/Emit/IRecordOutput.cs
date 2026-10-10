@@ -31,6 +31,9 @@ internal interface IRecordOutput
 
     /// <summary>
     /// Returns one value of a slot <paramref name="width"/> bytes wide, as the output writes it.
+    /// <paramref name="bigEndian"/> says whether its bytes are written high first, and
+    /// <paramref name="inBank"/> says whether the slot is an <c>.addr</c>, which holds the address
+    /// within its bank.
     /// </summary>
-    string ValueText(SyntaxNode value, int width, bool bigEndian);
+    string ValueText(SyntaxNode value, int width, bool bigEndian, bool inBank);
 }

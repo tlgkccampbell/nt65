@@ -1,0 +1,33 @@
+; A value worked out from a label in bank $7e is bounded by that bank, so it is refused in a
+; one-byte slot where it may not fit, rather than wrapped. A value in a two-byte slot that names
+; a far address, or an address placed past $ffff, is refused where it may not fit 16 bits,
+; since ca65 or ld65 would refuse it.
+.module main
+
+.export start, offsets
+
+.segment FARDATA
+.data far_table: .byte 1, 2, 3
+
+.segment DATA7E
+.data buffer: .byte[16]
+
+.segment RODATA
+.data offsets {
+    .byte buffer / 256                      ;! error[linked-value-may-not-fit]: `buffer / 256` is worked out by the linker from an address, and `.byte` holds 8 bits, which nt65 cannot show it fits: use `<(buffer / 256)` for its low byte
+    .word .loadof(FARDATA)                  ;! error[linked-value-may-not-fit]: `.loadof(FARDATA)` is worked out by the linker from an address, and `.word` holds 16 bits, which nt65 cannot show it fits: use `.loword(.loadof(FARDATA))` for its low 16 bits
+    .word buffer                            ;! error[linked-value-may-not-fit]: `buffer` is worked out by the linker from an address, and `.word` holds 16 bits, which nt65 cannot show it fits: use `.loword(buffer)` for its low 16 bits
+    .word far_table / 2                     ;! error[linked-value-may-not-fit]: `far_table / 2` is worked out by the linker from an address, and `.word` holds 16 bits, which nt65 cannot show it fits: use `.loword(far_table / 2)` for its low 16 bits
+    .beword buffer + 2                      ;! error[linked-value-may-not-fit]: `buffer + 2` is worked out by the linker from an address, and `.beword` holds 16 bits, which nt65 cannot show it fits: use `.loword(buffer + 2)` for its low 16 bits
+}
+
+.segment CODE
+.proc start: a16, i16, native {
+    ldx #buffer                             ;! error[linked-value-may-not-fit]: `buffer` is worked out by the linker from an address, and this immediate is two bytes, which nt65 cannot show it fits: use `.loword(buffer)` for its low 16 bits
+    lda #.loadof(FARDATA)                   ;! error[linked-value-may-not-fit]: `.loadof(FARDATA)` is worked out by the linker from an address, and this immediate is two bytes, which nt65 cannot show it fits: use `.loword(.loadof(FARDATA))` for its low 16 bits
+    ldy #far_table >> 1                     ;! error[linked-value-may-not-fit]: `far_table >> 1` is worked out by the linker from an address, and this immediate is two bytes, which nt65 cannot show it fits: use `.loword(far_table >> 1)` for its low 16 bits
+    sep #$20
+    lda #buffer >> 8                        ;! error[linked-value-may-not-fit]: `buffer >> 8` is worked out by the linker from an address, and an immediate is one byte, which nt65 cannot show it fits: use `<(buffer >> 8)` for its low byte
+    rep #$20
+    rts
+}

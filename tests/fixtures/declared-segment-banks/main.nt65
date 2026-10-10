@@ -1,0 +1,22 @@
+; A label in a segment whose declared `bank` is $7e is in bank $7e, even where no linked config
+; places the segment. A value worked out from it is bounded by that bank, as it would be by a
+; memory area a linked config runs the segment in.
+.module main
+
+.export start, offsets
+
+.segment WRAM
+.data buffer: .byte[16]
+
+.segment RODATA
+.data offsets {
+    .byte (buffer - $7e0000) >> 8           ; $00 to $ff, wherever buffer lands in the bank
+    .word buffer - $7e0000                  ; $0000 to $ffff
+    .addr buffer                            ; an address within its bank
+}
+
+.segment CODE
+.proc start: a16, i16, native {
+    ldx #buffer - $7e0000
+    rts
+}

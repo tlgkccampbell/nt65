@@ -2109,13 +2109,14 @@ public static class Catalogue
         Area.Data,
         "linked-value-may-not-fit",
         Severity.Error,
-        "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: use `<({0})` "
-            + "for its low byte",
-        "A value that names an absolute or far address is written for ld65 to work out, and ca65 refuses it in a "
-            + "one-byte slot whatever it comes to, unless a byte operator such as `<` takes one byte of the address. "
-            + "Where nt65 can show the value always fits a byte, as it can for `main / 256` or "
-            + "`'0' + (main / 10) .mod 10`, the output keeps only the low byte, which loses nothing. Where it cannot, "
-            + "`<` says that the low byte is what is meant.");
+        "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: {2}",
+        "A value that names an address is written for ld65 to work out. ca65 refuses it in a slot narrower than the "
+            + "address whatever it comes to, as an absolute address is in a one-byte slot or a far one in a two-byte "
+            + "slot, unless an operator such as `<` or `.loword` takes a part of the address that fits. ld65 refuses "
+            + "a value that does not fit its slot, as an address the linked configurations place past $FFFF may not "
+            + "in a two-byte slot. Where nt65 can show the value always fits, as it can for `main / 256` or "
+            + "`'0' + (main / 10) .mod 10` in a byte, the output keeps only the low part, which loses nothing. Where "
+            + "it cannot, `<` or `.loword` says which part is meant.");
 
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
         Area.Data,
@@ -2634,14 +2635,15 @@ public static class Catalogue
         "The `.assert` condition is false. nt65 checks an assertion as soon as it can evaluate the condition; one "
             + "that depends on final addresses is passed on for the linker to check.");
 
-    internal static DiagnosticDescriptor AssertMessageNotText { get; } = Entry(
+    internal static DiagnosticDescriptor MessageNotText { get; } = Entry(
         Area.Instructions,
-        "assert-message-not-text",
+        "message-not-text",
         Severity.Error,
-        "an `.assert` message is text: a string in quotes, a text constant, or a call that returns text",
-        "The message is what nt65 reports when the condition does not hold, and what ld65 reports when the "
-            + "linker checks it, so it has to be text nt65 can work out before writing the output. A long "
-            + "message can be declared once as a text constant, `.const MSG = \"...\"`, and named on the line.");
+        "{0} message is text: a string in quotes, a text constant, or a call that returns text",
+        "The message of an `.assert`, an `.error` or a `.warning` is what nt65 reports, and for an `.assert` "
+            + "what ld65 reports when the linker checks it, so it has to be text nt65 can work out before "
+            + "writing the output. The three directives take a message by the same rule. A long message can "
+            + "be declared once as a text constant, `.const MSG = \"...\"`, and named on the line.");
 
     internal static DiagnosticDescriptor ConfigRefused { get; } = Entry(
         Area.Instructions,
@@ -3084,11 +3086,12 @@ public static class Catalogue
         Area.ControlFlow,
         "code-label-as-data",
         Severity.Error,
-        "taking the address of `{0}` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `{1}`",
+        "taking the address of `{0}` lets code jump to it unseen: {1}",
         "Taking the address of an instruction, in a table, a `pea` or an immediate, means something may later jump "
             + "to it indirectly, where the analysis cannot follow. Declare the label an entry point with a "
             + "`.state` after it, or name it in a `.next` on the indirect jump in its own routine, so the analysis "
-            + "follows flow to it.");
+            + "follows flow to it. A `.label` inside an instruction can only be named in a `.next`, because the "
+            + "path from it starts inside the instruction's bytes, where no `.state` can stand.");
 
     internal static DiagnosticDescriptor SelfModifyingUnchecked { get; } = Entry(
         Area.ControlFlow,

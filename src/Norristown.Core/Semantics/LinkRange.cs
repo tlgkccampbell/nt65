@@ -4,16 +4,21 @@ using Norristown.Syntax;
 namespace Norristown.Semantics;
 
 /// <summary>
-/// Works out the range of values an expression that only the linker can finish may take. An
-/// address is somewhere in the space its address size reaches. A segment's linker symbol is
-/// inside the memory areas the linked configurations place the segment in. Each operator
-/// narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c> is always a digit wherever
-/// <c>main</c> lands. A call to a <c>.func</c> takes the range of its body, with each parameter
-/// taking the range of what it is given. ca65 refuses an expression that names an absolute or
-/// far address in a one-byte slot, whatever its value, unless a byte operator takes one byte of
-/// the address. The output therefore narrows such an expression whose range fits a byte, and
-/// the analysis refuses one whose range it cannot show fits.
+/// Works out the range of values an expression that only the linker can finish may take. A
+/// label, like a segment's linker symbol, is inside the memory areas the linked configurations
+/// place its segment in, or else in the banks the segment's declared <c>bank</c> names. Where
+/// nothing says, an address is somewhere in the space its address size reaches. Each operator narrows or widens that range, so <c>'0' + (main / 10) .mod 10</c>
+/// is always a digit wherever <c>main</c> lands. A call to a <c>.func</c> takes the range of its
+/// body, with each parameter taking the range of what it is given.
 /// </summary>
+/// <remarks>
+/// ca65 refuses an expression that names an address wider than its slot, whatever its value,
+/// unless an operator takes a part of the address that fits. That is an absolute or far address
+/// in a one-byte slot, or a far one in a two-byte slot. ld65 then refuses a value that does not
+/// fit its slot, as an address placed past the slot's reach may not. The output therefore
+/// narrows such an expression whose range fits the slot, and the analysis refuses one whose range
+/// it cannot show fits.
+/// </remarks>
 internal static class LinkRange
 {
     /// <summary>
@@ -24,33 +29,51 @@ internal static class LinkRange
         Range(model, expression, on, null, []);
 
     /// <summary>
-    /// Returns whether ca65 would refuse <paramref name="expression"/> in a one-byte slot because
-    /// of its address size. That is the case when nt65 does not know its value and it names an
-    /// absolute or far address outside every byte operator, directly or through the body of a
-    /// <c>.func</c> it calls. <paramref name="on"/> is the expansion the expression is in.
+    /// Returns whether ca65 or ld65 may refuse <paramref name="expression"/> in a slot of
+    /// <paramref name="bytes"/> bytes because of an address it names. That is the case when nt65
+    /// does not know its value and it names, directly or through the body of a <c>.func</c> it
+    /// calls, an address that is wider than the slot or placed past its reach. An address inside
+    /// an operator that takes a part of it that fits the slot does not count.
     /// </summary>
-    public static bool NamesWideAddress(SemanticModel model, SyntaxNode expression, Expansion? on) =>
-        model.ValueOf(expression, on).AsNumber() is null && NamesWide(model, expression, on, []);
+    /// <param name="model">The model the expression is read in.</param>
+    /// <param name="expression">The value of the slot.</param>
+    /// <param name="on">The expansion the expression is in.</param>
+    /// <param name="bytes">The width of the slot, which is one or two bytes.</param>
+    /// <param name="placed">
+    /// A value indicating whether an address placed past the slot's reach counts. It is false for
+    /// an <c>.addr</c>, which holds the address within its bank, as ca65 keeps it on the 65816.
+    /// </param>
+    public static bool NamesWideAddress(
+        SemanticModel model, SyntaxNode expression, Expansion? on, int bytes, bool placed = true) =>
+        model.ValueOf(expression, on).AsNumber() is null && NamesWide(model, expression, on, bytes, placed, []);
 
     /// <summary>
-    /// Returns whether the output writes <paramref name="expression"/>, the value of a one-byte
-    /// slot, inside <c>.lobyte()</c>. That is the case when ca65 would refuse it for its address
-    /// size, as <see cref="NamesWideAddress"/> decides, and its range always fits a byte, signed
-    /// or unsigned, so that keeping the low byte loses nothing.
+    /// Returns whether the output writes <paramref name="expression"/>, the value of a slot
+    /// <paramref name="bytes"/> bytes wide, inside <c>.lobyte()</c> or <c>.loword()</c>. That is
+    /// the case when it names an address that ca65 or ld65 may refuse, as
+    /// <see cref="NamesWideAddress"/> decides, and its range always fits the slot, signed or
+    /// unsigned, so that keeping the low part loses nothing.
     /// </summary>
-    public static bool NarrowsToByte(SemanticModel model, SyntaxNode expression, Expansion? on) =>
-        NamesWideAddress(model, expression, on) && FitsByte(Of(model, expression, on));
-
-    /// <summary>Returns whether a range, where there is one, lies within -128 to 255.</summary>
-    public static bool FitsByte((long Low, long High)? range) => range is { Low: >= -0x80, High: <= 0xff };
+    public static bool Narrows(SemanticModel model, SyntaxNode expression, Expansion? on, int bytes) =>
+        bytes is 1 or 2 && NamesWideAddress(model, expression, on, bytes) && Fits(Of(model, expression, on), bytes);
 
     /// <summary>
-    /// Returns whether part of an expression names an absolute or far address outside every byte
-    /// operator. A part whose value nt65 knows is written as that value, so it names nothing. A
-    /// call to a <c>.func</c> names what its arguments and its body name, and
+    /// Returns whether a range, where there is one, fits a slot of <paramref name="bytes"/>
+    /// bytes, signed or unsigned. One byte takes -128 to 255, and two bytes take -32768 to 65535.
+    /// </summary>
+    public static bool Fits((long Low, long High)? range, int bytes) =>
+        range is { } bound && bound.Low >= -(1L << ((8 * bytes) - 1)) && bound.High < 1L << (8 * bytes);
+
+    /// <summary>
+    /// Returns whether part of an expression names an address wider than a slot of
+    /// <paramref name="bytes"/> bytes, or one placed past its reach where
+    /// <paramref name="placed"/> says that counts, outside every operator that takes a part that
+    /// fits. A part whose value nt65 knows is written as that value, so it names nothing. A call
+    /// to a <c>.func</c> names what its arguments and its body name, and
     /// <paramref name="visiting"/> holds the functions already entered, so a recursive body ends.
     /// </summary>
-    private static bool NamesWide(SemanticModel model, SyntaxNode node, Expansion? on, HashSet<Symbol> visiting)
+    private static bool NamesWide(
+        SemanticModel model, SyntaxNode node, Expansion? on, int bytes, bool placed, HashSet<Symbol> visiting)
     {
         if (node is ExpressionSyntax && model.ValueOf(node, on).AsNumber() is not null)
             return false;
@@ -61,15 +84,17 @@ internal static class LinkRange
                 return false;
 
             case NameExpressionSyntax bound when model.BoundItemOf(bound, on) is { } item:
-                return NamesWide(model, item, on, visiting);
+                return NamesWide(model, item, on, bytes, placed, visiting);
 
             case NameExpressionSyntax name:
-                return model.SymbolOf(name, on) is { IsAddress: true }
-                    && model.AddressSizeOf(name, null, on) is AddressSize.Absolute or AddressSize.Far;
+                return model.SymbolOf(name, on) is { IsAddress: true } symbol
+                    && model.AddressSizeOf(name, null, on) is { } size
+                    && Wider(size, AddressRange(model, symbol, size), bytes, placed);
 
             // A segment function is a symbol ld65 defines, as wide as the segment's placement.
             case CallExpressionSyntax segmental when SegmentFunctions.Of(segmental, model) is { } about:
-                return SegmentFunctions.SizeOf(about.Function, about.Segment) is AddressSize.Absolute or AddressSize.Far;
+                return Wider(SegmentFunctions.SizeOf(about.Function, about.Segment),
+                    SegmentFunctions.RangeOf(about.Function, about.Segment), bytes, placed);
 
             // An argument counts only where the body uses its parameter outside every byte
             // operator, so `low(main)` for `.func low(n) = .lobyte(n)` names nothing wide.
@@ -79,13 +104,13 @@ internal static class LinkRange
                     return false;
                 try
                 {
-                    if (NamesWide(model, body, on, visiting))
+                    if (NamesWide(model, body, on, bytes, placed, visiting))
                         return true;
                     if (FunctionArguments.Match(function, call) is not { } arguments)
-                        return call.Arguments.ChildNodes.Any(part => NamesWide(model, part, on, visiting));
+                        return call.Arguments.ChildNodes.Any(part => NamesWide(model, part, on, bytes, placed, visiting));
                     for (var i = 0; i < arguments.Count; i++)
                     {
-                        if (NamesWide(model, arguments[i], on, visiting)
+                        if (NamesWide(model, arguments[i], on, bytes, placed, visiting)
                             && Exposes(model, body, function.ParameterSymbols[i], on, []))
                         {
                             return true;
@@ -100,18 +125,92 @@ internal static class LinkRange
 
             // The output writes `.loword`, `.hiword` and `.endof` around the names they are given,
             // and a `.select` or a `.switch` as the value it chooses. Every other built-in is
-            // written as its value or stands for no address.
+            // written as its value or stands for no address. A word of an address fits a slot of
+            // two bytes.
+            case CallExpressionSyntax { Callee: null, BuiltinKind: BuiltinKind.Loword or BuiltinKind.Hiword } when bytes >= 2:
+                return false;
             case CallExpressionSyntax { Callee: null, BuiltinKind: BuiltinKind.Loword or BuiltinKind.Hiword or BuiltinKind.Endof } builtin:
-                return builtin.Arguments.ChildNodes.Any(argument => NamesWide(model, argument, on, visiting));
+                return builtin.Arguments.ChildNodes.Any(argument => NamesWide(model, argument, on, bytes, placed, visiting));
             case CallExpressionSyntax { Callee: null } chooser:
-                return model.ChosenBy(chooser, on) is { } chosen && NamesWide(model, chosen, on, visiting);
+                return model.ChosenBy(chooser, on) is { } chosen && NamesWide(model, chosen, on, bytes, placed, visiting);
 
             case ParenthesizedExpressionSyntax or UnaryExpressionSyntax or BinaryExpressionSyntax or ArgumentListSyntax:
-                return node.ChildNodes.Any(child => NamesWide(model, child, on, visiting));
+                return node.ChildNodes.Any(child => NamesWide(model, child, on, bytes, placed, visiting));
 
             default:
                 return false;
         }
+    }
+
+    /// <summary>
+    /// Returns whether an address of address size <paramref name="size"/> and linked range
+    /// <paramref name="range"/> may be refused in a slot of <paramref name="bytes"/> bytes. ca65
+    /// refuses one wider than the slot. ld65 refuses one placed past the slot's reach, which
+    /// counts where <paramref name="placed"/> says so. An address nt65 cannot bound is anywhere
+    /// its address size reaches.
+    /// </summary>
+    private static bool Wider(AddressSize size, (long Low, long High)? range, int bytes, bool placed) =>
+        (int)size > bytes || (placed && !Fits(range ?? Reach(size), bytes));
+
+    /// <summary>Returns the addresses an address of address size <paramref name="size"/> reaches.</summary>
+    private static (long Low, long High)? Reach(AddressSize size) => size switch
+    {
+        AddressSize.ZeroPage => (0, 0xff),
+        AddressSize.Absolute => (0, 0xffff),
+        AddressSize.Far => (0, 0xffffff),
+        _ => null,
+    };
+
+    /// <summary>
+    /// Returns the range of values the address <paramref name="symbol"/>, of address size
+    /// <paramref name="size"/>, may take once linked, or null where nt65 cannot bound it. A label
+    /// is inside the areas <see cref="AreasOf"/> gives for its segment, as <c>.runof</c> of the
+    /// segment is. A label in a segment placed in bank <c>$7e</c> is therefore <c>$7e0000</c> or
+    /// more, whatever its address size. Where nothing bounds the segment, an address is anywhere
+    /// its address size reaches. So is a name given an address with <c>=</c>, which need not be in
+    /// the segment it is declared in.
+    /// </summary>
+    /// <remarks>
+    /// An absolute label is in the bank its area starts in, and a zero-page label in that page,
+    /// even where the area runs on past it. An area such as <c>$e000</c> with <c>$3f00</c> bytes
+    /// is common, and on the 6502 ld65 would refuse any absolute operand that named a label past
+    /// the bank.
+    /// </remarks>
+    private static (long Low, long High)? AddressRange(SemanticModel model, Symbol symbol, AddressSize size)
+    {
+        if (symbol is not { ValueExpression: null, Segment: { } name } || model.Segments.Find(name) is not { } segment
+            || AreasOf(segment) is not { Count: > 0 } areas)
+        {
+            return Reach(size);
+        }
+        long? reach = size switch
+        {
+            AddressSize.ZeroPage => 0xff,
+            AddressSize.Absolute => 0xffff,
+            _ => null,
+        };
+        return (areas.Min(area => area.First),
+            areas.Max(area => reach is { } last ? Math.Min(area.Last, area.First | last) : area.Last));
+    }
+
+    /// <summary>
+    /// Returns the address ranges <paramref name="segment"/> may run in, or an empty list where
+    /// nothing bounds it. These are the memory areas the linked configurations run it in, where
+    /// there is one for every configuration that places it. Otherwise they are the banks its
+    /// declared <c>bank</c> and <c>mirrors</c> name, one range for each bank, since the linker may
+    /// place it in any bank the same memory is seen in. A far segment starts in one of those banks
+    /// and may run on past it.
+    /// </summary>
+    internal static IReadOnlyList<(long First, long Last)> AreasOf(Segment segment)
+    {
+        if (SegmentFunctions.PlacedRange(segment.Runs, segment) is not null)
+            return [.. segment.Runs.Select(area => (area.First, area.Last))];
+        if (segment.Bank is not { } home)
+            return [];
+        return [.. segment.Mirrors.Prepend((First: home, Last: home))
+            .SelectMany(banks => Enumerable.Range((int)banks.First, (int)(banks.Last - banks.First + 1)))
+            .Distinct()
+            .Select(bank => ((long)bank << 16, segment.Size == AddressSize.Far ? 0xffffffL : ((long)bank << 16) | 0xffff))];
     }
 
     /// <summary>
@@ -186,15 +285,9 @@ internal static class LinkRange
             case NameExpressionSyntax name when model.SymbolOf(name, on) is { } symbol:
                 if (parameters is not null && parameters.TryGetValue(symbol, out var given))
                     return given.Range;
-                if (!symbol.IsAddress)
+                if (!symbol.IsAddress || model.AddressSizeOf(name, null, on) is not { } size)
                     return null;
-                return model.AddressSizeOf(name, null, on) switch
-                {
-                    AddressSize.ZeroPage => (0, 0xff),
-                    AddressSize.Absolute => (0, 0xffff),
-                    AddressSize.Far => (0, 0xffffff),
-                    _ => null,
-                };
+                return AddressRange(model, symbol, size);
 
             case UnaryExpressionSyntax unary:
                 var operand = Range(model, unary.Operand, on, parameters, visiting);

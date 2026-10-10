@@ -1,6 +1,7 @@
 ; A problem with a line a macro body emits is reported at the call in this file's own text, with
 ; the body line as a note. That holds for a body in another file and for one in this file alike,
-; and for the annotation checks, unreachable code and labels, and a `.func` body's evaluation.
+; and for the annotation checks, unreachable code and labels, a `.func` body's evaluation, and the
+; stack, `keeps` and flag checks at a return in the body.
 .module main
 
 .cpu 6502
@@ -10,6 +11,7 @@
 
 .export known, unknown, elsewhere, label, after_call, unlisted, divided, dead, known_here, not_code
 .export divided_here, dead_here, allowed, rejected, missed, taken, bytes_table, printed
+.export beneath, clobbers, no_result, wrong_carry
 
 .import print: proc(inline .strz)
 
@@ -42,6 +44,25 @@
     rts
     .allow "code-unreachable", "the call under test returns first"
     nop
+}
+
+.macro local_pull_return() {
+    pla
+    rts
+}
+
+.macro local_clobber_return() {
+    lda #0
+    rts
+}
+
+.macro local_return() {
+    rts
+}
+
+.macro local_clear_return() {
+    clc
+    rts
 }
 
 .segment BSS
@@ -131,4 +152,20 @@
 .proc printed {
     local_print!()          ;! error[inline-data-missing]: `print` expects one `.strz` directly after each call, and none follows this one
     rts
+}
+
+.proc beneath {
+    local_pull_return!()    ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address, having pulled more than the routine pushed: declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
+}
+
+.proc clobbers: keeps a {
+    local_clobber_return!() ;! error[keeps-broken]: `clobbers` promises `keeps a`, but A is not the same as on entry here: restore it before returning, or add `.state keeps a` at the point where the entry value is restored
+}
+
+.proc no_result: -> c {
+    local_return!()         ;! error[return-flag-not-set]: `no_result` declares `-> c`, but on this path nothing sets C before the return
+}
+
+.proc wrong_carry: -> c = 1 {
+    local_clear_return!()   ;! error[return-flag-mismatch]: `wrong_carry` declares it returns with `c = 1`, but C is 0 here
 }

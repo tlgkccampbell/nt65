@@ -898,11 +898,13 @@
       </PropertyComment>
       <Kind Name="Directive"/>
     </Field>
-    <Field Name="Message" Type="SyntaxToken">
+    <Field Name="Message" Type="ExpressionSyntax" Optional="true">
       <PropertyComment>
-        <summary>Gets the quoted message.</summary>
+        <summary>
+          Gets the message, which is text in quotes, a text constant or a call that returns text,
+          or null.
+        </summary>
       </PropertyComment>
-      <Kind Name="StringLiteral"/>
     </Field>
   </Node>
 

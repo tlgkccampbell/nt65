@@ -80,6 +80,14 @@ internal sealed class SourceStack : IEquatable<SourceStack>
         return new SourceStack(builder.MoveToImmutable(), offset);
     }
 
+    /// <summary>
+    /// Returns whether this stack is <paramref name="earlier"/> with nothing taken off it, and
+    /// perhaps more pushed on top, as <see cref="SavedStack.Extends"/> decides.
+    /// </summary>
+    public bool Extends(SourceStack earlier) =>
+        offset == earlier.offset && pushes.Length >= earlier.pushes.Length
+        && pushes.AsSpan(0, earlier.pushes.Length).SequenceEqual(earlier.pushes.AsSpan());
+
     /// <summary>Returns this stack with <paramref name="push"/> on top of it.</summary>
     public SourceStack Push(SourcePush push) => new(pushes.Add(push), offset);
 

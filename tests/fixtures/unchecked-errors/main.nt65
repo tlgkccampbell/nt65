@@ -21,6 +21,19 @@
     rts
 }
 
+; A label on a line of `.addr` is a table of the addresses on that line and no others, so an
+; address on the line after it is one that no `.next` names.
+.proc two_lines: a8, i8 {
+    jmp (@table,x)
+    .next @table
+@table: .addr @first
+    .addr @second                   ;! error[code-label-as-data]: taking the address of `@second` lets code jump to it unseen: add a `.state` after the label, or name it in a `.next` in `two_lines`
+@first:
+    rts
+@second:
+    rts
+}
+
 ; A call through a pointer whose `.next` names nothing leaves the widths and the mode unknown
 ; after it, and each says why.
 .proc unnamed_call: a8, i8, native {

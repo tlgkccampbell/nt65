@@ -1,5 +1,6 @@
 ; An `.assert` message may be a text constant or a call that returns text, and an `.assert` line
-; that ends with a comma continues onto the next, so a long message has a line of its own.
+; that ends with a comma continues onto the next, so a long message has a line of its own. An
+; `.error` or a `.warning` message is text by the same rule.
 .module main
 
 .cpu 6502
@@ -23,6 +24,13 @@
 .assert .sizeof(table) == 3,
     ; a comment may stand between the comma and the message
     PAST_ZERO_PAGE
+
+; There are three commands, so the build does not take the branch that refuses the program.
+.const COMMANDS = 3
+.if COMMANDS > 3 {
+    .error outgrown("the command list")
+}
+.warning PAST_ZERO_PAGE ;! warning[config-warned]: main must be past the zero page, where the direct-page variables live
 
 .segment CODE
 .proc main {

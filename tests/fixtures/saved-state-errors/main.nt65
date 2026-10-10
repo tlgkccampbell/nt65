@@ -202,3 +202,62 @@
     plb
     rts
 }
+
+; A `txs` from the X a `tsx` copied, with only pushes between, moves the stack back to where it
+; was, so the `plp` finds the status register the `php` saved and restores the 8-bit A. On the
+; 65816 the copy holds the whole stack pointer only where X is 16 bits wide.
+.proc moved_back: a8, i16, native {
+    php
+    rep #$20
+    tsx
+    pha
+    pha
+    txs
+    plp
+    lda #1
+    rts
+}
+
+.proc moved_back_narrow: a8, i8, native {
+    php
+    rep #$20
+    tsx
+    pha
+    txs
+    plp
+    lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `plp` pulls a status that no `php` in this routine pushed: an `.ensure` after it sets it
+    rts                     ;! error[return-state-mismatch]: `rts`: `moved_back_narrow` declares it returns with `a8`, but the width of A is not known here ;! error[return-state-mismatch]: `rts`: `moved_back_narrow` declares it returns with `i8`, but the width of X and Y is not known here
+}
+
+.proc moved_back_tcs: a8, i16, native {
+    php
+    rep #$20
+    tsc
+    phx
+    tcs
+    plp
+    lda #1
+    rts
+}
+
+; In emulation mode the high byte of the stack pointer is always $01, so an 8-bit X copies it
+; exactly there as well, and the `pld` finds the direct page the `phd` saved. Where the mode is
+; not known, an 8-bit copy holds only the low byte, and nothing is known about the stack after
+; the `txs`.
+.proc moved_back_emulation: a8, i8, emu, dp* {
+    phd
+    tsx
+    pha
+    txs
+    pld
+    rts
+}
+
+.proc moved_back_mode_unknown: a8, i8, e?, dp* {
+    phd
+    tsx
+    pha
+    txs
+    pld
+    rts                     ;! error[asserted-item-not-restored]: `rts`: `moved_back_mode_unknown` declares `dp*`, so D must be what it was on entry, but here it may not be
+}

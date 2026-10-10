@@ -16,22 +16,32 @@ public static class Constructs
     public static bool Repeats(BlockKind kind) => kind is BlockKind.Repeat or BlockKind.Each;
 
     /// <summary>
-    /// Returns the condition and the message of an <c>.assert</c> or an <c>.error</c>. The
-    /// condition is the expression that has to hold, and it is null for an <c>.error</c>.
+    /// Returns the condition and the message of an <c>.assert</c>, an <c>.error</c> or a
+    /// <c>.warning</c>. The condition is the expression that has to hold, and it is null for an
+    /// <c>.error</c> or a <c>.warning</c>.
     /// </summary>
-    /// <param name="directive">The <c>.assert</c> or <c>.error</c> line.</param>
+    /// <param name="directive">The <c>.assert</c>, <c>.error</c> or <c>.warning</c> line.</param>
     /// <param name="text">
-    /// A function that returns the text an <c>.assert</c>'s message stands for, or null when it
-    /// stands for no text. The message is an expression, so only the caller can evaluate it. When
-    /// the function is null, an <c>.assert</c> has no message.
+    /// A function that returns the text a message stands for, or null when it stands for no text.
+    /// The message is an expression, so only the caller can evaluate it. When the function is null,
+    /// the directive has no message.
     /// </param>
     public static Assertion AssertionOf(StatementSyntax directive, Func<ExpressionSyntax, string?>? text = null) =>
+        new(
+            (directive as AssertDirectiveSyntax)?.Condition,
+            MessageOf(directive) is { } message ? text?.Invoke(message) : null);
+
+    /// <summary>
+    /// Returns the message of an <c>.assert</c>, an <c>.error</c> or a <c>.warning</c>, or null
+    /// when the line has none or is none of these. The three take a message by one rule, so it may
+    /// be text in quotes, a text constant or a call that returns text.
+    /// </summary>
+    public static ExpressionSyntax? MessageOf(StatementSyntax directive) =>
         directive switch
         {
-            AssertDirectiveSyntax assert =>
-                new Assertion(assert.Condition, assert.Message is { } message ? text?.Invoke(message) : null),
-            ErrorDirectiveSyntax error => new Assertion(null, MessageOf(error.Message)),
-            _ => default,
+            AssertDirectiveSyntax assert => assert.Message,
+            ErrorDirectiveSyntax error => error.Message,
+            _ => null,
         };
 
     /// <summary>
@@ -42,14 +52,10 @@ public static class Constructs
     public static string? SegmentOf(StatementSyntax opener) =>
         opener is SegmentStatementSyntax segment ? SegmentNames.Of(segment.Name) : null;
 
-    // The message is null when the line has none. An `.assert` without a message leaves that
-    // child position empty, and an `.error` without one holds a missing token where the string
-    // belongs.
-    private static string? MessageOf(SyntaxToken? message) =>
-        message is { IsMissing: false } token ? Literals.Text(token.Text) : null;
-
-    /// <summary>Represents what an <c>.assert</c> or an <c>.error</c> requires.</summary>
-    /// <param name="Condition">The expression that has to hold, or null for an <c>.error</c>.</param>
+    /// <summary>Represents what an <c>.assert</c>, an <c>.error</c> or a <c>.warning</c> requires.</summary>
+    /// <param name="Condition">
+    /// The expression that has to hold, or null for an <c>.error</c> or a <c>.warning</c>.
+    /// </param>
     /// <param name="Message">The message to report, or null when the directive has none.</param>
     public readonly record struct Assertion(ExpressionSyntax? Condition, string? Message);
 }

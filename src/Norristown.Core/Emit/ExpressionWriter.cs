@@ -1,5 +1,6 @@
 using System.Globalization;
 using Norristown.Layout;
+using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
 using static Norristown.Emit.Ca65Directives;
@@ -75,9 +76,10 @@ internal sealed class ExpressionWriter(
 
     /// <summary>
     /// Writes one value of a slot as <see cref="Datum"/> returns it when it returns anything, and
-    /// as the source has it otherwise.
+    /// as the source has it otherwise. <paramref name="inBank"/> says whether the slot is an
+    /// <c>.addr</c>, which holds the address within its bank, as <see cref="Narrows"/> describes.
     /// </summary>
-    internal void InPlace(SyntaxNode value, int width, bool bigEndian, TokenRewriter rewriter)
+    internal void InPlace(SyntaxNode value, int width, bool bigEndian, TokenRewriter rewriter, bool inBank = false)
     {
         if (Datum(value, width, bigEndian, rewriter.Comments) is { } text)
         {
@@ -85,23 +87,23 @@ internal sealed class ExpressionWriter(
             return;
         }
         Substitute(value, rewriter, nested: false);
-        if (width == 1)
-            NarrowToByte(value, rewriter);
+        Narrow(value, width, rewriter, inBank);
     }
 
     /// <summary>
     /// Returns one value of a slot <paramref name="width"/> bytes wide, written out rather than
     /// edited in place. It is what <see cref="Datum"/> returns when that returns anything, and
-    /// what <see cref="Rendered"/> writes otherwise, inside <c>.lobyte()</c> where
-    /// <see cref="LinkRange.NarrowsToByte"/> says a one-byte slot needs it. Any comment either
-    /// produces is dropped.
+    /// what <see cref="Rendered"/> writes otherwise, inside <c>.lobyte()</c> or <c>.loword()</c>
+    /// where <see cref="Narrows"/> says the slot needs it. Any comment either produces is dropped.
+    /// <paramref name="inBank"/> says whether the slot is an <c>.addr</c>, which holds the address
+    /// within its bank.
     /// </summary>
-    internal string SlotText(SyntaxNode value, int width, bool bigEndian)
+    internal string SlotText(SyntaxNode value, int width, bool bigEndian, bool inBank = false)
     {
         if (Datum(value, width, bigEndian, []) is { } text)
             return text;
         var rendered = Rendered(value);
-        return width == 1 && LinkRange.NarrowsToByte(model, value, Expansion) ? LowByteOf(rendered) : rendered;
+        return Narrows(value, width, inBank) ? LowPartOf(rendered, width) : rendered;
     }
 
     /// <summary>
@@ -140,9 +142,10 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
-    /// Rewrites a negative constant in an immediate as its two's complement, and writes a one-byte
-    /// immediate inside <c>.lobyte()</c> where <see cref="LinkRange.NarrowsToByte"/> says ca65
-    /// needs it there. An immediate is a byte or a word slot, as wide as the instruction makes it.
+    /// Rewrites a negative constant in an immediate as its two's complement, and writes an
+    /// immediate inside <c>.lobyte()</c> or <c>.loword()</c> where <see cref="LinkRange.Narrows"/>
+    /// says ca65 or ld65 needs it there. An immediate is a byte or a word slot, as wide as the
+    /// instruction makes it.
     /// </summary>
     internal void Immediate(StatementSyntax statement, int bytes, TokenRewriter rewriter)
     {
@@ -153,8 +156,8 @@ internal sealed class ExpressionWriter(
         }
         if (Datum(value, bytes - 1, bigEndian: false, rewriter.Comments) is { } text)
             rewriter.Replace(value, text, around: false);
-        else if (bytes == 2)
-            NarrowToByte(value, rewriter);
+        else
+            Narrow(value, bytes - 1, rewriter);
     }
 
     /// <summary>
@@ -227,10 +230,15 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
-    /// Returns <paramref name="text"/> inside <c>.lobyte()</c>, without doubling the parentheses
-    /// of text that is already one parenthesized whole.
+    /// Returns <paramref name="text"/> inside <c>.lobyte()</c> for a slot of one byte, or inside
+    /// <c>.loword()</c> for a wider one, without doubling the parentheses of text that is already
+    /// one parenthesized whole.
     /// </summary>
-    private static string LowByteOf(string text) => IsWrapped(text) ? ".lobyte" + text : $".lobyte({text})";
+    private static string LowPartOf(string text, int width)
+    {
+        var function = width == 1 ? ".lobyte" : ".loword";
+        return IsWrapped(text) ? function + text : $"{function}({text})";
+    }
 
     /// <summary>
     /// Returns ca65's operator for <paramref name="kind"/>, which is <c>.lobyte</c>,
@@ -256,21 +264,40 @@ internal sealed class ExpressionWriter(
     private string NameOf(Symbol symbol) => names.Of(symbol, Expansion);
 
     /// <summary>
-    /// Writes <paramref name="value"/>, the value of a one-byte slot, inside <c>.lobyte()</c>
-    /// where <see cref="LinkRange.NarrowsToByte"/> says ca65 would otherwise refuse it for its
-    /// address size. The low byte loses nothing, because the value always fits a byte. The edits
-    /// <paramref name="rewriter"/> already holds for the value are kept inside the call.
+    /// Returns whether the output writes <paramref name="value"/>, the value of a slot
+    /// <paramref name="width"/> bytes wide, inside <c>.lobyte()</c> or <c>.loword()</c>. That is
+    /// the case where <see cref="LinkRange.Narrows"/> says so. It is also the case for a slot that
+    /// holds the address within its bank, as <paramref name="inBank"/> marks it, where the value
+    /// names an address placed past $FFFF on any CPU but the 65816.
     /// </summary>
-    private void NarrowToByte(SyntaxNode value, TokenRewriter rewriter)
+    /// <remarks>
+    /// An <c>.addr</c> and an absolute operand hold the address within its bank on every CPU.
+    /// ca65 keeps only the low 16 bits of either on the 65816, but range-checks them on the 6502
+    /// and the 65C02, where ld65 would then refuse a label placed past $FFFF. <c>.loword()</c>
+    /// gives ca65 the address within the bank on those CPUs.
+    /// </remarks>
+    private bool Narrows(SyntaxNode value, int width, bool inBank) =>
+        LinkRange.Narrows(model, value, Expansion, width)
+        || (inBank && layout.Cpu != Cpu.Wdc65816 && LinkRange.NamesWideAddress(model, value, Expansion, width));
+
+    /// <summary>
+    /// Writes <paramref name="value"/>, the value of a slot <paramref name="width"/> bytes wide,
+    /// inside <c>.lobyte()</c> or <c>.loword()</c> where <see cref="Narrows"/> says ca65 or ld65
+    /// would otherwise refuse it for an address it names. The low part loses nothing, because the
+    /// value always fits the slot or the slot holds the address within its bank, as
+    /// <paramref name="inBank"/> says. The edits <paramref name="rewriter"/>
+    /// already holds for the value are kept inside the call.
+    /// </summary>
+    private void Narrow(SyntaxNode value, int width, TokenRewriter rewriter, bool inBank = false)
     {
-        if (!LinkRange.NarrowsToByte(model, value, Expansion))
+        if (!Narrows(value, width, inBank))
             return;
 
         // The comments stay with the line rather than going inside the call.
         List<string> comments = [];
         var text = rewriter.Inline(value, comments);
         rewriter.Comments.AddRange(comments);
-        rewriter.Replace(value, LowByteOf(text), around: false);
+        rewriter.Replace(value, LowPartOf(text, width), around: false);
     }
 
     /// <summary>
@@ -316,6 +343,7 @@ internal sealed class ExpressionWriter(
                     return;
                 foreach (var child in operand.ChildNodes)
                     Substitute(child, rewriter, nested: false);
+                InBank(operand, rewriter);
                 Prefix(operand, rewriter);
                 return;
 
@@ -333,8 +361,9 @@ internal sealed class ExpressionWriter(
                 {
                     rewriter.Replacements[directive.Directive.Position] = ForCa65(directive.Directive.DirectiveKind, directive.Directive.Text);
                     var (width, bigEndian) = ElementFormat(directive);
+                    var inBank = directive.Directive.DirectiveKind == DirectiveKind.Addr;
                     foreach (var value in DataLengths.ElementsOf(directive))
-                        InPlace(value, width, bigEndian, rewriter);
+                        InPlace(value, width, bigEndian, rewriter, inBank);
                     return;
                 }
                 if (directive.Directive.DirectiveKind is DirectiveKind.Res or DirectiveKind.Align
@@ -351,7 +380,7 @@ internal sealed class ExpressionWriter(
                 when DataSyntax.DirectiveOfValues(values) is { IsRecord: false } of:
                 var (valueWidth, valuesBigEndian) = ElementFormat(of);
                 foreach (var value in values.Values)
-                    InPlace(value, valueWidth, valuesBigEndian, rewriter);
+                    InPlace(value, valueWidth, valuesBigEndian, rewriter, of.Directive.DirectiveKind == DirectiveKind.Addr);
                 return;
 
             // The distance between two places in one data declaration is a constant nt65 has
@@ -955,6 +984,21 @@ internal sealed class ExpressionWriter(
         var index = given.Index is { } register ? "," + register.Text : "";
         var address = Substituted(addressed, comments);
         return offset > 0 ? $"{address}+{offset}{index}" : $"{address}{offset}{index}";
+    }
+
+    /// <summary>
+    /// Writes the address of an absolute operand inside <c>.loword()</c> where it names an address
+    /// placed past $FFFF on any CPU but the 65816, as <see cref="Narrows"/> describes. Only the
+    /// absolute, absolute X and absolute Y modes count, because those are the ones whose operand
+    /// ca65 keeps the low 16 bits of on the 65816.
+    /// </summary>
+    private void InBank(AbsoluteOperandSyntax operand, TokenRewriter rewriter)
+    {
+        if (layout.Cpu != Cpu.Wdc65816 && operand.Parent is { } instruction
+            && layout.Of(instruction, Expansion)?.Mode is AddressingMode.Absolute or AddressingMode.AbsoluteX or AddressingMode.AbsoluteY)
+        {
+            Narrow(operand.Address, 2, rewriter, inBank: true);
+        }
     }
 
     /// <summary>Writes the <c>z:</c> or <c>a:</c> that shows which mode was chosen.</summary>

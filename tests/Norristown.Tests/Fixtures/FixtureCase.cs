@@ -195,7 +195,14 @@ internal sealed partial record FixtureCase(
                         && d.Severity == match.Groups["severity"].Value
                         && d.Id == match.Groups["id"].Value)
                         .ToList();
-                    return found is [var one] ? $";! {one.Severity}[{one.Id}]: {one.Message}" : match.Value;
+                    if (found is not [var one])
+                        return match.Value;
+
+                    // The message runs up to the next annotation, so it holds the spacing that
+                    // separates the two. That spacing is kept, or the annotations would run together.
+                    var message = match.Groups["message"].Value;
+                    var spacing = message[message.TrimEnd().Length..];
+                    return $";! {one.Severity}[{one.Id}]: {one.Message}{spacing}";
                 });
                 if (replaced != lines[i])
                 {

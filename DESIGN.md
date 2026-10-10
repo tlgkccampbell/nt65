@@ -635,11 +635,13 @@ sides use.
 - **A segment's addresses are the linker's, and nt65 names them.** `.loadof(S)`, `.runof(S)`
   and `.spanof(S)` stand for the `__S_LOAD__`, `__S_RUN__` and `__S_SIZE__` that ld65 defines
   for a segment its configuration gives `define=yes`: where the image was loaded, where it
-  runs and how many bytes it is. The output imports each as wide as its placement: `.runof(S)`
-  as a label in `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page
-  zero, far for a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the
-  image in another bank therefore writes `f:`, as it would for a label there. Each is also
-  bounded by the memory areas the linked configs put `S` in, so in a one-byte slot it follows
+  runs and how many bytes it is. Each is as wide as its placement: `.runof(S)` as a label in
+  `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page zero, far for
+  a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the image in
+  another bank therefore writes `f:`, as it would for a label there. ld65 exports all three as
+  absolute, so the output imports a far one as absolute, which changes nothing it assembles to.
+  Each is also bounded by the memory areas the linked configs put `S` in, and `.runof(S)` by
+  the banks `S` declares where no linked config places it, so in a one-byte slot it follows
   the rule for any value that names an address (§8): `.loadof(CODE) / 256` is written inside
   `.lobyte()` where CODE's area shows it fits, and is an error that asks for `<` where it may
   not. `.runof(S)` is an address in `S`'s space and is checked as one; the other two are the
@@ -1946,8 +1948,8 @@ Examples. A jump table inside a proc: the targets need no declarations because t
 ```
 
 Every item of `table` is a code label, so `.next table` says the same. A table is read only
-from data declared as addresses: a label on a line of `.addr` directives is a position, and
-names no targets.
+from data declared as addresses, or from a label on a line of `.addr` or `.faraddr`, whose
+items are the addresses on that line and no others.
 
 Data that names a label says nothing about which jump reaches it, so the flag analysis enters a
 label that data names with every flag unknown. A table that only this routine's `.next`
@@ -2404,7 +2406,8 @@ register a `tsx` or `tsc` filled, with nothing but pushes between them, moves th
 where the copy was taken and drops exactly those pushes, so `pha`, `tsx`, `pha`, `pha`, `txs`,
 `pla` keeps A. A pull between them, a change to the register, or a store into the stack leaves
 the stack unknown, as any other `txs` does. So does an X on the 65816 that is not 16 bits
-throughout, since an 8-bit X holds only the low byte of S.
+throughout, since an 8-bit X holds only the low byte of S, unless the mode is known to be
+emulation, where the high byte of S is always $01 and an 8-bit copy is exact, as on the 6502.
 
 What a routine's calls do is worked out with it, across the program: a call hands back what the
 routine it names hands back, and no more. Every routine starts out keeping everything and what
@@ -2720,9 +2723,18 @@ range error: `<x` and `.loword(x)` say which part is meant.
 Any other value in a one-byte slot that names an absolute or far address, such as `main / 256`
 or `'0' + main .mod 10`, has a value only ld65 knows. ca65 refuses it there whatever it comes
 to, unless `<`, `>`, `^`, `.lobyte`, `.hibyte` or `.bankbyte` takes one byte of the address. nt65
-bounds the value from its operators and the sizes of the addresses in it. Where the value always
+bounds the value from its operators and from where the addresses in it may be: a label is inside
+the memory areas the linked configs run its segment in, within the bank each area starts in for
+an absolute label. Where no linked config places the segment, a label is in the bank the segment
+declares or one of its mirrors, and otherwise anywhere its address size reaches. Where the value always
 fits a byte, the output writes it inside `.lobyte()`, which loses nothing. Where nt65 cannot show
-that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. The bound
+that it fits, as for `main * 2` or `main - other`, it is an error that asks for `<`. A two-byte
+slot is held to the same rule with a 16-bit bound: a value there that names a far address, or an
+absolute one placed past $FFFF, which ld65 would refuse, is written inside
+`.loword()` where it always fits and is otherwise an error that asks for `.loword`. An `.addr`
+holds the address within its bank, as ca65 keeps it on the 65816, so only a far address counts
+there. ca65 range-checks an `.addr` and an absolute operand on the other CPUs, so the output
+writes `.loword()` around one that names an address placed past $FFFF. The bound
 respects ld65's arithmetic, which is C's `long`: 32 bits on Windows and 64 on Linux. So nt65
 bounds a value only where every step of it stays within 32 bits, signed, and `(main << 16) .mod 10`
 is an error, since the shift can leave 32 bits before the `.mod` brings it back.
@@ -3149,10 +3161,11 @@ nt65 has said why it has none.
 `.assert cond, "message"` takes no level. ca65's `error`, `warning`, `lderror` and
 `ldwarning` choose when a check runs, which nt65 decides itself: at edit time when it can,
 and otherwise at link time, which the output writes as ca65's `lderror`. A failed assertion
-is always an error, and the message may be left out. The message is text: a string in quotes,
-a text constant or a call that returns text, and nt65 writes what it stands for into the
-output. An `.assert` line that ends with its comma continues onto the next (§4), so a long
-message has a line of its own:
+is always an error, and the message may be left out. An `.assert`, an `.error` and a
+`.warning` take their message by one rule: it is text, which is a string in quotes, a text
+constant or a call that returns text, and anything else is reported as `message-not-text`.
+nt65 writes what an `.assert` message stands for into the output. An `.assert` line that
+ends with its comma continues onto the next (§4), so a long message has a line of its own:
 
 ```nt65
 .const PAST_ZERO_PAGE = "main must be past the zero page, where the direct-page variables live"
@@ -3163,9 +3176,10 @@ message has a line of its own:
 .assert main >= $0200, PAST_ZERO_PAGE
 ```
 
-`.error "text"` is a configuration the
-file refuses to be built in, and `.warning "text"` one it builds in and has something to say
-about.
+`.error message` is a configuration the
+file refuses to be built in, and `.warning message` one it builds in and has something to say
+about. Each message is text by the same rule as an `.assert` message, so `.error UNSUPPORTED`
+reports the text constant `UNSUPPORTED` stands for.
 
 `.if` and `.repeat` are allowed at item level, inside procs, and in `.data` bodies, where
 their lines are values (§8). `.if` is allowed in an `.enum` body too, where its lines are
@@ -5815,8 +5829,8 @@ place       := '.place' module-path                    ; at file level, in no bl
 allow       := '.allow' string (',' string)?           ; a warning's name, then a reason; applies
                                                       ; to the next statement, or block, below
 assert      := '.assert' expr (',' expr)?                ; the message is text; a line break may follow the ','
-warning     := '.warning' string
-error       := '.error' string
+warning     := '.warning' expr                           ; the message is text, as an assert's is
+error       := '.error' expr                             ; the message is text, as an assert's is
 cpu         := '.cpu' ('6502' | '6502x' | '65sc02' | 'r65c02' | '65c02' | '65816')
 segment-decl := '.segment' ident ':' size (',' seg-attr)*
 seg-attr    := 'dp' '=' expr | 'bank' '=' expr | 'mirrors' '=' '[' banks? ']'
