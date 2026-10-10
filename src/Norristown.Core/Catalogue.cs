@@ -2109,13 +2109,14 @@ public static class Catalogue
         Area.Data,
         "linked-value-may-not-fit",
         Severity.Error,
-        "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: use `<({0})` "
-            + "for its low byte",
-        "A value that names an absolute or far address is written for ld65 to work out, and ca65 refuses it in a "
-            + "one-byte slot whatever it comes to, unless a byte operator such as `<` takes one byte of the address. "
-            + "Where nt65 can show the value always fits a byte, as it can for `main / 256` or "
-            + "`'0' + (main / 10) .mod 10`, the output keeps only the low byte, which loses nothing. Where it cannot, "
-            + "`<` says that the low byte is what is meant.");
+        "`{0}` is worked out by the linker from an address, and {1}, which nt65 cannot show it fits: {2}",
+        "A value that names an address is written for ld65 to work out. ca65 refuses it in a slot narrower than the "
+            + "address whatever it comes to, as an absolute address is in a one-byte slot or a far one in a two-byte "
+            + "slot, unless an operator such as `<` or `.loword` takes a part of the address that fits. ld65 refuses "
+            + "a value that does not fit its slot, as an address the linked configurations place past $FFFF may not "
+            + "in a two-byte slot. Where nt65 can show the value always fits, as it can for `main / 256` or "
+            + "`'0' + (main / 10) .mod 10` in a byte, the output keeps only the low part, which loses nothing. Where "
+            + "it cannot, `<` or `.loword` says which part is meant.");
 
     internal static DiagnosticDescriptor AddressNegative { get; } = Entry(
         Area.Data,

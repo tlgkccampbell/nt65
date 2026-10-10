@@ -108,9 +108,8 @@ public static class SegmentFunctions
             IReadOnlyList<RunArea> areas = [.. segment.Runs, .. segment.Loads];
             return areas.Count > 0 ? (0, areas.Min(area => area.Last - area.First + 1)) : null;
         }
-        var placed = function == BuiltinKind.Runof ? segment.Runs : segment.Loads;
-        if (Known(placed, segment))
-            return (placed.Min(area => area.First), placed.Max(area => area.Last));
+        if (PlacedRange(function == BuiltinKind.Runof ? segment.Runs : segment.Loads, segment) is { } placed)
+            return placed;
         return SizeOf(function, segment) switch
         {
             AddressSize.ZeroPage => (0, 0xff),
@@ -119,6 +118,14 @@ public static class SegmentFunctions
             _ => null,
         };
     }
+
+    /// <summary>
+    /// Returns the addresses from the start of the lowest of <paramref name="areas"/> to the end
+    /// of the highest, or null when they do not hold an area for every linked configuration that
+    /// places <paramref name="segment"/>. The areas are where the segment runs or where it loads.
+    /// </summary>
+    public static (long Low, long High)? PlacedRange(IReadOnlyList<RunArea> areas, Segment segment) =>
+        Known(areas, segment) ? (areas.Min(area => area.First), areas.Max(area => area.Last)) : null;
 
     /// <summary>
     /// Returns a value indicating whether <paramref name="areas"/> holds an area for every linked
