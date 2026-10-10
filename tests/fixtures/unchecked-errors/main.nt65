@@ -245,7 +245,7 @@
     resumed:
     .state a16, i16, native
     plp
-    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `resumed` to the same side of it as the code that reads them; `pushed n` on `saved_across` declares what the caller of a second entry point pushed
+    lda #$12                ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `resumed` can be entered from outside `saved_across`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `resumed` to the same side of it as the code that reads them; on `saved_across`, `pushed n` declares what the caller pushed beneath the return address, and `pulls n` the bytes handed above it
     sep #$30
     rts                     ;! error[return-beneath-entry]: `rts` returns 1 byte beneath its return address when the routine is entered at `resumed`, having pulled more than the routine pushed: keep each push and its pull on one side of `resumed`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
@@ -265,7 +265,7 @@
     .frame local: Local
     laid_out:
     .state a16, i16, native
-    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `laid_out` to the same side of it as the code that reads them; `pushed n` on `framed` declares what the caller of a second entry point pushed
+    lda local::count,s      ;! error[frame-depth-unknown]: `local::count` is an offset from the stack pointer, but how many bytes are pushed here is not known, because `laid_out` can be entered from outside `framed`, and a jump to it has not pushed what the path above the label pushes: move the pushes above `laid_out` to the same side of it as the code that reads them; on `framed`, `pushed n` declares what the caller pushed beneath the return address, and `pulls n` the bytes handed above it
     pla
     rts                     ;! error[return-beneath-entry]: `rts` returns 2 bytes beneath its return address when the routine is entered at `laid_out`, having pulled more than the routine pushed: keep each push and its pull on one side of `laid_out`, declare the bytes the routine is entered with above its return address with `pulls n`, or add a `.next` naming where it goes
 }
