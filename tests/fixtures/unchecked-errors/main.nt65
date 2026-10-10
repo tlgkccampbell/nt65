@@ -21,14 +21,15 @@
     rts
 }
 
-; A call through a pointer whose `.next` names nothing leaves the widths unknown after it.
+; A call through a pointer whose `.next` names nothing leaves the widths and the mode unknown
+; after it, and each says why.
 .proc unnamed_call: a8, i8, native {
     ldx #0
     jsr ($1000,x)
     .next ?
     lda #1                  ;! error[width-unknown]: `lda #` needs the width of A, and it is not known here, because `jsr ($1000,x)` calls through a pointer, and its `.next` names no routine or label: a `.next` that names them lets their exit state flow here
     sep #$30
-    rts                     ;! error[return-state-mismatch]: `rts`: `unnamed_call` declares it returns in native mode, but the mode is not known here
+    rts                     ;! error[return-state-mismatch]: `rts`: `unnamed_call` declares it returns in native mode, but the mode is not known here, because `jsr ($1000,x)` calls through a pointer, and its `.next` names no routine or label: a `.next` that names them lets their exit state flow here
 }
 
 ; A table of anything but addresses names no code at all.

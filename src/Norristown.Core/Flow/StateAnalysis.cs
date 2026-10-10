@@ -670,10 +670,25 @@ public sealed class StateAnalysis : IProcessorStates
         WhyD = after.Processor.D.Kind == StateValueKind.Unknown && before.Processor.D.Kind == StateValueKind.Unknown
             ? before.WhyD
             : null,
-        WhyE = after.Processor.E == ProcessorMode.Unknown && before.Processor.E == ProcessorMode.Unknown
-            ? before.WhyE
-            : null,
+        WhyE = after.Processor.E != ProcessorMode.Unknown ? null
+            : before.Processor.E == ProcessorMode.Unknown ? before.WhyE
+            : Called(step, next),
     };
+
+    /// <summary>
+    /// Returns the cause for a part of the state that a call at <paramref name="step"/> makes
+    /// unknown, or null where the step is no call. It is the same cause a width that the call
+    /// makes unknown is given.
+    /// </summary>
+    private static Cause? Called(Step step, NextDirectiveSyntax? next)
+    {
+        if (step.Statement is not InstructionStatementSyntax { MnemonicKind: MnemonicKind.Jsr or MnemonicKind.Jsl } statement)
+            return null;
+        var quoted = $"`{statement.GetText().Trim()}`";
+        return next is not null && statement.Operand is not AbsoluteOperandSyntax
+            ? new($"{quoted} calls through a pointer, and its `.next` names no routine or label", "a `.next` that names them lets their exit state flow here")
+            : new($"{quoted} returns with it unknown", "an `.ensure` after it sets it");
+    }
 
     private Cause? Why(
         Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
@@ -713,9 +728,7 @@ public sealed class StateAnalysis : IProcessorStates
             MnemonicKind.Rep when mode != ProcessorMode.Native && StepOperands.Constant(model, step) is not null
                 => ModeUnknown($"{quoted} widens nothing in emulation mode", state.WhyE),
             MnemonicKind.Rep or MnemonicKind.Sep => new($"{quoted} changes flags nt65 cannot work out", "an `.ensure` after it sets it"),
-            MnemonicKind.Jsr or MnemonicKind.Jsl when next is not null && statement.Operand is not AbsoluteOperandSyntax
-                => new($"{quoted} calls through a pointer, and its `.next` names no routine or label", "a `.next` that names them lets their exit state flow here"),
-            MnemonicKind.Jsr or MnemonicKind.Jsl => new($"{quoted} returns with it unknown", "an `.ensure` after it sets it"),
+            MnemonicKind.Jsr or MnemonicKind.Jsl => Called(step, next),
             _ => new($"{quoted} makes it unknown", "a `.state` after it declares what it is"),
         };
     }
