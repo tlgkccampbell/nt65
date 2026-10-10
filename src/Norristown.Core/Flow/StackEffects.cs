@@ -1,3 +1,5 @@
+using System.Globalization;
+using Norristown.Layout;
 using Norristown.Processor;
 using Norristown.Semantics;
 using Norristown.Syntax;
@@ -272,7 +274,7 @@ public sealed class StackEffects
 
         // What a `.next .return` leaves: the height, or the count written after `.return`, which
         // must be the height where nt65 knows it.
-        StackEffect Returned(NextDirectiveSyntax returning, Layout.Step step, int? height)
+        StackEffect Returned(NextDirectiveSyntax returning, Step step, int? height)
         {
             if (returning.ReturnUnknownToken is not null)
                 return StackEffect.Unknown;
@@ -287,7 +289,7 @@ public sealed class StackEffects
             {
                 report?.Add(Expansion.Problem(
                     walk.Model.Tree, count, step.On, Severity.Error, Catalogue.ReturnCountMismatch.Message(promised, counted),
-                    new DiagnosticFix(FixKind.Spelling, counted.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+                    new DiagnosticFix(FixKind.Spelling, counted.ToString(CultureInfo.InvariantCulture))));
             }
             return StackEffect.Leaving((int)promised);
         }
@@ -385,7 +387,7 @@ public sealed class StackEffects
     /// <see cref="StackPointerCopies"/> work them out. An instruction a store may turn into another
     /// drops the copy.
     /// </summary>
-    private static Height Copied(RegisterWalk walk, Layout.Step step, MnemonicKind mnemonic, Height height)
+    private static Height Copied(RegisterWalk walk, Step step, MnemonicKind mnemonic, Height height)
     {
         var mode = walk.Layout.Of(step.Statement, step.On)?.Mode;
         var immediate = walk.Immediate(step);
@@ -428,7 +430,7 @@ public sealed class StackEffects
     /// inside another instruction's bytes.
     /// </summary>
     private static void CheckReturn(
-        SyntaxTree file, Layout.Step step, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
+        SyntaxTree file, Step step, MnemonicKind mnemonic, Height height, Symbol? entry, List<Diagnostic> report)
     {
         if (height.Least is not { } least)
             return;

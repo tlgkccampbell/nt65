@@ -29,8 +29,8 @@ public sealed class RoutineContexts
     private readonly HashSet<Symbol> unmarked;
 
     private RoutineContexts(
-        Dictionary<Symbol, RoutineContext> contexts, Dictionary<Symbol, List<Symbol>> handlers, Dictionary<Symbol, List<TextSpan>> unfollowed,
-        HashSet<Symbol> unmarked)
+        Dictionary<Symbol, RoutineContext> contexts, Dictionary<Symbol, List<Symbol>> handlers,
+        Dictionary<Symbol, List<TextSpan>> unfollowed, HashSet<Symbol> unmarked)
     {
         this.contexts = contexts;
         this.handlers = handlers;
@@ -61,8 +61,15 @@ public sealed class RoutineContexts
                 foreach (var block in region.Blocks)
                 {
                     // An `rti` with a `.next` is a computed jump, not a handler's return.
-                    if (block is { End: BlockEnd.Return, Next: null, Steps: [.., { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rti } }] })
+                    if (block is
+                        {
+                            End: BlockEnd.Return,
+                            Next: null,
+                            Steps: [.., { Statement: InstructionStatementSyntax { MnemonicKind: MnemonicKind.Rti } }],
+                        })
+                    {
                         returnsByRti.Add(routine);
+                    }
                     if (block.CallsUnknown && block.Steps.Count > 0 && StepLines.Of(file.Model.Tree, block.Steps[^1]) is { } shown)
                     {
                         if (!unfollowed.TryGetValue(routine, out var spans))

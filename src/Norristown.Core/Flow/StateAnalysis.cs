@@ -123,7 +123,10 @@ public sealed class StateAnalysis : IProcessorStates
         analysis.checks.CheckOutsideRoutines();
         analysis.Exports = InferredExports.Of(layout, flow, analysis.signatures, analysis, analysis.EnteredWith);
         analysis.Diagnostics = Norristown.Diagnostics.Ordered(
-            analysis.checks.Found.Concat(analysis.UndeclaredExports()).Concat(analysis.UndeclaredEntries()).DistinctBy(d => (d.Span, d.Id, d.Message)));
+            analysis.checks.Found
+                .Concat(analysis.UndeclaredExports())
+                .Concat(analysis.UndeclaredEntries())
+                .DistinctBy(d => (d.Span, d.Id, d.Message)));
         return analysis;
     }
 
@@ -223,7 +226,8 @@ public sealed class StateAnalysis : IProcessorStates
     /// the stack <see cref="EntryStack"/> gives. Where the callers disagree on D, the cause names
     /// them.
     /// </summary>
-    private static FlowState Entry(Signature signature, Symbol routine, InferredSignatures signatures) => new(signature.Entry, EntryStack(signature))
+    private static FlowState Entry(Signature signature, Symbol routine, InferredSignatures signatures) => new(
+        signature.Entry, EntryStack(signature))
     {
         WhyA = signature.Entry.A == Width.Unknown ? EntryCause(signature, routine, "a?") : null,
         WhyIndex = signature.Entry.Index == Width.Unknown ? EntryCause(signature, routine, "i?") : null,
@@ -254,6 +258,10 @@ public sealed class StateAnalysis : IProcessorStates
     private static AnalysisStack EntryStack(Signature signature) =>
         AnalysisStack.Entered(signature.ReturnSize, signature.Pushed, signature.Pulls);
 
+    /// <summary>
+    /// Returns the cause for a width that a routine's entry leaves unknown, which is either that
+    /// the routine is an interrupt handler or that its signature declares <paramref name="item"/>.
+    /// </summary>
     private static Cause EntryCause(Signature signature, Symbol routine, string item) => signature.IsInterrupt
         ? new($"`{routine.DisplayName}` is an interrupt handler, entered from anywhere", "an `.ensure` sets it")
         : new($"`{routine.DisplayName}` declares `{item}` at entry", "an `.ensure` sets it");
@@ -365,9 +373,17 @@ public sealed class StateAnalysis : IProcessorStates
             ? new($"{reason}, and the mode is not known", "a `.state` before it declares which mode it is")
             : new($"{reason}, and the mode is not known, as {whyMode.Reason}", whyMode.Fix);
 
+    /// <summary>
+    /// Returns <paramref name="stack"/> with <paramref name="bytes"/> bytes nothing is known about
+    /// pushed, or null where the stack or the count is not known.
+    /// </summary>
     private static AnalysisStack? Push(AnalysisStack? stack, int? bytes) =>
         bytes is { } count ? stack?.Push(StackEntry.Opaque, count) : null;
 
+    /// <summary>
+    /// Returns <paramref name="stack"/> with <paramref name="bytes"/> bytes pulled, or null where
+    /// the stack or the count is not known.
+    /// </summary>
     private static AnalysisStack? Pull(AnalysisStack? stack, int? bytes) =>
         bytes is { } count ? stack?.Pull(count) : null;
 
@@ -728,6 +744,11 @@ public sealed class StateAnalysis : IProcessorStates
             : new($"{quoted} returns with it unknown", "an `.ensure` after it sets it");
     }
 
+    /// <summary>
+    /// Returns why a width is unknown after <paramref name="step"/>, where it is. A step that made
+    /// the width unknown names itself as the cause, and one that left it unknown passes on
+    /// <paramref name="inherited"/>, the cause from before it.
+    /// </summary>
     private Cause? Why(
         Step step, Step? previous, NextDirectiveSyntax? next, FlowState state, Width before, Width after, Cause? inherited)
     {

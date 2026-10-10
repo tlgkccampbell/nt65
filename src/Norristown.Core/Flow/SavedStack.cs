@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using Norristown.Processor;
+using Norristown.Semantics;
 
 namespace Norristown.Flow;
 
@@ -84,7 +85,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// there are none. A pull of any size takes the handed bytes, one byte at a time.
     /// </summary>
     public static SavedStack Entered(int returnSize, int handed) => new(
-        [.. Enumerable.Repeat(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Semantics.Width.Eight) { IsLeft = true, IsHanded = true }, handed)],
+        [.. Enumerable.Repeat(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Width.Eight) { IsLeft = true, IsHanded = true }, handed)],
         returnSize - handed);
 
     /// <summary>
@@ -128,11 +129,11 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// <para>
     /// Two unknown widths are not taken to be the same width. A call between the push and the
     /// pull may have widened the register, and then the pull takes back bytes the push never
-    /// put there. <see cref="Semantics.Width.Unchanged"/> does not have this problem, because
+    /// put there. <see cref="Width.Unchanged"/> does not have this problem, because
     /// a routine that leaves a register's width as it found it leaves the same width at both.
     /// </para>
     /// </summary>
-    public RegisterValue Pulled(PushSize size, Semantics.Width width) =>
+    public RegisterValue Pulled(PushSize size, Width width) =>
         Top(size, width)?.Value ?? RegisterValue.Unknown;
 
     /// <summary>
@@ -140,13 +141,14 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// they held when the push on top was a <c>php</c>, and otherwise flags nothing is known about.
     /// </summary>
     public PushedFlags PulledFlags() =>
-        Top(PushSize.OneByte, Semantics.Width.Eight)?.Flags ?? PushedFlags.Unknown;
+        Top(PushSize.OneByte, Width.Eight)?.Flags ?? PushedFlags.Unknown;
 
     /// <summary>
     /// Returns this stack as a call to a routine with <paramref name="effect"/> leaves it once the
     /// routine returns, or null where what it leaves is not known. Bytes the routine leaves hold
-    /// nothing known, and a pull of any size takes them (see <see cref="SavedPush.IsLeft"/>). Bytes it takes are taken from beneath what this routine pushed, so where
-    /// this routine has pushed anything, the routine may have taken it and nothing is known.
+    /// nothing known, and a pull of any size takes them, as <see cref="SavedPush.IsLeft"/>
+    /// describes. Bytes it takes are taken from beneath what this routine pushed, so where this
+    /// routine has pushed anything, the routine may have taken it and nothing is known.
     /// </summary>
     public SavedStack? AfterCall(StackEffect effect)
     {
@@ -158,7 +160,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
             return new SavedStack(pushes, offset + effect.Bytes);
         var left = pushes.ToBuilder();
         for (var i = 0; i < effect.Bytes; i++)
-            left.Add(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Semantics.Width.Eight) { IsLeft = true });
+            left.Add(new SavedPush(RegisterValue.Unknown, PushSize.OneByte, Width.Eight) { IsLeft = true });
         return new SavedStack(left.ToImmutable(), offset);
     }
 
@@ -179,7 +181,7 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// nothing is known about the stack.
     /// </para>
     /// </summary>
-    public SavedStack? Pull(PushSize size, Semantics.Width width)
+    public SavedStack? Pull(PushSize size, Width width)
     {
         if (pushes.Length > 0 && pushes[^1].IsLeft)
         {
@@ -216,9 +218,9 @@ public sealed class SavedStack : IEquatable<SavedStack>
     /// Returns the push on top when a pull of this size and width matches it, or null otherwise.
     /// See <see cref="Pulled"/>.
     /// </summary>
-    private SavedPush? Top(PushSize size, Semantics.Width width) =>
+    private SavedPush? Top(PushSize size, Width width) =>
         pushes.Length > 0 && pushes[^1].Size == size && pushes[^1].Width == width
-            && width != Semantics.Width.Unknown && !pushes[^1].IsLeft
+            && width != Width.Unknown && !pushes[^1].IsLeft
             ? pushes[^1]
             : null;
 }

@@ -9,7 +9,7 @@ namespace Norristown.Flow;
 /// across the program. A 6502 programmer's first question about someone else's routine is which
 /// registers survive it, and without this analysis the answer lives only in a comment.
 /// <para>
-/// A routine is analysed the same way as the 65816's processor state. Its blocks are run to a
+/// A routine is analyzed the same way as the 65816's processor state. Its blocks are run to a
 /// fixed point over what each register may hold, and a save and its restore cancel through the
 /// stack, so <c>pha</c> … <c>pla</c> around a call needs no annotation. What its calls do is
 /// worked out alongside it, over the whole program. Every routine starts out keeping every

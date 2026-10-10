@@ -33,6 +33,12 @@ internal sealed class StateChecks
     // The routines and registers whose callers disagree that have been reported, once each.
     private readonly HashSet<(Symbol, WidthRegister)> disagreed = [];
 
+    /// <summary>
+    /// Initializes checks for the file that <paramref name="layout"/> laid out.
+    /// <paramref name="signatureOf"/> returns the signature each routine is analyzed with and
+    /// records that the analysis took it, and <paramref name="signatures"/> holds the program's
+    /// inferred signatures, which say where callers disagree.
+    /// </summary>
     public StateChecks(
         SemanticModel model, CodeLayout layout, IReadOnlyList<Project.AccessRange> ranges,
         Func<Symbol, Signature?> signatureOf, InferredSignatures signatures)
@@ -87,7 +93,8 @@ internal sealed class StateChecks
     /// <paramref name="step"/>.
     /// </summary>
     public bool InAnotherSpace(Step step, Symbol? target) =>
-        target?.Segment is { } targetSegment && model.Segments.SpaceOf(targetSegment)?.Name != model.Segments.SpaceOf(step.Segment)?.Name;
+        target?.Segment is { } targetSegment
+        && model.Segments.SpaceOf(targetSegment)?.Name != model.Segments.SpaceOf(step.Segment)?.Name;
 
     /// <summary>Returns the segment a symbol is in, as the program's table declares it.</summary>
     public Segment? SegmentOf(Symbol symbol) => symbol.Segment is { } name ? model.Segments.Find(name) : null;
