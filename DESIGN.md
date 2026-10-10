@@ -639,7 +639,9 @@ sides use.
   `S` is, `.loadof(S)` as zero page where every linked config loads `S` into page zero, far for
   a far segment and absolute otherwise, and `.spanof(S)` absolute. A read of the image in
   another bank therefore writes `f:`, as it would for a label there. ld65 exports all three as
-  absolute, so the output imports a far one as absolute, which changes nothing it assembles to.
+  absolute, so the output imports every one as absolute. That changes nothing a far one
+  assembles to, and a zero-page one is written inside `.lobyte()` wherever it fills a one-byte
+  slot, operands included, which gives ca65 a zero-page value and loses nothing.
   Each is also bounded by the memory areas the linked configs put `S` in, and `.runof(S)` by
   the banks `S` declares where no linked config places it, so in a one-byte slot it follows
   the rule for any value that names an address (§8): `.loadof(CODE) / 256` is written inside

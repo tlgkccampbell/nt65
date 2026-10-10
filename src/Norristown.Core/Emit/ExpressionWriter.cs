@@ -1014,16 +1014,27 @@ internal sealed class ExpressionWriter(
     }
 
     /// <summary>
-    /// Writes the two-byte address of an operand inside <c>.loword()</c> where it names an
+    /// Writes the address of an operand inside <c>.lobyte()</c> or <c>.loword()</c> where ca65 or
+    /// ld65 would otherwise refuse it. A one-byte address is written so where
+    /// <see cref="LinkRange.Narrows"/> says so, as the run address of a zero-page segment is,
+    /// which the output imports as absolute. A two-byte address is written so where it names an
     /// address placed past $FFFF in a mode that <see cref="RangeChecksInBank"/> says ca65
     /// range-checks.
     /// </summary>
     private void NarrowAddress(OperandSyntax operand, ExpressionSyntax address, TokenRewriter rewriter)
     {
-        if (operand.Parent is { } instruction && layout.Of(instruction, Expansion)?.Mode is { } mode
-            && Instructions.Width(mode) == AddressSize.Absolute && RangeChecksInBank(mode))
+        if (operand.Parent is not { } instruction || layout.Of(instruction, Expansion)?.Mode is not { } mode)
+            return;
+        switch (Instructions.Width(mode))
         {
-            Narrow(address, 2, rewriter, inBank: true);
+            case AddressSize.ZeroPage:
+                Narrow(address, 1, rewriter);
+                break;
+            case AddressSize.Absolute when RangeChecksInBank(mode):
+                Narrow(address, 2, rewriter, inBank: true);
+                break;
+            default:
+                break;
         }
     }
 
