@@ -243,12 +243,18 @@ internal sealed class RegisterWalk
             return state.WithEach(Ensured(step.Statement), RegisterValue.Written);
 
         // The bytes from a position inside an instruction run as the instructions they decode
-        // as, one after another.
+        // as, one after another. A `tsx` among them leaves X holding the stack pointer as a
+        // written one would, but nt65 does not follow which stack such a copy was taken from.
         if (layout.HiddenPathAt(step) is { } hidden)
         {
             foreach (var instruction in hidden.Instructions)
-                state = Instruction(step, instruction.Mnemonic, instruction.Mode, Immediate(instruction), state, use, saved, null);
-            return state with { FromStackPointer = Registers.None, Pointed = null };
+            {
+                var decodedImmediate = Immediate(instruction);
+                var holding = StackWrites.Pointing(instruction.Mnemonic, instruction.Mode, decodedImmediate, state.FromStackPointer);
+                var ran = Instruction(step, instruction.Mnemonic, instruction.Mode, decodedImmediate, state, use, saved, null, instruction);
+                state = ran with { FromStackPointer = holding };
+            }
+            return state with { Pointed = null };
         }
         if (step.Statement is not InstructionStatementSyntax statement)
             return state;
@@ -297,11 +303,13 @@ internal sealed class RegisterWalk
     /// <summary>
     /// Returns what the registers hold after <paramref name="step"/>'s instruction runs as
     /// <paramref name="mnemonic"/> in <paramref name="mode"/>, with <paramref name="immediate"/> as
-    /// its immediate where it has one, from what they held before it.
+    /// its immediate where it has one, from what they held before it. <paramref name="decoded"/> is
+    /// the instruction where the bytes of the <see cref="HiddenPath"/> at <paramref name="step"/>
+    /// decode as it, and null where it is written at the step.
     /// </summary>
     private RegisterState Instruction(
         Step step, MnemonicKind mnemonic, AddressingMode? mode, long? immediate, RegisterState state,
-        Action<Registers>? use, Registers saved, Step? next)
+        Action<Registers>? use, Registers saved, Step? next, HiddenInstruction? decoded = null)
     {
         var facts = Instructions.Facts(mnemonic);
         if (use is not null)
@@ -324,8 +332,14 @@ internal sealed class RegisterWalk
         // A store into the bytes on the stack may change a saved register or the flags an
         // interrupt pushed, and nt65 does not follow which byte it changes. What a pull or an
         // `rti` restores after it is then not known.
-        if (facts.Stores && StackWrites.Into(model, step, mode, state.FromStackPointer))
-            state = state with { Stack = null, WhyStack = Cause.StackWritten($"`{step.Statement.GetText().Trim()}`") };
+        var intoStack = facts.Stores && (decoded is null
+            ? StackWrites.Into(model, step, mode, state.FromStackPointer)
+            : StackWrites.Into(decoded, state.FromStackPointer));
+        if (intoStack)
+        {
+            var text = decoded is null ? step.Statement.GetText().Trim() : decoded.ToString();
+            state = state with { Stack = null, WhyStack = Cause.StackWritten($"`{text}`") };
+        }
 
         // The processor pushes the flags when it takes an interrupt, and `rti` pulls them
         // back. A handler that has left the stack where it found it therefore hands the flags
