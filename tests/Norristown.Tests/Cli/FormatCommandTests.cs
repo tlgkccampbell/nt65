@@ -21,7 +21,7 @@ public sealed class FormatCommandTests : IDisposable
     {
         root.Write("main.nt65", Crooked);
 
-        var (code, printed) = Run(root.FullName, "fmt", "main.nt65");
+        var (code, printed) = Nt65.Run(root.FullName, "fmt", "main.nt65");
 
         Assert.Equal((ExitCode.Success, ""), (code, printed));
         Assert.Equal(Straight, root.Read("main.nt65"));
@@ -38,13 +38,13 @@ public sealed class FormatCommandTests : IDisposable
         root.Write("src/main.nt65", Crooked);
         root.Write("src/hw.nt65", ".module hw\n");
 
-        var (code, printed) = Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65");
+        var (code, printed) = Nt65.Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65");
 
         Assert.Equal((ExitCode.InputError, "src/main.nt65\n"), (code, printed));
         Assert.Equal(Crooked, root.Read("src/main.nt65"));
 
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt", "src/main.nt65"));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "fmt", "src/main.nt65"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "fmt", "--check", "src/main.nt65", "src/hw.nt65"));
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed class FormatCommandTests : IDisposable
         root.Write("app/src/hw.nt65", "  .module hw\n");
         root.Write("app/notes.nt65", Crooked);
 
-        Assert.Equal((ExitCode.Success, ""), Run(Path.Combine(root.FullName, "app", "src"), "fmt"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(Path.Combine(root.FullName, "app", "src"), "fmt"));
 
         Assert.Equal(Straight, root.Read("app/src/main.nt65"));
         Assert.Equal(".module hw\n", root.Read("app/src/hw.nt65"));
@@ -85,8 +85,8 @@ public sealed class FormatCommandTests : IDisposable
             """);
         root.Write("src/main.nt65", Crooked);
 
-        Assert.Equal((ExitCode.InputError, "src/main.nt65\n"), Run(root.FullName, "fmt", "--check"));
-        Assert.Equal((ExitCode.Success, ""), Run(root.FullName, "fmt"));
+        Assert.Equal((ExitCode.InputError, "src/main.nt65\n"), Nt65.Run(root.FullName, "fmt", "--check"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "fmt"));
         Assert.Equal(Straight, root.Read("src/main.nt65"));
     }
 
@@ -98,36 +98,27 @@ public sealed class FormatCommandTests : IDisposable
     [Fact]
     public void WhatItCannotFormatIsReported()
     {
-        var (code, printed) = Run(root.FullName, "fmt");
+        var (code, printed) = Nt65.Run(root.FullName, "fmt");
         Assert.Equal(ExitCode.UsageError, code);
         Assert.StartsWith("nt65: no files to format, and no nt65.json\nusage: nt65 build", printed);
 
-        (code, printed) = Run(root.FullName, "fmt", "gone.nt65");
+        (code, printed) = Nt65.Run(root.FullName, "fmt", "gone.nt65");
         Assert.Equal((ExitCode.InputError, "gone.nt65: error: file not found\n"), (code, printed));
 
         // A project file that cannot be read is why no files were found, and it is what is reported.
         root.Write("nt65.json", """{ "files": ["*.nt65"] """);
-        (code, printed) = Run(root.FullName, "fmt");
+        (code, printed) = Nt65.Run(root.FullName, "fmt");
         Assert.Equal(ExitCode.InputError, code);
         Assert.StartsWith("nt65.json:1:", printed);
         Assert.DoesNotContain("no files to format", printed);
 
         // So is a `files` that is not a list of globs.
         root.Write("nt65.json", """{ "files": "*.nt65" }""");
-        (code, printed) = Run(root.FullName, "fmt");
+        (code, printed) = Nt65.Run(root.FullName, "fmt");
         Assert.Equal(ExitCode.InputError, code);
         Assert.StartsWith("nt65.json:1:3: error:", printed);
 
-        (code, printed) = Run(root.FullName, "fmt", "--write");
+        (code, printed) = Nt65.Run(root.FullName, "fmt", "--write");
         Assert.Equal((ExitCode.UsageError, "nt65: `--write` is not an option\nsee `nt65 --help`\n"), (code, printed));
-    }
-
-    private static (ExitCode Code, string Printed) Run(string directory, params string[] arguments)
-    {
-        var output = new StringWriter { NewLine = "\n" };
-        var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(arguments, directory, output, error,
-            cancellation: TestTimeout.Token());
-        return (code, output.ToString() + error.ToString());
     }
 }

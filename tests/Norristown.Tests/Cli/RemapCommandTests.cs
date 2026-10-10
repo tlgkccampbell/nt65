@@ -40,7 +40,7 @@ public sealed class RemapCommandTests : IDisposable
         root.Write("build/main.s.lines", Map);
         root.Write("game.dbg", Linked);
 
-        var (code, printed) = Run("remap-dbg", "game.dbg");
+        var (code, printed) = Nt65.Run(root.FullName, "remap-dbg", "game.dbg");
 
         Assert.Equal((ExitCode.Success, ""), (code, printed));
         Assert.Contains("name=\"src/main.nt65\"", Read("game.dbg"));
@@ -54,7 +54,7 @@ public sealed class RemapCommandTests : IDisposable
         root.Write("build/main.s.lines", Map);
         root.Write("game.dbg", Linked);
 
-        Assert.Equal(ExitCode.Success, Run("remap-dbg", "game.dbg", "--out", "mapped.dbg").Code);
+        Assert.Equal(ExitCode.Success, Nt65.Run(root.FullName, "remap-dbg", "game.dbg", "--out", "mapped.dbg").Code);
 
         Assert.Equal(Linked, Read("game.dbg"));
         Assert.Contains("name=\"src/main.nt65\"", Read("mapped.dbg"));
@@ -69,7 +69,7 @@ public sealed class RemapCommandTests : IDisposable
     {
         root.Write("game.dbg", Linked);
 
-        Assert.Equal(ExitCode.Success, Run("remap-dbg", "game.dbg").Code);
+        Assert.Equal(ExitCode.Success, Nt65.Run(root.FullName, "remap-dbg", "game.dbg").Code);
 
         Assert.Equal(Linked, Read("game.dbg"));
     }
@@ -119,7 +119,7 @@ public sealed class RemapCommandTests : IDisposable
 
             """);
 
-        Assert.Equal((ExitCode.Success, ""), Run("remap-dbg", "game.dbg", "--labels", "game.lbl"));
+        Assert.Equal((ExitCode.Success, ""), Nt65.Run(root.FullName, "remap-dbg", "game.dbg", "--labels", "game.lbl"));
 
         Assert.Equal("""
             al 0000E0 .wave::LINES
@@ -144,7 +144,7 @@ public sealed class RemapCommandTests : IDisposable
         root.Write("a.dbg", Linked);
         root.Write("game.dbg", Linked);
 
-        var result = Run(arguments);
+        var result = Nt65.Run(root.FullName, arguments);
 
         Assert.Equal(expected, result.Code);
         Assert.StartsWith(message, result.Printed);
@@ -156,19 +156,10 @@ public sealed class RemapCommandTests : IDisposable
     {
         root.Write("game.dbg", "not a debug file at all\n");
 
-        var (code, printed) = Run("remap-dbg", "game.dbg");
+        var (code, printed) = Nt65.Run(root.FullName, "remap-dbg", "game.dbg");
 
         Assert.Equal(ExitCode.InputError, code);
         Assert.StartsWith("game.dbg: error: it is not a version 2.0 ld65 debug file", printed);
-    }
-
-    private (ExitCode Code, string Printed) Run(params string[] arguments)
-    {
-        var output = new StringWriter { NewLine = "\n" };
-        var error = new StringWriter { NewLine = "\n" };
-        var code = Commands.Run(arguments, root.FullName, output, error,
-            cancellation: TestTimeout.Token());
-        return (code, output.ToString() + error.ToString());
     }
 
     private string Read(string path) =>
