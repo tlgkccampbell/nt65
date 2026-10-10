@@ -872,7 +872,8 @@ public sealed class StateAnalysis : IProcessorStates
         // the bytes of a hidden path, as there too.
         var pointing = StackWrites.Pointing(mnemonic, mode, executing.Immediate, state.Pointing);
         var pointed = executing.Decoded is not null ? null
-            : StackPointerCopies.Copied(mnemonic, layout.Cpu, processor, pointing, state.Pointed, state.Stack);
+            : StackPointerCopies.Copied(
+                mnemonic, executing.Immediate, layout.Cpu, processor, pointing, state.Pointed, state.Stack);
         var movedBack = StackPointerCopies.MovedBack(
             mnemonic, layout.Cpu, processor, state.Pointing, executing.Decoded is null ? state.Pointed : null, state.Stack,
             (now, copy) => now.Extends(copy));

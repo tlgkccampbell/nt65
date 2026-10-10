@@ -395,7 +395,7 @@ public sealed class StackEffects
             pointing &= StackWrites.Pointing(variant, mode, immediate, height.Pointing);
         var pointed = variants.Count > 0 ? null
             : StackPointerCopies.Copied(
-                mnemonic, walk.Cpu, walk.Processor(step), pointing, height.Pointed,
+                mnemonic, immediate, walk.Cpu, walk.Processor(step), pointing, height.Pointed,
                 height with { Pointing = Registers.None, Pointed = null });
         return height with { Pointing = pointing, Pointed = pointed };
     }

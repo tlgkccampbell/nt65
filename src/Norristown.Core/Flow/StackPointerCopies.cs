@@ -24,9 +24,13 @@ internal static class StackPointerCopies
     /// instruction copied it, or null where that cannot be relied on. A <c>tsx</c> or <c>tsc</c>
     /// copies the stack as it is. Any other instruction keeps the copy, unless it pulls, calls,
     /// returns, or on the 65816 may change the index width, which can clear the high byte of X.
+    /// An <c>xce</c> may always change it. A <c>rep</c> or <c>sep</c> may change it unless the mode
+    /// before it is known to be emulation, where X is always 8 bits, or its mask is known and
+    /// leaves the X bit alone.
     /// </summary>
     /// <typeparam name="TStack">The tracker's stack.</typeparam>
     /// <param name="mnemonic">The instruction.</param>
+    /// <param name="immediate">The value of the instruction's immediate, or null where it has none that is known.</param>
     /// <param name="cpu">The processor the instruction runs on.</param>
     /// <param name="processor">
     /// The 65816 state before the instruction, or null where it is not known. On every processor
@@ -37,7 +41,8 @@ internal static class StackPointerCopies
     /// <param name="stack">The stack before the instruction, or null where it is not known.</param>
     /// <returns>The stack the copy was taken from, or null.</returns>
     public static TStack? Copied<TStack>(
-        MnemonicKind mnemonic, Cpu cpu, ProcessorState? processor, Registers pointing, TStack? pointed, TStack? stack)
+        MnemonicKind mnemonic, long? immediate, Cpu cpu, ProcessorState? processor, Registers pointing, TStack? pointed,
+        TStack? stack)
         where TStack : class
     {
         if (pointing == Registers.None)
@@ -54,7 +59,7 @@ internal static class StackPointerCopies
         }
         if (Instructions.Facts(mnemonic).Pulls is not null || Instructions.IsCall(mnemonic)
             || mnemonic is MnemonicKind.Rts or MnemonicKind.Rtl or MnemonicKind.Rti or MnemonicKind.Brk or MnemonicKind.Cop
-            || (cpu == Cpu.Wdc65816 && mnemonic is MnemonicKind.Sep or MnemonicKind.Rep or MnemonicKind.Xce))
+            || (cpu == Cpu.Wdc65816 && MayChangeIndexWidth(mnemonic, immediate, processor)))
         {
             return null;
         }
@@ -96,6 +101,19 @@ internal static class StackPointerCopies
             return null;
         return mnemonic == MnemonicKind.Txs && !HoldsWholePointer(cpu, processor) ? null : pointed;
     }
+
+    /// <summary>
+    /// Returns whether an instruction on the 65816 may change the width of X.
+    /// </summary>
+    /// <param name="mnemonic">The instruction.</param>
+    /// <param name="immediate">The value of the instruction's immediate, or null where it has none that is known.</param>
+    /// <param name="processor">The 65816 state before the instruction, or null where it is not known.</param>
+    /// <returns>True where the width of X may change.</returns>
+    private static bool MayChangeIndexWidth(MnemonicKind mnemonic, long? immediate, ProcessorState? processor) =>
+        mnemonic == MnemonicKind.Xce
+        || (mnemonic is MnemonicKind.Rep or MnemonicKind.Sep
+            && processor is not { E: ProcessorMode.Emulation }
+            && (immediate is not { } mask || (mask & (long)StatusFlags.X) != 0));
 
     /// <summary>
     /// Returns whether a <c>tsx</c> copies the stack pointer exactly, and a <c>txs</c> moves back
